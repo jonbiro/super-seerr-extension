@@ -8,6 +8,7 @@ class OptionsManager {
     this.testButton = document.getElementById('testConnection');
     this.reloadButton = document.getElementById('reloadSettings');
     this.toggleButton = document.getElementById('toggleApiKey');
+    this.skipButton = document.getElementById('skipSetup');
     this.statusDiv = document.getElementById('status');
     
     this.init();
@@ -22,6 +23,7 @@ class OptionsManager {
     this.testButton?.addEventListener('click', () => this.testConnection());
     this.reloadButton?.addEventListener('click', () => this.reloadSettings());
     this.toggleButton?.addEventListener('click', () => this.toggleApiKeyVisibility());
+    this.skipButton?.addEventListener('click', () => window.close());
     
     // Auto-save on input change (with debounce)
     let saveTimeout;
@@ -56,8 +58,8 @@ class OptionsManager {
   }
 
   async autoSave() {
-    // Only auto-save if both fields have values
-    if (this.serverUrlInput.value.trim() && this.apiKeyInput.value.trim()) {
+    // Only auto-save if URL has a value
+    if (this.serverUrlInput.value.trim()) {
       await this.saveSettings(false); // Don't show success message for auto-save
     }
   }
@@ -66,9 +68,9 @@ class OptionsManager {
     const serverUrl = this.serverUrlInput.value.trim();
     const apiKey = this.apiKeyInput.value.trim();
 
-    // Basic validation
-    if (!serverUrl || !apiKey) {
-      this.showStatus('error', 'Both server URL and API key are required');
+    // URL is required; API key is optional (ratings-only mode)
+    if (!serverUrl) {
+      this.showStatus('error', 'Server URL is required');
       return;
     }
 
@@ -127,8 +129,13 @@ class OptionsManager {
     const serverUrl = this.serverUrlInput.value.trim();
     const apiKey = this.apiKeyInput.value.trim();
 
-    if (!serverUrl || !apiKey) {
-      this.showStatus('error', 'Please enter both server URL and API key before testing');
+    if (!serverUrl) {
+      this.showStatus('error', 'Please enter a server URL before testing');
+      return;
+    }
+
+    if (!apiKey) {
+      this.showStatus('error', 'An API key is required to test the connection. Enter your key or skip setup.');
       return;
     }
 

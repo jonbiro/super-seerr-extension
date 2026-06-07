@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Seerr Request Button",
-  "version": "2.0.0",
+  "version": "3.1.0",
   "description": "Add movies and TV shows to Seerr directly from IMDB, Rotten Tomatoes, TheMovieDB, Letterboxd, Metacritic, Trakt and Filmweb.pl",
   "permissions": [
     "storage",
@@ -147,8 +147,8 @@
         "https://*/tv/*",
         "http://*/search*",
         "https://*/search*",
-        "http://localhost:5055/*",
-        "https://localhost:5055/*"
+        "http://*/*",
+        "https://*/*"
       ],
       "js": [
         "src/shared/RatingsModel.js",

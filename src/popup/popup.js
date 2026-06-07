@@ -70,7 +70,7 @@ class PopupManager {
   showNotConfiguredState() {
     this.hideAllStates();
     this.notConfiguredState.classList.remove('hidden');
-    this.setStatus('warning', 'Setup required');
+    this.setStatus('connected', 'Ratings overlay active');
   }
 
   showErrorState(message) {

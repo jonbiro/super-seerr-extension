@@ -16,7 +16,7 @@
                 </svg>
                 <h1>Seerr Request Button</h1>
             </div>
-            <p class="subtitle">Configure your Seerr server connection</p>
+            <p class="subtitle">Configure your Seerr server connection — or close this tab to use the extension in ratings-only mode</p>
         </header>
 
         <main>
@@ -33,12 +33,11 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="apiKey">API Key</label>
+                    <label for="apiKey">API Key <small>(optional — needed for requests)</small></label>
                     <input 
                         type="password" 
                         id="apiKey" 
-                        placeholder="Your Seerr API key" 
-                        required
+                        placeholder="Your Seerr API key (leave blank for ratings-only)" 
                     >
                     <small>
                         Get your API key from Seerr Settings → General → API Key
@@ -57,6 +56,9 @@
                     </button>
                     <button type="submit" class="button primary">
                         Save Settings
+                    </button>
+                    <button type="button" id="skipSetup" class="button secondary" style="margin-left:8px;opacity:0.7">
+                        Skip for now
                     </button>
                 </div>
             </form>
@@ -78,17 +80,17 @@
                 </ol>
             </section>
 
-            <section class="features-section">
-                <h2>Features</h2>
-                <ul>
-                    <li>✅ Add request buttons to IMDB, Rotten Tomatoes, and TMDb pages</li>
-                    <li>✅ Add request buttons to Letterboxd, Metacritic, and Trakt pages</li>
-                    <li>✅ Add request buttons to Filmweb.pl movie and TV show pages</li>
-                    <li>✅ Automatic media matching using title and year</li>
-                    <li>✅ Visual feedback for request status</li>
-                    <li>✅ Support for both movies and TV series</li>
-                </ul>
-            </section>
+                <section class="features-section">
+                    <h2>Features</h2>
+                    <ul>
+                        <li>🍅 RT ratings overlay on Seerr pages (no API key needed)</li>
+                        <li>✅ Request buttons on IMDB, Rotten Tomatoes, and TMDb pages</li>
+                        <li>✅ Request buttons on Letterboxd, Metacritic, Trakt, and Filmweb</li>
+                        <li>🔍 Automatic media matching using title, year, and TMDb ID</li>
+                        <li>📊 Visual feedback for request status and monitoring</li>
+                        <li>📺 Support for both movies and TV series</li>
+                    </ul>
+                </section>
         </main>
 
         <footer>

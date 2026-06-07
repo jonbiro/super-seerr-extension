@@ -7,12 +7,6 @@
   if (window.__seerr_overlay_installed) return;
   window.__seerr_overlay_installed = true;
 
-  // Verify we are inside a Seerr instance
-  if (!document.querySelector('[data-testid="navbar"]') && !document.querySelector('#__next')) {
-    // Not a Seerr page — bail silently
-    return;
-  }
-
   const Model = window.RatingsModel;
   const Config = window.RatingsConfig;
   if (!Model || !Config) return;
@@ -28,7 +22,27 @@
     bulkActions: true,
   };
 
+  let apiConfigured = false;
+
+  // Check API config — controls whether request features are available
+  function checkApiConfig() {
+    chrome.storage.sync.get(['seerrUrl', 'seerrApiKey']).then(settings => {
+      apiConfigured = !!(settings.seerrUrl && settings.seerrApiKey);
+      log('API configured:', apiConfigured);
+    });
+  }
+  checkApiConfig();
+
+  // Update when settings change (e.g., user configures from options page)
+  chrome.storage.onChanged.addListener((changes, namespace) => {
+    if (namespace === 'sync' && (changes.seerrUrl || changes.seerrApiKey)) {
+      checkApiConfig();
+    }
+  });
+
   const ratingsCache = new Map(); // key: tmdbId (string), value: { bundle, expiresAt }
+  const embeddedRatingsByTmdbId = new Map();
+  let embeddedRatingsIndexed = false;
 
   // ──────────────── Route Detection ────────────────
 
@@ -37,8 +51,14 @@
     if (/^\/movie\/\d+/.test(path)) return { type: 'movie-detail', id: path.match(/\/movie\/(\d+)/)[1] };
     if (/^\/tv\/\d+/.test(path))    return { type: 'tv-detail',    id: path.match(/\/tv\/(\d+)/)[1] };
     if (/^\/search/.test(path))     return { type: 'search' };
+    if (/^\/discover/.test(path))   return { type: 'discover' };
+    if (/^\/requests(?:\/|$)/.test(path)) return { type: 'requests' };
     if (path === '/')               return { type: 'discover' };
     return null;
+  }
+
+  function isListRoute(route) {
+    return route && (route.type === 'discover' || route.type === 'search' || route.type === 'requests');
   }
 
   // ──────────────── SPA Navigation ────────────────
@@ -71,7 +91,7 @@
   function isAlreadyInjected() {
     // Check per-route type to allow re-injection on new pages (e.g., infinite scroll)
     const route = detectRoute();
-    const selector = route?.type === 'discover' || route?.type === 'search'
+    const selector = isListRoute(route)
       ? '[data-seerr-overlay="true"].seerr-card-badge'
       : '[data-seerr-overlay="true"]';
     return document.querySelector(selector);
@@ -79,6 +99,8 @@
 
   function cleanupOverlay() {
     document.querySelectorAll('[data-seerr-overlay="true"]').forEach(el => el.remove());
+    embeddedRatingsByTmdbId.clear();
+    embeddedRatingsIndexed = false;
     // Reset pending badge flags so cards can be re-injected after navigation
     document.querySelectorAll('[class*="card"], [class*="Card"]').forEach(c => { c.__seerrBadgesResolving = false; });
     // Clear the per-card in-progress flag so a future re-injection isn't
@@ -91,7 +113,117 @@
 
   // ──────────────── Ratings Resolution ────────────────
 
-  function extractSeerrNativeRatings() {
+  function parsePercentScore(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const raw = typeof value === 'number' ? value : parseFloat(String(value).match(/\d+(?:\.\d+)?/)?.[0]);
+    if (!Number.isFinite(raw)) return null;
+    return Math.max(0, Math.min(100, Math.round(raw)));
+  }
+
+  function parseTenPointScore(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const raw = typeof value === 'number' ? value : parseFloat(String(value).match(/\d+(?:\.\d+)?/)?.[0]);
+    if (!Number.isFinite(raw)) return null;
+    return Math.max(0, Math.min(10, Math.round(raw * 10) / 10));
+  }
+
+  function firstParsedScore(obj, keys, parser) {
+    for (const key of keys) {
+      if (obj && Object.prototype.hasOwnProperty.call(obj, key)) {
+        const parsed = parser(obj[key]);
+        if (parsed !== null) return parsed;
+      }
+    }
+    return null;
+  }
+
+  function bundleFromRatingObject(obj, source = 'seerr-native') {
+    if (!obj || typeof obj !== 'object') return null;
+
+    const bundle = {};
+    const rt = obj.rt || obj.rottenTomatoes || obj.rottenTomatoesRatings || {};
+    const imdb = obj.imdb || obj.imdbRatings || {};
+    const mediaInfo = obj.mediaInfo || obj.media || {};
+
+    const critics = firstParsedScore(obj, ['rtCriticsScore', 'rtScore', 'criticsScore', 'criticScore', 'tomatometerScore'], parsePercentScore)
+      ?? firstParsedScore(rt, ['rtCriticsScore', 'rtScore', 'criticsScore', 'criticScore', 'tomatometerScore'], parsePercentScore);
+    const audience = firstParsedScore(obj, ['rtAudienceScore', 'audienceScore', 'audienceRatingScore', 'popcornScore'], parsePercentScore)
+      ?? firstParsedScore(rt, ['rtAudienceScore', 'audienceScore', 'audienceRatingScore', 'popcornScore'], parsePercentScore);
+    const imdbRating = firstParsedScore(obj, ['imdbRating', 'imdbScore'], parseTenPointScore)
+      ?? firstParsedScore(imdb, ['imdbRating', 'imdbScore', 'criticsScore', 'score'], parseTenPointScore);
+    const tmdbRating = firstParsedScore(obj, ['tmdbRating', 'tmdbScore', 'voteAverage'], parseTenPointScore)
+      ?? firstParsedScore(mediaInfo, ['tmdbRating', 'tmdbScore', 'voteAverage'], parseTenPointScore);
+
+    if (critics !== null) bundle.rtCriticsScore = critics;
+    if (audience !== null) bundle.rtAudienceScore = audience;
+    if (imdbRating !== null) bundle.imdbRating = imdbRating;
+    if (tmdbRating !== null) bundle.tmdbRating = tmdbRating;
+
+    if (Object.keys(bundle).length === 0) return null;
+    return Model.createRatingsBundle({
+      ...bundle,
+      confidence: 1.0,
+      source,
+      lastUpdated: Date.now()
+    });
+  }
+
+  function mergeBundles(primary, secondary) {
+    if (!primary) return secondary || null;
+    if (!secondary) return primary;
+    return Model.createRatingsBundle({
+      rtCriticsScore: primary.rtCriticsScore ?? secondary.rtCriticsScore,
+      rtAudienceScore: primary.rtAudienceScore ?? secondary.rtAudienceScore,
+      imdbRating: primary.imdbRating ?? secondary.imdbRating,
+      tmdbRating: primary.tmdbRating ?? secondary.tmdbRating,
+      confidence: Math.max(primary.confidence || 0, secondary.confidence || 0),
+      source: primary.source || secondary.source,
+      lastUpdated: Math.max(primary.lastUpdated || 0, secondary.lastUpdated || 0) || Date.now()
+    });
+  }
+
+  function objectTmdbId(obj) {
+    if (!obj || typeof obj !== 'object') return null;
+    return obj.tmdbId ?? obj.id ?? obj.mediaInfo?.tmdbId ?? obj.media?.tmdbId ?? obj.media?.id ?? null;
+  }
+
+  function indexEmbeddedRatings() {
+    if (embeddedRatingsIndexed) return;
+    embeddedRatingsIndexed = true;
+
+    const scripts = document.querySelectorAll('script[type="application/json"], script#__NEXT_DATA__');
+    const seen = new WeakSet();
+
+    function visit(node) {
+      if (!node || typeof node !== 'object' || seen.has(node)) return;
+      seen.add(node);
+
+      const tmdbId = objectTmdbId(node);
+      if (tmdbId !== null && tmdbId !== undefined) {
+        let bundle = bundleFromRatingObject(node, 'seerr-native');
+        bundle = mergeBundles(bundle, bundleFromRatingObject(node.mediaInfo, 'seerr-native'));
+        bundle = mergeBundles(bundle, bundleFromRatingObject(node.media, 'seerr-native'));
+        if (bundle && Model.hasAnyScore(bundle)) {
+          const key = String(tmdbId);
+          embeddedRatingsByTmdbId.set(key, mergeBundles(embeddedRatingsByTmdbId.get(key), bundle));
+        }
+      }
+
+      if (Array.isArray(node)) {
+        node.forEach(visit);
+      } else {
+        Object.keys(node).forEach(key => visit(node[key]));
+      }
+    }
+
+    scripts.forEach(script => {
+      try {
+        visit(JSON.parse(script.textContent));
+      } catch (_) {}
+    });
+  }
+
+  function extractSeerrNativeRatings(tmdbId = null) {
     const bundle = {};
 
     // Look for embedded JSON data (e.g., __NEXT_DATA__ or similar)
@@ -99,6 +231,8 @@
     scripts.forEach(script => {
       try {
         const data = JSON.parse(script.textContent);
+        const direct = bundleFromRatingObject(data?.props?.pageProps?.media, 'seerr-native');
+        if (direct) Object.assign(bundle, direct);
         // Seerr typically embeds media data in various shapes
         if (data?.props?.pageProps?.media) {
           const m = data.props.pageProps.media;
@@ -109,6 +243,12 @@
         }
       } catch (_) {}
     });
+
+    if (tmdbId !== null && tmdbId !== undefined) {
+      indexEmbeddedRatings();
+      const embedded = embeddedRatingsByTmdbId.get(String(tmdbId));
+      if (embedded && Model.hasAnyScore(embedded)) return embedded;
+    }
 
     // Try to extract from the DOM (ratings may be rendered as text)
     const rtElements = document.querySelectorAll('[data-rating], .rt-score');
@@ -129,11 +269,48 @@
     return Object.keys(bundle).length > 0 ? Model.createRatingsBundle(bundle) : null;
   }
 
-  async function resolveRatings(tmdbId, title, year) {
+  async function fetchJsonFromSeerr(endpoint) {
+    const url = new URL(endpoint, window.location.origin);
+    const response = await fetch(url.toString(), {
+      method: 'GET',
+      credentials: 'include',
+      headers: { Accept: 'application/json' }
+    });
+
+    if (!response.ok) {
+      log(`Seerr ratings endpoint ${endpoint} returned ${response.status}`);
+      return null;
+    }
+
+    return response.json();
+  }
+
+  async function fetchSeerrSessionRatings(tmdbId, mediaType) {
+    if (!tmdbId || !mediaType) return null;
+
+    const endpoints = mediaType === 'tv'
+      ? [`/api/v1/tv/${tmdbId}/ratings`, `/api/v1/tv/${tmdbId}`]
+      : [`/api/v1/movie/${tmdbId}/ratingscombined`, `/api/v1/movie/${tmdbId}/ratings`, `/api/v1/movie/${tmdbId}`];
+
+    let bundle = null;
+    for (const endpoint of endpoints) {
+      try {
+        const data = await fetchJsonFromSeerr(endpoint);
+        const next = bundleFromRatingObject(data, endpoint.includes('ratings') ? 'seerr-ratings-api' : 'seerr-details-api');
+        bundle = mergeBundles(bundle, next);
+      } catch (error) {
+        log(`Seerr ratings fetch failed for ${endpoint}:`, error);
+      }
+    }
+
+    return bundle && Model.hasAnyScore(bundle) ? bundle : null;
+  }
+
+  async function resolveRatings(tmdbId, title, year, mediaType = null) {
     log(`Resolving ratings for TMDB ${tmdbId}`);
 
     // 1. Check Seerr-native data first
-    const native = extractSeerrNativeRatings();
+    const native = extractSeerrNativeRatings(tmdbId);
     if (native && native.rtCriticsScore !== null) {
       log('Using Seerr-native ratings, confidence 1.0');
       return native;
@@ -145,9 +322,14 @@
       return native;
     }
 
-    // 3. Fallback: try ID-based lookup (TMDB ID → RT slug via background proxy)
-    // For now, since there's no RT API proxy in background.js, construct a
-    // minimal fallback bundle based on available page data
+    // 3. Same-origin Seerr API lookup using the user's logged-in page session.
+    // This does not need the extension's stored Seerr API key.
+    const sessionRatings = await fetchSeerrSessionRatings(tmdbId, mediaType);
+    if (sessionRatings && Model.hasAnyScore(sessionRatings)) {
+      log('Using same-origin Seerr ratings API');
+      return mergeBundles(sessionRatings, native);
+    }
+
     const fallback = Model.createRatingsBundle({
       confidence: native ? 1.0 : 0.0,
       source: native ? 'seerr-native' : 'unknown',
@@ -157,7 +339,7 @@
     return fallback;
   }
 
-  async function getRatings(tmdbId, title, year) {
+  async function getRatings(tmdbId, title, year, mediaType = null) {
     const key = String(tmdbId || title);
     const cached = ratingsCache.get(key);
     if (cached && Date.now() < cached.expiresAt) {
@@ -172,7 +354,7 @@
       return ratingsCache.get(pendingKey);
     }
 
-    const promise = resolveRatings(tmdbId, title, year);
+    const promise = resolveRatings(tmdbId, title, year, mediaType);
     ratingsCache.set(pendingKey, promise);
 
     try {
@@ -208,29 +390,74 @@
     return 'Mostly negative reviews';
   }
 
+  const MEDIA_LINK_RE = /\/(movie|tv)\/(\d+)/;
+  const MEDIA_CARD_CONTAINER_SELECTOR = '[class*="MediaCard"], [class*="media-item"], [class*="card"], [class*="Card"], article, li';
+  let nextCardIndex = 0;
+
+  function getCardMediaInfo(card) {
+    const links = card.matches?.('a[href]') ? [card] : Array.from(card.querySelectorAll('a[href]'));
+    const link = links.find(a => MEDIA_LINK_RE.test(a.getAttribute('href') || ''));
+    if (!link) return null;
+
+    const href = link.getAttribute('href') || '';
+    const tmdbMatch = href.match(MEDIA_LINK_RE);
+    if (!tmdbMatch) return null;
+
+    const titleEl = card.querySelector('h2, h3, [class*="title"], [class*="Title"]');
+    const imageAlt = card.querySelector('img[alt]')?.getAttribute('alt') || '';
+    const title = titleEl?.textContent?.trim() || link.getAttribute('aria-label') || imageAlt || '';
+
+    return {
+      link,
+      href,
+      mediaType: tmdbMatch[1],
+      tmdbId: tmdbMatch[2],
+      title: title.trim()
+    };
+  }
+
+  function getMediaCards(root = document) {
+    const links = Array.from(root.querySelectorAll('a[href]'))
+      .filter(link => MEDIA_LINK_RE.test(link.getAttribute('href') || ''))
+      .filter(link => !link.closest('[data-seerr-overlay="true"]'));
+    const cards = [];
+    const seen = new Set();
+
+    links.forEach(link => {
+      const card = link.closest(MEDIA_CARD_CONTAINER_SELECTOR) || link;
+      if (!card || card.closest('[data-seerr-overlay="true"]')) return;
+      if (seen.has(card)) return;
+      seen.add(card);
+      cards.push(card);
+    });
+
+    return cards;
+  }
+
+  function ensureCardIndexes(cards) {
+    cards.forEach(card => {
+      if (!card.hasAttribute('data-seerr-card-index')) {
+        card.setAttribute('data-seerr-card-index', String(nextCardIndex++));
+      }
+    });
+  }
+
   // ──────────────── Injection ────────────────
 
   function injectCardBadges() {
     if (!FEATURE_FLAGS.cardBadges) return;
 
     // Find media cards on discover/search pages
-    const cards = document.querySelectorAll('[class*="card"], [class*="Card"], [class*="media-item"], [class*="MediaCard"]');
-    let injected = 0;
+    const cards = getMediaCards();
+    ensureCardIndexes(cards);
 
     cards.forEach(card => {
       if (card.querySelector('[data-seerr-overlay="true"][class*="card-badge"], [data-seerr-overlay="true"][class*="audience-badge"]')) return;
       if (card.__seerrBadgesResolving) return; // already resolving, skip this pass
-      card.__seerrBadgesResolving = true;
 
       // Try to extract title/TMDB ID from card
-      const titleEl = card.querySelector('h2, h3, [class*="title"], [class*="Title"]');
-      const title = titleEl?.textContent?.trim();
-      if (!title) return;
-
-      const link = card.querySelector('a[href]');
-      const href = link?.getAttribute('href') || '';
-      const tmdbMatch = href.match(/\/(movie|tv)\/(\d+)/);
-      const tmdbId = tmdbMatch ? tmdbMatch[2] : null;
+      const mediaInfo = getCardMediaInfo(card);
+      if (!mediaInfo || !mediaInfo.title) return;
 
       // Ensure card has position relative for absolute positioning
       const computed = window.getComputedStyle(card);
@@ -241,12 +468,12 @@
       // Mark the card as "rating-resolution in progress" so a re-entrant
       // call (e.g. setTimeout 2s retry) doesn't queue a second
       // getRatings + DOM append for the same card.
-      if (card.__seerrBadgesResolving) return;
       card.__seerrBadgesResolving = true;
+      card.__seerrBadgesCleared = false;
 
       // Resolve ratings asynchronously
-      if (tmdbId) {
-        getRatings(tmdbId, title, null).then(bundle => {
+      if (mediaInfo.tmdbId) {
+        getRatings(mediaInfo.tmdbId, mediaInfo.title, null, mediaInfo.mediaType).then(bundle => {
           // Re-check: a cleanup could have removed any previously-rendered
           // badges since this promise was queued.
           if (card.__seerrBadgesCleared) {
@@ -274,8 +501,12 @@
             audienceBadge.style.top = '28px'; // stack below critics badge
             card.appendChild(audienceBadge);
           }
+          injectSortFilterControls();
         }).catch(err => log('Card badge ratings failed:', err))
-          .finally(() => { card.__seerrBadgesResolving = false; });
+          .finally(() => {
+            card.__seerrBadgesResolving = false;
+            setTimeout(injectSortFilterControls, 100);
+          });
       } else {
         card.__seerrBadgesResolving = false;
       }
@@ -301,7 +532,8 @@
     const tmdbId = route.id;
     const title = document.querySelector('h1')?.textContent?.trim() || '';
 
-    getRatings(tmdbId, title, null).then(bundle => {
+    const mediaType = route.type === 'tv-detail' ? 'tv' : 'movie';
+    getRatings(tmdbId, title, null, mediaType).then(bundle => {
       if (!bundle || !Model.hasAnyScore(bundle)) return;
 
       const row = document.createElement('div');
@@ -344,11 +576,9 @@
           summaryEl.textContent = summary;
           container.appendChild(summaryEl);
         }
-          }
-        }).catch(err => log('Card badge ratings failed:', err)).finally(() => {
-          card.__seerrBadgesResolving = false;
-        });
       }
+    }).catch(err => log('Detail ratings failed:', err));
+  }
 
   function makeRatingItem(icon, value, label) {
     const item = document.createElement('span');
@@ -362,10 +592,38 @@
   }
 
   let injectionInProgress = false;
+  let seerrDomReadyRetries = 0;
+  const MAX_SEERR_DOM_RETRIES = 5;
+  let cardObserver = null;
+  let cardObserverTimer = null;
+
+  function isSeerrPage() {
+    // Overseerr-specific navbar
+    if (document.querySelector('[data-testid="navbar"]') && /seerr|overseerr|jellyseerr/i.test(document.body?.textContent || '')) return true;
+    // Any Seerr derivative — check for Seerr API patterns in links/scripts
+    const links = document.querySelectorAll('a[href*="/api/v1/"], script[src*="/api/"]');
+    if (links.length > 0) return true;
+    // Check page content for request-related Seerr patterns
+    const textSample = (document.title || '') + (document.body?.textContent || '').slice(0, 3000).toLowerCase();
+    if (/(seerr|overseerr|jellyseerr|\/api\/v1\/request|\/api\/v1\/search|plex watchlist|request media)/i.test(textSample)) return true;
+    // Known Seerr subdomain or path patterns
+    if (/request\.|requests|discover\/movie|discover\/tv/i.test(window.location.host + window.location.pathname)) return true;
+    return false;
+  }
 
   function injectOverlay() {
     if (isAlreadyInjected()) return;
     if (injectionInProgress) return;
+
+    if (!isSeerrPage()) {
+      if (seerrDomReadyRetries < MAX_SEERR_DOM_RETRIES) {
+        seerrDomReadyRetries++;
+        setTimeout(injectOverlay, 1000);
+        return;
+      }
+      return;
+    }
+
     injectionInProgress = true;
 
     try {
@@ -374,8 +632,10 @@
 
       if (!route) return;
 
-      if (route.type === 'discover' || route.type === 'search') {
+      if (isListRoute(route)) {
         injectCardBadges();
+        injectSortFilterControls();
+        setupCardObserver();
         setTimeout(() => injectCardBadges(), 2000); // retry for lazy-loaded cards
       } else if (route.type === 'movie-detail' || route.type === 'tv-detail') {
         injectDetailRatings();
@@ -385,10 +645,23 @@
     }
   }
 
+  function setupCardObserver() {
+    if (cardObserver || !window.MutationObserver) return;
+    cardObserver = new MutationObserver(() => {
+      const route = detectRoute();
+      if (!isListRoute(route)) return;
+      clearTimeout(cardObserverTimer);
+      cardObserverTimer = setTimeout(() => {
+        injectCardBadges();
+        injectSortFilterControls();
+      }, 250);
+    });
+    cardObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
   // ──────────────── Sort & Filter ────────────────
 
-  function countCardsWithRatings() {
-    const cards = document.querySelectorAll('[class*="card"], [class*="Card"], [class*="media-item"]');
+  function countCardsWithRatings(cards = getMediaCards()) {
     if (cards.length === 0) return { total: 0, rated: 0 };
     let rated = 0;
     cards.forEach(c => { if (getCardScore(c) !== null) rated++; });
@@ -396,18 +669,20 @@
   }
 
   function injectSortFilterControls(retryCount = 0) {
+    if (!isSeerrPage()) return;
     if (!FEATURE_FLAGS.sortFilter) return;
 
     const route = detectRoute();
-    if (!route || (route.type !== 'discover' && route.type !== 'search')) return;
+    if (!isListRoute(route)) return;
 
     if (document.querySelector('[data-seerr-overlay="true"][class*="sort-filter-bar"]')) return;
 
-    const cards = document.querySelectorAll('[class*="card"], [class*="Card"], [class*="media-item"]');
+    const cards = getMediaCards();
     if (cards.length < 3) return;
+    ensureCardIndexes(cards);
 
     // Coverage check — need at least 30% of cards to have ratings
-    const { total, rated } = countCardsWithRatings();
+    const { total, rated } = countCardsWithRatings(cards);
     if (rated / total < 0.3 && retryCount < 3) {
       // Ratings are still loading asynchronously — retry with increasing delays
       setTimeout(() => injectSortFilterControls(retryCount + 1), 1500 + retryCount * 1000);
@@ -434,7 +709,7 @@
       <label>Audience ≥</label>
       <input type="number" class="seerr-min-audience" min="0" max="100" step="5" value="0" style="width:55px">
       <button class="seerr-reset-sort">Reset</button>
-      ${FEATURE_FLAGS.bulkActions ? '<button class="seerr-toggle-select" data-seerr-overlay="true">Select titles</button>' : ''}
+      ${FEATURE_FLAGS.bulkActions && apiConfigured ? '<button class="seerr-toggle-select" data-seerr-overlay="true">Select titles</button>' : ''}
     `;
 
     const firstCard = cards[0];
@@ -451,7 +726,9 @@
     const sortSelect = bar.querySelector('.seerr-sort-select');
     sortSelect.addEventListener('change', () => {
       const val = sortSelect.value;
-      const sorted = Array.from(cards).sort((a, b) => {
+      const currentCards = getMediaCards(grid);
+      ensureCardIndexes(currentCards);
+      const sorted = currentCards.sort((a, b) => {
         let scoreA, scoreB;
         if (val.startsWith('rt-audience')) {
           scoreA = getCardAudienceScore(a);
@@ -477,7 +754,8 @@
     // ── Reset ──
     bar.querySelector('.seerr-reset-sort').addEventListener('click', () => {
       // Restore original order by re-appending in source order
-      const allCards = Array.from(grid.querySelectorAll('[class*="card"], [class*="Card"], [class*="media-item"]'));
+      const allCards = getMediaCards(grid);
+      ensureCardIndexes(allCards);
       const ordered = allCards.sort((a, b) => {
         const idxA = parseInt(a.getAttribute('data-seerr-card-index') || '0');
         const idxB = parseInt(b.getAttribute('data-seerr-card-index') || '0');
@@ -493,15 +771,15 @@
     });
 
     // Store original index on each card
-    Array.from(cards).forEach((c, i) => {
-      c.setAttribute('data-seerr-card-index', String(i));
-    });
+    ensureCardIndexes(cards);
 
     // ── Filter logic ──
     function applyFilters() {
       const minCritics = parseInt(bar.querySelector('.seerr-min-critics').value) || 0;
       const minAudience = parseInt(bar.querySelector('.seerr-min-audience').value) || 0;
-      Array.from(grid.querySelectorAll('[class*="card"], [class*="Card"], [class*="media-item"]')).forEach(c => {
+      const currentCards = getMediaCards(grid);
+      ensureCardIndexes(currentCards);
+      currentCards.forEach(c => {
         const cs = getCardScore(c);
         const as = getCardAudienceScore(c);
         const hidesForCritics = minCritics > 0 && (cs === null || cs < minCritics);
@@ -534,12 +812,13 @@
   let selectedCards = new Set();
 
   function toggleBulkMode() {
-    if (!FEATURE_FLAGS.bulkActions) return;
+    if (!FEATURE_FLAGS.bulkActions || !apiConfigured) return;
 
     bulkMode = !bulkMode;
     selectedCards.clear();
 
-    const cards = document.querySelectorAll('[class*="card"], [class*="Card"], [class*="media-item"]');
+    const cards = getMediaCards();
+    ensureCardIndexes(cards);
 
     if (bulkMode) {
       cards.forEach(card => {
@@ -553,12 +832,11 @@
         checkbox.setAttribute('data-seerr-overlay', 'true');
         checkbox.addEventListener('click', (e) => {
           e.stopPropagation();
-          const cardIdx = Array.from(cards).indexOf(card);
-          if (selectedCards.has(cardIdx)) {
-            selectedCards.delete(cardIdx);
+          if (selectedCards.has(card)) {
+            selectedCards.delete(card);
             checkbox.classList.remove('checked');
           } else {
-            selectedCards.add(cardIdx);
+            selectedCards.add(card);
             checkbox.classList.add('checked');
           }
           updateBulkActionBar();
@@ -609,21 +887,19 @@
   }
 
   function getSelectedTitles() {
-    const cards = document.querySelectorAll('[class*="card"], [class*="Card"], [class*="media-item"]');
     const titles = [];
-    selectedCards.forEach(idx => {
-      const card = cards[idx];
+    selectedCards.forEach(card => {
       if (!card) return;
-      const titleEl = card.querySelector('h2, h3, [class*="title"], [class*="Title"]');
-      const title = titleEl?.textContent?.trim() || 'Unknown Title';
-      const link = card.querySelector('a[href]');
-      const href = link?.getAttribute('href') || '';
-      const tmdbMatch = href.match(/\/(movie|tv)\/(\d+)/);
-      const tmdbId = tmdbMatch ? tmdbMatch[2] : null;
-      const mediaType = tmdbMatch ? tmdbMatch[1] : 'movie';
+      const mediaInfo = getCardMediaInfo(card);
       const score = getCardScore(card);
       const confidence = score !== null ? 1.0 : 0.0;
-      titles.push({ title, tmdbId, mediaType, score, confidence });
+      titles.push({
+        title: mediaInfo?.title || 'Unknown Title',
+        tmdbId: mediaInfo?.tmdbId || null,
+        mediaType: mediaInfo?.mediaType || 'movie',
+        score,
+        confidence
+      });
     });
     return titles;
   }
@@ -675,6 +951,11 @@
     modal.querySelector('.cancel-btn').addEventListener('click', () => modal.remove());
 
     modal.querySelector('.confirm-btn').addEventListener('click', async () => {
+      if (!apiConfigured) {
+        modal.querySelector('.confirm-btn').textContent = 'API key required — configure in extension settings';
+        modal.querySelector('.confirm-btn').style.background = '#ef4444';
+        return;
+      }
       const btn = modal.querySelector('.confirm-btn');
       btn.disabled = true;
       btn.textContent = 'Requesting...';

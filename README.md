@@ -1,30 +1,40 @@
 # Seerr Request Button
 
-A browser extension that seamlessly integrates with popular movie and TV sites, allowing you to request content directly to your Seerr server.
+A browser extension that seamlessly integrates with popular movie and TV sites, allowing you to request content directly to your Seerr server. Adds Rotten Tomatoes context on Seerr browse cards and detail pages so you can evaluate titles without leaving Seerr.
 
-![Version](https://img.shields.io/badge/version-2.0.0-blue)
+![Version](https://img.shields.io/badge/version-3.0.0-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Chrome](https://img.shields.io/badge/Chrome-Compatible-brightgreen)
 ![Firefox](https://img.shields.io/badge/Firefox-Compatible-brightgreen)
 
 ## Supported Sites
 
-- **IMDb** - Movie and TV show pages
-- **Rotten Tomatoes** - Movie and TV show reviews  
-- **TheMovieDB** - Comprehensive movie database (most accurate matching)
-- **Letterboxd** - Film community platform
-- **Metacritic** - Professional reviews and scores
-- **Trakt** - Movie and TV tracking platform
-- **Filmweb** - Polish movie and TV database
+- **IMDb** — Movie and TV show pages
+- **Rotten Tomatoes** — Movie and TV show reviews
+- **TheMovieDB** — Comprehensive movie database (most accurate matching)
+- **Letterboxd** — Film community platform
+- **Metacritic** — Professional reviews and scores
+- **Trakt** — Movie and TV tracking platform
+- **Filmweb** — Polish movie and TV database
 
 ## Features
 
-- **Unified Flyout Interface** - Consistent design across all supported sites
-- **Smart Media Detection** - Automatically extracts title, year, and media type
-- **Real-time Status** - Shows current request status with color indicators
-- **Intelligent Retry** - Handles network issues gracefully
-- **Brand Theming** - Each site maintains its unique visual identity
-- **Fast Performance** - Lightweight and optimized
+### Core
+- **Unified Flyout Interface** — Consistent design across all supported sites with brand-matched theming
+- **Smart Media Detection** — Automatically extracts title, year, media type, and TMDb ID from page content
+- **Real-time Status** — Shows current request status with color indicators and monitoring info
+- **Convenience** — Play button opens Jellyfin directly when content is available
+
+### Seerr Overlay (runs on your Seerr instance)
+- **Browse-Card Rating Badges** — Compact RT critics and audience scores on discover/search cards
+- **Detail-Page Ratings Row** — RT critics → audience → IMDb → TMDB scores near the request action
+- **Pre-Request Quality Summary** — One-line heuristic: "Critics love it", "Strong reviews", "Mixed reviews"
+- **RT Sorting & Filtering** — Sort by critics/audience score; filter by minimum thresholds
+- **Bulk List Actions** — Multi-select titles, review in confirmation modal, submit as batch
+
+### Flyout Panel (runs on supported review sites)
+- **Add to Watchlist** — Save media to your Seerr watchlist without immediately requesting
+- **In-Library Badge** — Green checkmark shows when content is already on Jellyfin
 
 ## Installation
 
@@ -55,10 +65,17 @@ A browser extension that seamlessly integrates with popular movie and TV sites, 
 
 ## Usage
 
+### External Sites
 1. **Navigate** to any movie or TV show page on supported sites
 2. **Look for** the Seerr flyout tab on the right side of your screen
 3. **Click the tab** to expand the flyout panel
 4. **View status** and click the action button to request content
+
+### Seerr Itself
+1. **Browse** your Seerr discover, search, or detail pages
+2. **See** RT scores on cards and detail pages automatically
+3. **Sort** and **filter** using the extension-provided controls
+4. **Select multiple titles** and submit as a batch request
 
 ### Status Indicators
 - 🟢 **Green**: Available to request or ready to watch
@@ -66,55 +83,80 @@ A browser extension that seamlessly integrates with popular movie and TV sites, 
 - 🔵 **Blue**: Currently downloading/processing
 - 🔴 **Red**: Error or connection issue
 
-## Screenshots
-
-See the extension in action across different movie and TV sites:
-
-### IMDb Integration
-![IMDb Integration](screenshots/imdb%20Large.jpeg)
-*Clean flyout interface on IMDb movie pages with yellow theme matching IMDb's branding*
-
-### Rotten Tomatoes Integration
-![Rotten Tomatoes Integration](screenshots/RottenTomatoes%20Large.jpeg)
-*Elegant red-themed flyout matching Rotten Tomatoes' signature colors*
-
-### Letterboxd Integration
-![Letterboxd Integration](screenshots/letterboxd%20Large.jpeg)
-*Minimalist green-themed design perfectly suited for the film community platform*
-
-### Trakt Integration
-![Trakt Integration](screenshots/trakt%20Large.jpeg)
-*Purple gradient theme matching Trakt's modern branding with comprehensive status display*
-
 ## Architecture
-
-The extension uses a modern shared library architecture:
 
 ```
 src/
-├── shared/                    # Shared Libraries
-│   ├── BaseIntegration.js    # Base class for all sites
-│   ├── SeerrClient.js        # API communication
-│   ├── MediaExtractor.js     # Title/year extraction
-│   └── UIComponents.js       # Flyout interface
-├── content/                   # Site Integrations
-│   ├── imdb-integration.js   # IMDb (Yellow theme)
-│   ├── rt-integration.js     # Rotten Tomatoes (Red theme)
-│   ├── tmdb-integration.js   # TheMovieDB (Blue theme)
+├── shared/                       # Shared Libraries
+│   ├── BaseIntegration.js        # Base class for all site integrations
+│   ├── SeerrClient.js            # API communication (MV3 Promise-based)
+│   ├── MediaExtractor.js         # Title/year/TMDb extraction
+│   ├── UIComponents.js           # Flyout interface, notifications, badges
+│   ├── RatingsModel.js           # Typed ratings bundle (partial-data safe)
+│   └── RatingsConfig.js          # Centralized thresholds and summary rules
+├── content/                      # Site Integrations
+│   ├── imdb-integration.js       # IMDb (Yellow theme)
+│   ├── rt-integration.js         # Rotten Tomatoes (Red theme)
+│   ├── tmdb-integration.js       # TheMovieDB (Blue theme)
 │   ├── letterboxd-integration.js # Letterboxd (Green theme)
 │   ├── metacritic-integration.js # Metacritic (Yellow theme)
-│   └── trakt-integration.js  # Trakt (Purple theme)
+│   ├── trakt-integration.js      # Trakt (Purple theme)
+│   ├── filmweb-integration.js    # Filmweb (Yellow/Black theme)
+│   ├── seerr-integration.js      # Seerr overlay (ratings, sort, bulk)
+│   └── seerr-overlay.css         # Overlay stylesheet (dark/light themes)
 ├── background/
-│   └── background.js         # Service worker
+│   └── background.js             # Service worker (ES module, top-level await)
 ├── options/
-│   └── options.*             # Settings page
+│   └── options.{html,js,css}     # Settings page
 └── popup/
-    └── popup.*               # Extension popup
+    └── popup.{html,js,css}       # Extension popup
 ```
 
 ## Development
 
-All site integrations share common functionality through the `BaseIntegration` class, making it easy to add new sites with minimal code.
+### Build
+
+```bash
+make build          # Build Chrome + Firefox (unpacked)
+make build-chrome   # Chrome only
+make build-firefox  # Firefox only
+make release        # Create .zip / .xpi for distribution
+```
+
+The build process merges `manifest.base.json` with platform-specific overrides (`manifest.chrome.json` / `manifest.firefox.json`) to produce the final manifest for each browser.
+
+### Test
+
+```bash
+npm install         # Install test dependencies (fast-check)
+npm test            # Run all 33 tests
+npm run test:watch  # Watch mode
+```
+
+Tests cover storage migration, branding, debug namespace, watchlist visibility, badge idempotence, ratings model, cache coalescing, summary heuristics, overlay injection, and SPA navigation regression.
+
+### Feature Flags
+
+The Seerr overlay uses feature flags in `seerr-integration.js` (all enabled by default):
+
+```js
+const FEATURE_FLAGS = {
+  cardBadges: true,           // RT scores on browse cards
+  detailRatingsRow: true,     // Ratings row on detail pages
+  preRequestSummary: true,    // Quality summary text
+  sortFilter: true,           // Sort & filter controls
+  bulkActions: true,          // Multi-select & bulk requests
+};
+```
+
+Set any to `false` to disable that feature without code changes.
+
+### Chrome Load
+
+```bash
+make build-chrome
+# Then: chrome://extensions → Developer Mode → Load unpacked → select dist/chrome/
+```
 
 ## Support
 
@@ -122,4 +164,4 @@ For issues or feature requests, please open an issue on the repository.
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.

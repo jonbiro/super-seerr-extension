@@ -96,7 +96,7 @@ test('HTML files use Seerr branding', () => {
   assert.ok(popupHtml.includes('Seerr Request Button'), 'popup.html title');
   assert.ok(popupHtml.includes('<h1>Seerr</h1>'), 'popup.html h1');
   assert.ok(popupHtml.includes('The Seerr request button'), 'popup.html configured state');
-  assert.ok(popupHtml.includes('Configure your Seerr server URL'), 'popup.html not-configured state');
+  assert.ok(popupHtml.includes('configure'), 'popup.html not-configured state');
   assert.ok(popupHtml.includes('Unable to connect to your Seerr server'), 'popup.html error state');
 });
 

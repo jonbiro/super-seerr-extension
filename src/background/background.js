@@ -46,9 +46,12 @@ class SeerrAPI {
     if (this.baseUrl && this.apiKey) {
       chrome.action.setBadgeText({ text: 'ON' });
       chrome.action.setBadgeBackgroundColor({ color: '#10b981' });
+    } else if (this.baseUrl) {
+      // URL set but no API key — ratings-only mode
+      chrome.action.setBadgeText({ text: 'RT' });
+      chrome.action.setBadgeBackgroundColor({ color: '#8b5cf6' });
     } else {
-      chrome.action.setBadgeText({ text: 'OFF' });
-      chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
+      chrome.action.setBadgeText({ text: '' });
     }
   }
 
@@ -897,15 +900,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 chrome.runtime.onInstalled.addListener((details) => {
   if (details.reason === 'install') {
-    chrome.tabs.create({
-      url: chrome.runtime.getURL('src/options/options.html')
-    });
+    // Extension installed — no auto-open. User discovers settings via popup.
   }
 });
 
-// Top-level await: migration + load settings complete before worker accepts events
-await seerrAPI.loadSettings();
-// Storage migration runs after settings loaded (old keys → new keys)
-await seerrAPI.migrateStorage();
-// Reload from potentially migrated new keys
-await seerrAPI.loadSettings();
+// Async init — runs migration and loads settings after listeners are registered
+(async () => {
+  await seerrAPI.loadSettings();
+  await seerrAPI.migrateStorage();
+  await seerrAPI.loadSettings();
+})();
