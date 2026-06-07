@@ -36,8 +36,19 @@ class SeerrAPI {
       const settings = await chrome.storage.sync.get(['seerrUrl', 'seerrApiKey']);
       this.baseUrl = settings.seerrUrl;
       this.apiKey = settings.seerrApiKey;
+      this.updateIconBadge();
     } catch (error) {
       console.error('Error loading Seerr settings:', error);
+    }
+  }
+
+  updateIconBadge() {
+    if (this.baseUrl && this.apiKey) {
+      chrome.action.setBadgeText({ text: 'ON' });
+      chrome.action.setBadgeBackgroundColor({ color: '#10b981' });
+    } else {
+      chrome.action.setBadgeText({ text: 'OFF' });
+      chrome.action.setBadgeBackgroundColor({ color: '#ef4444' });
     }
   }
 
@@ -104,35 +115,41 @@ class SeerrAPI {
 
     console.log('🎬 [Background] Requesting media:', mediaData);
 
-    let tmdbId = null;
-    const searchTerms = this.generateSearchTerms(mediaData.title);
-    console.log('🔍 [Background] Generated search terms:', searchTerms);
+    // Use TMDB ID directly if provided — skip search entirely
+    let tmdbId = mediaData.tmdbId ? parseInt(mediaData.tmdbId) : null;
+    if (tmdbId && !isNaN(tmdbId)) {
+      console.log('✅ [Background] Using provided TMDB ID:', tmdbId);
+    } else {
+      // No TMDB ID provided — do a title search
+      const searchTerms = this.generateSearchTerms(mediaData.title);
+      console.log('🔍 [Background] Generated search terms:', searchTerms);
 
-    let searchResults = [];
-    let bestMatch = null;
+      let searchResults = [];
+      let bestMatch = null;
 
-    for (const searchTerm of searchTerms) {
-      try {
-        console.log('🔍 [Background] Searching for:', searchTerm, 'type:', mediaData.mediaType);
-        searchResults = await this.searchMedia(searchTerm, mediaData.mediaType);
-        console.log('🔍 [Background] Search results for "' + searchTerm + '":', searchResults.length, 'items');
+      for (const searchTerm of searchTerms) {
+        try {
+          console.log('🔍 [Background] Searching for:', searchTerm, 'type:', mediaData.mediaType);
+          searchResults = await this.searchMedia(searchTerm, mediaData.mediaType);
+          console.log('🔍 [Background] Search results for "' + searchTerm + '":', searchResults.length, 'items');
 
-        bestMatch = this.findBestMatch(searchResults, { ...mediaData, title: searchTerm });
-        console.log('🎯 [Background] Best match for "' + searchTerm + '":', bestMatch);
+          bestMatch = this.findBestMatch(searchResults, { ...mediaData, title: searchTerm });
+          console.log('🎯 [Background] Best match for "' + searchTerm + '":', bestMatch);
 
-        if (bestMatch) {
-          tmdbId = parseInt(bestMatch.id);
-          console.log('✅ [Background] Using TMDB ID:', tmdbId, 'from search term:', searchTerm);
-          break;
+          if (bestMatch) {
+            tmdbId = parseInt(bestMatch.id);
+            console.log('✅ [Background] Using TMDB ID:', tmdbId, 'from search term:', searchTerm);
+            break;
+          }
+        } catch (searchError) {
+          console.warn('⚠️ [Background] Search failed for "' + searchTerm + '":', searchError);
+          continue;
         }
-      } catch (searchError) {
-        console.warn('⚠️ [Background] Search failed for "' + searchTerm + '":', searchError);
-        continue;
       }
-    }
 
-    if (!bestMatch) {
-      throw new Error(`Could not find "${mediaData.title}" in Seerr database. Tried search terms: ${searchTerms.join(', ')}`);
+      if (!bestMatch) {
+        throw new Error(`Could not find "${mediaData.title}" in Seerr database. Tried search terms: ${searchTerms.join(', ')}`);
+      }
     }
 
     if (!tmdbId || isNaN(tmdbId)) {
@@ -527,7 +544,7 @@ class SeerrAPI {
       console.log('📊 [Background] Seasons data available:', mediaDetails.seasons.length);
     }
 
-    const numericStatus = parseInt(status);
+    let status = null;
     let mediaUrl = null;
     let serviceUrl = null;
 
@@ -854,6 +871,7 @@ class SeerrAPI {
   updateSettings(settings) {
     this.baseUrl = settings.seerrUrl;
     this.apiKey = settings.seerrApiKey;
+    this.updateIconBadge();
   }
 }
 

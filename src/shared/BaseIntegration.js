@@ -27,6 +27,8 @@ class BaseIntegration {
     });
 
     this.destroyed = false;
+    this._initialized = false;
+    this._requestInFlight = false;
 
     // State
     this.mediaData = null;
@@ -65,6 +67,8 @@ class BaseIntegration {
    * Should be called by child classes
    */
   async init() {
+    if (this._initialized) return;
+    this._initialized = true;
     this.log('Initializing integration...');
 
     // Inject shared styles
@@ -139,6 +143,10 @@ class BaseIntegration {
   }
 
   async setupButtonUI() {
+    if (typeof this.getButtonInsertionPoint !== 'function') {
+      this.error('Button UI requires getButtonInsertionPoint() — falling back to flyout');
+      return this.setupFlyoutUI();
+    }
     this.log('Setting up button UI...');
 
     // Check if button already exists
@@ -284,7 +292,11 @@ class BaseIntegration {
    * Handle request button click
    */
   async handleRequest() {
+    if (this._requestInFlight) return;
+    this._requestInFlight = true;
+
     if (!this.mediaData) {
+      this._requestInFlight = false;
       this.ui.createNotification('Error', 'Could not extract media information', 'error');
       return;
     }
@@ -302,6 +314,7 @@ class BaseIntegration {
     } else {
       await this.handleRequestButtonClick();
     }
+    this._requestInFlight = false;
   }
 
   /**
@@ -401,6 +414,7 @@ class BaseIntegration {
 
     } catch (err) {
       this.error('Request failed:', err);
+      this._requestInFlight = false;
 
       this.ui.createNotification(
           'Request Failed',
@@ -467,6 +481,7 @@ class BaseIntegration {
         error.message.includes('connect') ||
         error.message.includes('Server URL and API key') ||
         error.message.includes('Connection failed') ||
+        error.message.includes('not responding') ||
         error.message.toLowerCase().includes('cors')
     );
 
@@ -573,9 +588,15 @@ class BaseIntegration {
     this.log('Setting up SPA navigation detection');
 
     // Method 1: Override pushState and replaceState (most reliable)
+    // Guard against double-patching: only patch if history.pushState hasn't
+    // already been wrapped by another instance of this integration.
+    if (history.pushState.__seerrPatched) {
+      this.log('history.pushState already patched, skipping');
+      return;
+    }
+
     const originalPushState = history.pushState;
     const originalReplaceState = history.replaceState;
-
     const handleNavigation = () => {
       const newUrl = window.location.href;
       if (newUrl !== this.currentUrl) {
@@ -585,21 +606,26 @@ class BaseIntegration {
       }
     };
 
-    // Override history methods
-    history.pushState = function(...args) {
+    const wrappedPushState = function(...args) {
       originalPushState.apply(history, args);
       setTimeout(handleNavigation, 100); // Small delay for React to update DOM
     };
+    wrappedPushState.__seerrPatched = true;
+    history.pushState = wrappedPushState;
 
-    history.replaceState = function(...args) {
+    const wrappedReplaceState = function(...args) {
       originalReplaceState.apply(history, args);
       setTimeout(handleNavigation, 100);
     };
+    wrappedReplaceState.__seerrPatched = true;
+    history.replaceState = wrappedReplaceState;
+
+    this._originalPushState = originalPushState;
+    this._originalReplaceState = originalReplaceState;
 
     // Method 2: Listen for popstate (back/forward buttons)
-    window.addEventListener('popstate', () => {
-      setTimeout(handleNavigation, 100);
-    });
+    this._popstateListener = () => setTimeout(handleNavigation, 100);
+    window.addEventListener('popstate', this._popstateListener);
 
     // Method 3: Polling as fallback (for edge cases)
     this.navigationListener = setInterval(() => {
@@ -679,6 +705,18 @@ class BaseIntegration {
       clearInterval(this.navigationListener);
       this.navigationListener = null;
     }
+    if (this._popstateListener) {
+      window.removeEventListener('popstate', this._popstateListener);
+      this._popstateListener = null;
+    }
+    if (this._originalPushState && history.pushState.__seerrPatched) {
+      history.pushState = this._originalPushState;
+    }
+    if (this._originalReplaceState && history.replaceState.__seerrPatched) {
+      history.replaceState = this._originalReplaceState;
+    }
+    this._originalPushState = null;
+    this._originalReplaceState = null;
     this.destroyed = true;
     if (window.seerr_debug) {
       delete window.seerr_debug[this.siteName.toLowerCase()];

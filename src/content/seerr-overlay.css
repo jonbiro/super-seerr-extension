@@ -1,6 +1,6 @@
-// Seerr Pre-Request Ratings Overlay CSS
-// Injected on Seerr pages via content_scripts css array.
-// Matches Seerr's visual density and supports dark/light themes.
+/* Seerr Pre-Request Ratings Overlay CSS */
+/* Injected on Seerr pages via content_scripts css array. */
+/* Matches Seerr's visual density and supports dark/light themes. */
 
 .seerr-card-badge {
   position: absolute;

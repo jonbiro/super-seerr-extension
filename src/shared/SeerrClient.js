@@ -96,19 +96,15 @@ class SeerrClient {
    * Request media on Seerr
    */
   async requestMedia(mediaData) {
+    // Pre-flight check — only run once, not per retry
+    const extensionOk = await this.testExtensionConnection();
+    if (!extensionOk) {
+      throw new Error('Could not connect to extension background script. Please reload the extension and try again.');
+    }
+
     for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
       try {
         this.log(`Attempting to send message (attempt ${attempt}/${this.retryAttempts})`);
-
-        const extensionOk = await this.testExtensionConnection();
-        if (!extensionOk) {
-          if (attempt < this.retryAttempts) {
-            this.warn(`Extension connection test failed on attempt ${attempt}, retrying in ${this.retryDelay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, this.retryDelay));
-            continue;
-          }
-          throw new Error('Could not connect to extension background script. Please reload the extension and try again.');
-        }
 
         const response = await this.sendMessage({
           action: 'requestMedia',
@@ -196,6 +192,7 @@ class SeerrClient {
       return response.data;
     }
     throw new Error(response ? response.error : 'No response received');
+  }
 }
 
 // Export for use in content scripts

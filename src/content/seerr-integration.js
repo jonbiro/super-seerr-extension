@@ -44,16 +44,19 @@
   // ──────────────── SPA Navigation ────────────────
 
   let currentPath = window.location.pathname;
-  const originalPushState = history.pushState;
-  history.pushState = function (...args) {
-    originalPushState.apply(history, args);
-    setTimeout(handleRouteChange, 150);
-  };
-  const originalReplaceState = history.replaceState;
-  history.replaceState = function (...args) {
-    originalReplaceState.apply(history, args);
-    setTimeout(handleRouteChange, 150);
-  };
+  if (!history.__seerrOverlayPatched) {
+    history.__seerrOverlayPatched = true;
+    const originalPushState = history.pushState;
+    history.pushState = function (...args) {
+      originalPushState.apply(history, args);
+      setTimeout(handleRouteChange, 150);
+    };
+    const originalReplaceState = history.replaceState;
+    history.replaceState = function (...args) {
+      originalReplaceState.apply(history, args);
+      setTimeout(handleRouteChange, 150);
+    };
+  }
   window.addEventListener('popstate', () => setTimeout(handleRouteChange, 150));
 
   function handleRouteChange() {
@@ -66,11 +69,24 @@
   // ──────────────── Idempotency ────────────────
 
   function isAlreadyInjected() {
-    return document.querySelector('[data-seerr-overlay="true"]');
+    // Check per-route type to allow re-injection on new pages (e.g., infinite scroll)
+    const route = detectRoute();
+    const selector = route?.type === 'discover' || route?.type === 'search'
+      ? '[data-seerr-overlay="true"].seerr-card-badge'
+      : '[data-seerr-overlay="true"]';
+    return document.querySelector(selector);
   }
 
   function cleanupOverlay() {
     document.querySelectorAll('[data-seerr-overlay="true"]').forEach(el => el.remove());
+    // Reset pending badge flags so cards can be re-injected after navigation
+    document.querySelectorAll('[class*="card"], [class*="Card"]').forEach(c => { c.__seerrBadgesResolving = false; });
+    // Clear the per-card in-progress flag so a future re-injection isn't
+    // permanently blocked by a stale marker.
+    document.querySelectorAll('[class*="card"], [class*="Card"], [class*="media-item"], [class*="MediaCard"]').forEach(card => {
+      card.__seerrBadgesResolving = false;
+      card.__seerrBadgesCleared = true;
+    });
   }
 
   // ──────────────── Ratings Resolution ────────────────
@@ -203,6 +219,8 @@
 
     cards.forEach(card => {
       if (card.querySelector('[data-seerr-overlay="true"][class*="card-badge"], [data-seerr-overlay="true"][class*="audience-badge"]')) return;
+      if (card.__seerrBadgesResolving) return; // already resolving, skip this pass
+      card.__seerrBadgesResolving = true;
 
       // Try to extract title/TMDB ID from card
       const titleEl = card.querySelector('h2, h3, [class*="title"], [class*="Title"]');
@@ -220,10 +238,25 @@
         card.style.position = 'relative';
       }
 
+      // Mark the card as "rating-resolution in progress" so a re-entrant
+      // call (e.g. setTimeout 2s retry) doesn't queue a second
+      // getRatings + DOM append for the same card.
+      if (card.__seerrBadgesResolving) return;
+      card.__seerrBadgesResolving = true;
+
       // Resolve ratings asynchronously
       if (tmdbId) {
         getRatings(tmdbId, title, null).then(bundle => {
-          if (!bundle || !Model.hasAnyScore(bundle)) return;
+          // Re-check: a cleanup could have removed any previously-rendered
+          // badges since this promise was queued.
+          if (card.__seerrBadgesCleared) {
+            card.__seerrBadgesResolving = false;
+            return;
+          }
+          if (!bundle || !Model.hasAnyScore(bundle)) {
+            card.__seerrBadgesResolving = false;
+            return;
+          }
 
           if (bundle.rtCriticsScore !== null && bundle.confidence >= Config.confidenceThreshold) {
             const prefix = bundle.confidence < 1.0 && bundle.confidence >= Config.confidenceThreshold ? '~' : '';
@@ -241,7 +274,10 @@
             audienceBadge.style.top = '28px'; // stack below critics badge
             card.appendChild(audienceBadge);
           }
-        }).catch(err => log('Card badge ratings failed:', err));
+        }).catch(err => log('Card badge ratings failed:', err))
+          .finally(() => { card.__seerrBadgesResolving = false; });
+      } else {
+        card.__seerrBadgesResolving = false;
       }
     });
   }
@@ -308,9 +344,11 @@
           summaryEl.textContent = summary;
           container.appendChild(summaryEl);
         }
+          }
+        }).catch(err => log('Card badge ratings failed:', err)).finally(() => {
+          card.__seerrBadgesResolving = false;
+        });
       }
-    }).catch(err => log('Detail ratings failed:', err));
-  }
 
   function makeRatingItem(icon, value, label) {
     const item = document.createElement('span');
@@ -590,12 +628,21 @@
     return titles;
   }
 
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
   function openBulkConfirmation() {
     if (selectedCards.size === 0) return;
 
     const titles = getSelectedTitles();
-    const readyTitles = titles.filter(t => t.confidence >= Config.confidenceThreshold);
-    const excludedTitles = titles.filter(t => t.confidence < Config.confidenceThreshold || !t.tmdbId);
+    // A title is only "ready" if it has BOTH a TMDB ID and a passing
+    // confidence score — a high score alone is useless without an ID
+    // because the API can't resolve the request.
+    const readyTitles = titles.filter(t => t.tmdbId && t.confidence >= Config.confidenceThreshold);
+    const excludedTitles = titles.filter(t => !t.tmdbId || t.confidence < Config.confidenceThreshold);
 
     const modal = document.createElement('div');
     modal.className = 'seerr-confirmation-modal';
@@ -607,13 +654,13 @@
         ${excludedTitles.length > 0 ? `<br><strong style="color:#f59e0b">⚠️ ${excludedTitles.length} titles excluded</strong>` : ''}
       </div>
       <ul>
-        ${readyTitles.map(t => `<li>• ${t.title}</li>`).join('')}
+        ${readyTitles.map(t => `<li>• ${escapeHtml(t.title)}</li>`).join('')}
       </ul>
       ${excludedTitles.length > 0 ? `
         <details style="margin-bottom:12px;opacity:0.7">
           <summary>Excluded titles (${excludedTitles.length})</summary>
           <ul>
-            ${excludedTitles.map(t => `<li class="excluded">• ${t.title}${!t.tmdbId ? ' (no TMDB ID)' : ` (~${Math.round(t.confidence * 100)}% conf.)`}</li>`).join('')}
+            ${excludedTitles.map(t => `<li class="excluded">• ${escapeHtml(t.title)}${!t.tmdbId ? ' (no TMDB ID)' : ` (~${Math.round(t.confidence * 100)}% conf.)`}</li>`).join('')}
           </ul>
         </details>
       ` : ''}
@@ -639,10 +686,15 @@
       for (let i = 0; i < readyTitles.length; i++) {
         const t = readyTitles[i];
         btn.textContent = `Requesting ${i + 1}/${readyTitles.length}...`;
+        const tmdbIdNum = parseInt(t.tmdbId, 10);
+        if (!t.tmdbId || Number.isNaN(tmdbIdNum)) {
+          failed++;
+          continue;
+        }
         try {
           const response = await chrome.runtime.sendMessage({
             action: 'requestMedia',
-            data: { title: t.title, mediaType: t.mediaType, tmdbId: parseInt(t.tmdbId) }
+            data: { title: t.title, mediaType: t.mediaType, tmdbId: tmdbIdNum }
           });
           if (response && response.success) {
             succeeded++;

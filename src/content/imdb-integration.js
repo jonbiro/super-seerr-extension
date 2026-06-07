@@ -60,7 +60,8 @@ class IMDBIntegration extends BaseIntegration {
     // Extract year from multiple sources
     const yearSelectors = [
       '[data-testid="hero-title-block__metadata"] a', // Modern metadata
-      '.sc-69e49b85-0 a[href*="/year/"]', // Year link
+      'a[href*="/releaseyear/"]', // Release year link (resilient)
+      '.sc-69e49b85-0 a[href*="/year/"]', // Year link (CSS module — fragile)
       '.titleBar-desktopSpacing a[href*="/year/"]', // Desktop year
       'span.titleYear a', // Title year
       '.subtext a[href*="year"]', // Subtext year

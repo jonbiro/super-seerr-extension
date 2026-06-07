@@ -122,25 +122,6 @@ class TMDbIntegration extends BaseIntegration {
     });
   }
 
-  /**
-   * Get insertion point for button UI (not used since we use flyout)
-   */
-  getButtonInsertionPoint() {
-    // Not used for TMDb since we use flyout interface
-    // But implemented for completeness
-    const insertionSelectors = [
-      '.header_poster_wrapper .poster', // Next to poster
-      '.poster', // Generic poster area
-      '.facts', // Facts section
-      '.header_poster_wrapper' // Header area
-    ];
-
-    return this.findInsertionPoint(insertionSelectors, 'button insertion point');
-  }
-
-  /**
-   * Get site-specific CSS for TMDb
-   */
   getSiteSpecificCSS() {
     return `
       /* TMDb Blue Theme Override */

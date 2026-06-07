@@ -26,7 +26,7 @@ class OptionsManager {
     // Auto-save on input change (with debounce)
     let saveTimeout;
     [this.serverUrlInput, this.apiKeyInput].forEach(input => {
-      input.addEventListener('input', () => {
+      input?.addEventListener('input', () => {
         clearTimeout(saveTimeout);
         saveTimeout = setTimeout(() => this.autoSave(), 1000);
       });
@@ -74,7 +74,11 @@ class OptionsManager {
 
     // Validate URL format
     try {
-      new URL(serverUrl);
+      const parsed = new URL(serverUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        this.showStatus('error', 'Server URL must use http:// or https://');
+        return;
+      }
     } catch (error) {
       this.showStatus('error', 'Please enter a valid server URL');
       return;
@@ -130,7 +134,11 @@ class OptionsManager {
 
     // Validate URL format
     try {
-      new URL(serverUrl);
+      const parsed = new URL(serverUrl);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        this.showStatus('error', 'Server URL must use http:// or https://');
+        return;
+      }
     } catch (error) {
       this.showStatus('error', 'Please enter a valid server URL');
       return;
@@ -146,6 +154,9 @@ class OptionsManager {
         seerrUrl: serverUrl,
         seerrApiKey: apiKey
       });
+
+      // Brief delay to let storage sync propagate to the background worker
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       // Test the connection via background script
       const response = await chrome.runtime.sendMessage({ action: 'testConnection' });
