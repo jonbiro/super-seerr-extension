@@ -1,0 +1,256 @@
+// Seerr Pre-Request Ratings Overlay CSS
+// Injected on Seerr pages via content_scripts css array.
+// Matches Seerr's visual density and supports dark/light themes.
+
+.seerr-card-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background: rgba(0, 0, 0, 0.72);
+  color: white;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.seerr-ratings-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+  font-size: 14px;
+  font-family: inherit;
+  flex-wrap: wrap;
+}
+
+.seerr-rating-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.seerr-rating-item strong {
+  font-weight: 700;
+}
+
+.seerr-rating-item small {
+  font-size: 11px;
+  opacity: 0.7;
+}
+
+.seerr-quality-summary {
+  font-size: 13px;
+  opacity: 0.85;
+  padding: 4px 0;
+  font-style: italic;
+}
+
+.seerr-sort-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-family: inherit;
+  flex-wrap: wrap;
+}
+
+.seerr-sort-filter-bar label {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-right: 2px;
+}
+
+.seerr-sort-filter-bar select,
+.seerr-sort-filter-bar input[type="number"] {
+  padding: 4px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 12px;
+}
+
+.seerr-sort-filter-bar button {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.seerr-sort-filter-bar button:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.seerr-select-checkbox {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  border: 2px solid white;
+  background: rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  z-index: 20;
+}
+
+.seerr-select-checkbox.checked {
+  background: #8b5cf6;
+  border-color: #8b5cf6;
+}
+
+.seerr-bulk-action-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 12px;
+  padding: 12px 24px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  z-index: 9999;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  font-family: inherit;
+  color: white;
+}
+
+.seerr-bulk-action-bar button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  background: #8b5cf6;
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.seerr-bulk-action-bar button:hover {
+  background: #7c3aed;
+}
+
+.seerr-confirmation-modal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 12px;
+  padding: 24px;
+  z-index: 10000;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  max-width: 500px;
+  width: 90%;
+  font-family: inherit;
+  color: white;
+}
+
+.seerr-confirmation-modal h3 {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+}
+
+.seerr-confirmation-modal ul {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 16px 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.seerr-confirmation-modal li {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 14px;
+}
+
+.seerr-confirmation-modal .excluded {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.seerr-confirmation-modal .modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.seerr-confirmation-modal button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.seerr-confirmation-modal .cancel-btn {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
+.seerr-confirmation-modal .confirm-btn {
+  background: #8b5cf6;
+  color: white;
+}
+
+.seerr-card-audience-badge {
+  /* Positioned via inline style (top: 28px) to stack below critics badge.
+     This class exists as a query selector target in seerr-integration.js */
+}
+
+/* Summary notification (used by bulk request result) */
+.seerr-notification {
+  position: fixed;
+  top: 1.25rem;
+  right: 1.25rem;
+  background: #1f2937;
+  border: 1px solid #374151;
+  border-radius: 0.5rem;
+  padding: 1rem;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  z-index: 10000;
+  min-width: 300px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  color: #f9fafb;
+}
+
+.seerr-notification.success { border-left: 4px solid #10b981; }
+.seerr-notification.error { border-left: 4px solid #ef4444; }
+.seerr-notification.warning { border-left: 4px solid #f59e0b; }
+.seerr-notification.info { border-left: 4px solid #3b82f6; }
+
+.seerr-notification-title {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  font-size: 0.875rem;
+}
+
+.seerr-notification-message {
+  font-size: 0.8rem;
+  color: #d1d5db;
+  line-height: 1.4;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .seerr-flyout *,
+  .seerr-card-badge,
+  .seerr-bulk-action-bar,
+  .seerr-confirmation-modal {
+    transition: none !important;
+    animation: none !important;
+  }
+}

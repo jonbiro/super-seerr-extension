@@ -1,0 +1,176 @@
+{
+  "manifest_version": 3,
+  "name": "Seerr Request Button",
+  "version": "2.0.0",
+  "description": "Add movies and TV shows to Seerr directly from IMDB, Rotten Tomatoes, TheMovieDB, Letterboxd, Metacritic, Trakt and Filmweb.pl",
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://www.imdb.com/*",
+    "https://imdb.com/*",
+    "https://www.rottentomatoes.com/*",
+    "https://rottentomatoes.com/*",
+    "https://www.themoviedb.org/*",
+    "https://themoviedb.org/*",
+    "https://letterboxd.com/*",
+    "https://www.letterboxd.com/*",
+    "https://www.metacritic.com/*",
+    "https://metacritic.com/*",
+    "https://trakt.tv/*",
+    "https://www.trakt.tv/*",
+    "https://app.trakt.tv/*",
+    "https://www.filmweb.pl/*",
+    "https://filmweb.pl/*",
+    "http://localhost/*",
+    "https://localhost/*",
+    "http://*/*",
+    "https://*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.imdb.com/title/*",
+        "https://imdb.com/title/*"
+      ],
+      "js": [
+        "src/shared/SeerrClient.js",
+        "src/shared/MediaExtractor.js",
+        "src/shared/UIComponents.js",
+        "src/shared/BaseIntegration.js",
+        "src/content/imdb-integration.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://www.rottentomatoes.com/m/*",
+        "https://rottentomatoes.com/m/*",
+        "https://www.rottentomatoes.com/tv/*",
+        "https://rottentomatoes.com/tv/*"
+      ],
+      "js": [
+        "src/shared/SeerrClient.js",
+        "src/shared/MediaExtractor.js",
+        "src/shared/UIComponents.js",
+        "src/shared/BaseIntegration.js",
+        "src/content/rt-integration.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://www.themoviedb.org/movie/*",
+        "https://themoviedb.org/movie/*",
+        "https://www.themoviedb.org/tv/*",
+        "https://themoviedb.org/tv/*"
+      ],
+      "js": [
+        "src/shared/SeerrClient.js",
+        "src/shared/MediaExtractor.js",
+        "src/shared/UIComponents.js",
+        "src/shared/BaseIntegration.js",
+        "src/content/tmdb-integration.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://letterboxd.com/film/*",
+        "https://www.letterboxd.com/film/*"
+      ],
+      "js": [
+        "src/shared/SeerrClient.js",
+        "src/shared/MediaExtractor.js",
+        "src/shared/UIComponents.js",
+        "src/shared/BaseIntegration.js",
+        "src/content/letterboxd-integration.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://www.metacritic.com/movie/*",
+        "https://metacritic.com/movie/*",
+        "https://www.metacritic.com/tv/*",
+        "https://metacritic.com/tv/*"
+      ],
+      "js": [
+        "src/shared/SeerrClient.js",
+        "src/shared/MediaExtractor.js",
+        "src/shared/UIComponents.js",
+        "src/shared/BaseIntegration.js",
+        "src/content/metacritic-integration.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://trakt.tv/movies/*",
+        "https://www.trakt.tv/movies/*",
+        "https://app.trakt.tv/movies/*",
+        "https://trakt.tv/shows/*",
+        "https://www.trakt.tv/shows/*",
+        "https://app.trakt.tv/shows/*"
+      ],
+      "js": [
+        "src/shared/SeerrClient.js",
+        "src/shared/MediaExtractor.js",
+        "src/shared/UIComponents.js",
+        "src/shared/BaseIntegration.js",
+        "src/content/trakt-integration.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://www.filmweb.pl/film/*",
+        "https://filmweb.pl/film/*",
+        "https://www.filmweb.pl/serial/*",
+        "https://filmweb.pl/serial/*"
+      ],
+      "js": [
+        "src/shared/SeerrClient.js",
+        "src/shared/MediaExtractor.js",
+        "src/shared/UIComponents.js",
+        "src/shared/BaseIntegration.js",
+        "src/content/filmweb-integration.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "http://*/movie/*",
+        "https://*/movie/*",
+        "http://*/tv/*",
+        "https://*/tv/*",
+        "http://*/search*",
+        "https://*/search*",
+        "http://localhost:5055/*",
+        "https://localhost:5055/*"
+      ],
+      "js": [
+        "src/shared/RatingsModel.js",
+        "src/shared/RatingsConfig.js",
+        "src/shared/UIComponents.js",
+        "src/content/seerr-integration.js"
+      ],
+      "css": [
+        "src/content/seerr-overlay.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_popup": "src/popup/popup.html",
+    "default_title": "Seerr Request Button"
+  },
+  "options_page": "src/options/options.html",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

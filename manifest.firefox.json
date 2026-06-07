@@ -1,0 +1,20 @@
+{
+  "browser_specific_settings": {
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    },
+    "gecko": {
+      "id": "seerr-request-button@example.com",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": [
+          "none"
+        ]
+      }
+    }
+  },
+  "background": {
+    "service_worker": "src/background/background.js",
+    "type": "module"
+  }
+}

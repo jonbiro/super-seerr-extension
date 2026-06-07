@@ -1,0 +1,18 @@
+# macOS
+.DS_Store
+__MACOSX
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Build output
+dist/
+*.zip
+*.xpi
+
+# Dependencies (future)
+node_modules/
+package-lock.json
