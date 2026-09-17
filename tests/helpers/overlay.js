@@ -86,13 +86,13 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local
         ? Promise.resolve({ success: true, data: { apiConfigured, serverUrl: settings.seerrUrl ?? null } })
         : sendMessage(message) }
     },
-    window: { RatingsModel: Model, RatingsConfig: Config, location: { pathname, search: '', origin: 'https://seerr.example' }, addEventListener() {} }
+    window: { RatingsModel: Model, RatingsConfig: Config, location: { pathname, search: '', origin: 'https://seerr.example', href: `https://seerr.example${pathname}` }, addEventListener() {} }
   });
   const source = fs.readFileSync(path.join(__dirname, '../../src/content/seerr-integration.js'), 'utf8');
   // Expose closure functions in the test VM only; execute the real production code.
   vm.runInContext(source.replace(/\}\)\(\);\s*$/, `globalThis.overlay = {
     getRatings, resolveRatings, mergeBundles, isBundleComplete, fetchSeerrSessionRatings, buildSummary, injectDetailRatings,
-    extractSeerrNativeRatings, bundleFromRatingObject, splitDisplayTitle, cleanupOverlay, ratingsCache, isSeerrPage, isRequestableTitle, detectRoute, isListRoute,
+    extractSeerrNativeRatings, bundleFromRatingObject, splitDisplayTitle, mediaLinkTarget, cleanupOverlay, ratingsCache, isSeerrPage, isRequestableTitle, detectRoute, isListRoute,
     applyScoreSort, applyScoreFilters,
     loadPersistedRatings, flushPersistedRatings, forgetRatings, ratingsCacheAge, ratingsCacheKey, explainUnresolvedCards,
     setSort: order => { currentSort = order; },

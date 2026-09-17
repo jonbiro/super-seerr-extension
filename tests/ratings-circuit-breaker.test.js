@@ -188,3 +188,90 @@ test('a server with IMDb but no Rotten Tomatoes also stops being asked', async (
   const plain = paths.filter(p => p.endsWith('/ratings') && /\/movie\/[1-9]\d{3,}/.test(p)).length;
   assert.ok(plain < attempts, `expected it to stop asking, saw ${plain} calls across ${attempts} titles`);
 });
+
+// Giving up used to last only as long as the page. Every reload spent a dozen
+// failed requests per endpoint relearning that this server serves no ratings,
+// which is what put a wall of red 404s in the console on each navigation.
+
+const DAY = 24 * 60 * 60 * 1000;
+const settle = () => new Promise(resolve => setImmediate(resolve));
+
+function overlayRemembering(record, respond) {
+  const paths = [];
+  const overlay = loadOverlay({
+    settings,
+    local: record ? { seerrRatingsUnavailableV1: record } : {},
+    fetch: async url => {
+      const { pathname } = new URL(String(url));
+      paths.push(pathname);
+      return respond(pathname);
+    }
+  });
+  const underTest = p => /\/movie\/[1-9]\d{3,}\//.test(p);
+  return { overlay, asked: suffix => paths.filter(p => p.endsWith(suffix) && underTest(p)).length };
+}
+
+const allRatingsMissing = pathname => pathname.endsWith('/ratings') || pathname.endsWith('/ratingscombined')
+  ? { ok: false, status: 404 }
+  : { ok: true, json: async () => ({ voteAverage: 7.9 }) };
+
+test('a server written off today is not asked again on the next page load', async () => {
+  const { overlay, asked } = overlayRemembering(
+    { server: 'https://seerr.example/', kinds: { ratingscombined: Date.now() } },
+    allRatingsMissing
+  );
+
+  for (let i = 0; i < 20; i++) await overlay.getRatings(1000 + i, `Title ${i}`, null, 'movie');
+
+  assert.equal(asked('/ratingscombined'), 0, 'a remembered verdict should cost no requests at all');
+  assert.equal(asked('/ratings'), 0, 'and neither endpoint can succeed once combined has failed');
+});
+
+test('an old verdict is retested with one request, not another dozen', async () => {
+  const { overlay, asked } = overlayRemembering(
+    { server: 'https://seerr.example/', kinds: { ratingscombined: Date.now() - 2 * DAY } },
+    allRatingsMissing
+  );
+
+  for (let i = 0; i < 20; i++) await overlay.getRatings(1000 + i, `Title ${i}`, null, 'movie');
+
+  assert.equal(asked('/ratingscombined'), 1,
+    'past the window it should probe once, then trip on that single failure');
+});
+
+test('a remembered verdict from another server is ignored', async () => {
+  const { overlay, asked } = overlayRemembering(
+    { server: 'https://elsewhere.example/', kinds: { ratingscombined: Date.now() } },
+    allRatingsMissing
+  );
+
+  for (let i = 0; i < 3; i++) await overlay.getRatings(1000 + i, `Title ${i}`, null, 'movie');
+
+  assert.ok(asked('/ratingscombined') > 0, 'what another server does not serve says nothing about this one');
+});
+
+test('giving up is written down, so the next page load starts knowing it', async () => {
+  const { overlay } = overlayRemembering(null, allRatingsMissing);
+
+  for (let i = 0; i < Config.seerrRatingsFailureLimit + 1; i++) {
+    await overlay.fetchSeerrSessionRatings(1000 + i, 'movie', null);
+  }
+  await settle();
+
+  const record = overlay.localStore.seerrRatingsUnavailableV1;
+  assert.equal(record.server, 'https://seerr.example/');
+  assert.equal(typeof record.kinds.ratingscombined, 'number');
+});
+
+test('refreshing forgets the written-down verdict too', async () => {
+  const { overlay } = overlayRemembering(
+    { server: 'https://seerr.example/', kinds: { ratingscombined: Date.now() } },
+    allRatingsMissing
+  );
+
+  overlay.forgetRatings([{ tmdbId: TMDB_ID, mediaType: 'movie' }]);
+  await settle();
+
+  assert.equal(overlay.localStore.seerrRatingsUnavailableV1, undefined,
+    'a refresh must not leave a record that silences the retry it just asked for');
+});

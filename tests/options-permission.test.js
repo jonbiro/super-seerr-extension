@@ -156,7 +156,9 @@ test('Settings reports how many ratings are cached and clears them', async t => 
 
   // Removal, not an empty write: open tabs treat a write as a normal flush.
   // Flatten: the arrays come from the page realm.
-  assert.deepEqual(ctx.localRemovals.map(keys => [...keys]), [['overlayRatingsV1']]);
+  // The record of endpoints this server does not serve goes with the cache:
+  // clearing is the user saying "try again", which includes those.
+  assert.deepEqual(ctx.localRemovals.map(keys => [...keys]), [['seerrRatingsUnavailableV1', 'overlayRatingsV1']]);
   assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /No ratings cached/);
   assert.equal(ctx.window.document.getElementById('clearRatingsCache').disabled, true, 'nothing left to clear');
 });

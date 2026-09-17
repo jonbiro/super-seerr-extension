@@ -2,6 +2,9 @@
 
 // Written by the Seerr overlay; see src/content/seerr-integration.js.
 const RATINGS_CACHE_KEY = 'overlayRatingsV1';
+// The overlay's record of which ratings endpoints this server does not serve.
+// Clearing the cache means "ask again", so this goes with it.
+const RATINGS_UNAVAILABLE_KEY = 'seerrRatingsUnavailableV1';
 
 class OptionsManager {
   constructor() {
@@ -56,7 +59,7 @@ class OptionsManager {
   async clearRatingsCache() {
     try {
       // Removing the key is what open Seerr tabs watch for; a write is not a clear.
-      await chrome.storage.local.remove([RATINGS_CACHE_KEY]);
+      await chrome.storage.local.remove([RATINGS_UNAVAILABLE_KEY, RATINGS_CACHE_KEY]);
       this.showStatus('success', 'Ratings cache cleared');
     } catch (error) {
       console.error('Could not clear the ratings cache:', error);

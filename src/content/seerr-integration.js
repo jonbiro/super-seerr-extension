@@ -57,6 +57,9 @@
     // write a value, so only a removal counts as a clear.
     if (namespace === 'local' && changes[PERSISTED_RATINGS_KEY] && changes[PERSISTED_RATINGS_KEY].newValue === undefined) {
       forgetPersistedRatings();
+      // Clearing the cache is also a request to retry endpoints we had
+      // written off, in case the server has gained a ratings backend since.
+      resetSeerrRatings();
       cleanupOverlay();
       injectOverlay();
       return;
@@ -504,9 +507,58 @@
     return seerrRatingsFailures[kind] >= Config.seerrRatingsFailureLimit;
   }
 
+  // Giving up only lasts as long as the page does, so every reload re-learns
+  // the same answer at a cost of twelve failed requests and twelve red console
+  // lines per endpoint. A server with no ratings backend configured pays that
+  // on every navigation. Remember the verdict instead, per server.
+  const RATINGS_UNAVAILABLE_KEY = 'seerrRatingsUnavailableV1';
+  // How long the verdict stands before it is worth testing again. Turning the
+  // ratings backend on is a deliberate change on the server, so a day of not
+  // asking costs little; "Refresh scores" clears it immediately for anyone who
+  // does not want to wait.
+  const RATINGS_RECHECK_MS = 24 * 60 * 60 * 1000;
+  let ratingsAvailabilityReady = null;
+
+  function loadRatingsAvailability() {
+    ratingsAvailabilityReady ??= (async () => {
+      try {
+        const stored = (await chrome.storage.local.get([RATINGS_UNAVAILABLE_KEY]))[RATINGS_UNAVAILABLE_KEY];
+        if (!stored || typeof stored !== 'object') return;
+        if (stored.server !== configuredServer?.href) return;
+        for (const kind of RATINGS_ENDPOINTS) {
+          const recordedAt = stored.kinds?.[kind];
+          if (typeof recordedAt !== 'number') continue;
+          // Inside the window, start given up: no request at all. Past it, sit
+          // one short of the limit, so a single 404 re-trips rather than
+          // another full dozen.
+          seerrRatingsFailures[kind] = Date.now() - recordedAt < RATINGS_RECHECK_MS
+            ? Config.seerrRatingsFailureLimit
+            : Config.seerrRatingsFailureLimit - 1;
+        }
+      } catch (error) {
+        log('Could not read which ratings endpoints were unavailable:', error);
+      }
+    })();
+    return ratingsAvailabilityReady;
+  }
+
+  async function rememberRatingsUnavailable(kind) {
+    try {
+      if (!configuredServer) return;
+      const stored = (await chrome.storage.local.get([RATINGS_UNAVAILABLE_KEY]))[RATINGS_UNAVAILABLE_KEY];
+      const kinds = stored?.server === configuredServer.href && stored?.kinds ? { ...stored.kinds } : {};
+      kinds[kind] = Date.now();
+      await chrome.storage.local.set({ [RATINGS_UNAVAILABLE_KEY]: { server: configuredServer.href, kinds } });
+    } catch (error) {
+      log('Could not record that ratings are unavailable:', error);
+    }
+  }
+
   function resetSeerrRatings() {
     seerrRatingsFailures.ratings = 0;
     seerrRatingsFailures.ratingscombined = 0;
+    ratingsAvailabilityReady = null;
+    chrome.storage.local.remove([RATINGS_UNAVAILABLE_KEY]).catch(() => {});
   }
 
   function endpointCanHelp(bundle, fields) {
@@ -546,7 +598,8 @@
           else if (result.status === 404) {
             seerrRatingsFailures[kind]++;
             if (seerrRatingsGivenUp(kind)) {
-              log(`Seerr has answered ${seerrRatingsFailures[kind]} ${kind} requests with 404; not asking again this session`);
+              log(`Seerr has answered ${seerrRatingsFailures[kind]} ${kind} requests with 404; not asking again`);
+              rememberRatingsUnavailable(kind);
             }
           }
         }
@@ -664,7 +717,7 @@
         });
         return {
           posterUrl: posterUrl || null,
-          hasMediaLink: Array.from(card.querySelectorAll('a[href]')).some(a => MEDIA_LINK_RE.test(a.getAttribute('href') || '')),
+          hasMediaLink: Array.from(card.querySelectorAll('a[href]')).some(a => mediaLinkTarget(a.getAttribute('href'))),
           posterMatches: posterMatches.length,
           reason: !posterUrl ? 'no poster image to match on'
             : lastListItems.length === 0 ? 'nothing observed from the page yet'
@@ -928,6 +981,7 @@
 
   async function getRatings(tmdbId, title, year, mediaType = null, options = {}) {
     await loadPersistedRatings();
+    await loadRatingsAvailability();
 
     const key = ratingsCacheKey(tmdbId, title, year, mediaType);
     const cached = options.refresh === true ? null : ratingsCache.get(key);
@@ -996,7 +1050,24 @@
     return 'Mostly negative reviews';
   }
 
-  const MEDIA_LINK_RE = /\/(movie|tv)\/(\d+)/;
+  // Seerr's own routes are /movie/:id and /tv/:id, but that path shape is not
+  // unique to this server. A detail page's external-links row points at
+  // themoviedb.org/movie/1241982, and matching the raw href read that logo as
+  // one of our cards and stamped a rating badge on it. Resolve the href and
+  // require the same origin, so only links back into this Seerr count.
+  function mediaLinkTarget(href) {
+    if (!href) return null;
+    let pathname;
+    try {
+      const url = new URL(href, window.location.href);
+      if (url.origin !== window.location.origin) return null;
+      pathname = url.pathname;
+    } catch {
+      return null;
+    }
+    const match = pathname.match(/^\/(movie|tv)\/(\d+)/);
+    return match ? { mediaType: match[1], tmdbId: match[2] } : null;
+  }
   const MEDIA_CARD_CONTAINER_SELECTOR = '[data-testid="title-card"], [class*="MediaCard"], [class*="media-item"], article, li, [class*="card"], [class*="Card"]';
   let nextCardIndex = 0;
   let lastListItems = [];
@@ -1005,12 +1076,12 @@
     if (card.__seerrMediaInfo) return card.__seerrMediaInfo;
 
     const links = card.matches?.('a[href]') ? [card] : Array.from(card.querySelectorAll('a[href]'));
-    const link = links.find(a => MEDIA_LINK_RE.test(a.getAttribute('href') || ''));
+    const link = links.find(a => mediaLinkTarget(a.getAttribute('href')));
     if (!link) return card.__seerrListMediaInfo || null;
 
     const href = link.getAttribute('href') || '';
-    const tmdbMatch = href.match(MEDIA_LINK_RE);
-    if (!tmdbMatch) return null;
+    const target = mediaLinkTarget(href);
+    if (!target) return null;
 
     const titleEl = card.querySelector('h2, h3, [class*="title"], [class*="Title"]');
     const imageAlt = card.querySelector('img[alt]')?.getAttribute('alt') || '';
@@ -1019,8 +1090,8 @@
     card.__seerrMediaInfo = {
       link,
       href,
-      mediaType: tmdbMatch[1],
-      tmdbId: tmdbMatch[2],
+      mediaType: target.mediaType,
+      tmdbId: target.tmdbId,
       title: title.trim()
     };
     return card.__seerrMediaInfo;
@@ -1032,7 +1103,7 @@
     if (titleCards.length > 0) return titleCards;
 
     const links = Array.from(root.querySelectorAll('a[href]'))
-      .filter(link => MEDIA_LINK_RE.test(link.getAttribute('href') || ''))
+      .filter(link => mediaLinkTarget(link.getAttribute('href')))
       .filter(link => !link.closest('[data-seerr-overlay="true"]'));
     const cards = [];
     const seen = new Set();
@@ -1895,7 +1966,7 @@
         }))
       };
     },
-    clearCache:   () => { forgetPersistedRatings(); chrome.storage.local.remove([PERSISTED_RATINGS_KEY]); },
+    clearCache:   () => { forgetPersistedRatings(); resetSeerrRatings(); chrome.storage.local.remove([PERSISTED_RATINGS_KEY]); },
     inject:       () => { cleanupOverlay(); injectOverlay(); },
     reInject:     () => { cleanupOverlay(); injectOverlay(); }
   };

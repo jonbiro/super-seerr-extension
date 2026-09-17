@@ -28,7 +28,8 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
   window.chrome = {
     storage: {
       sync: { get: async () => syncedStorage() },
-      local: { get: async () => ({}) },
+      // MV3 always provides these; a mock without them fails code that is fine.
+      local: { get: async () => ({}), set: async () => {}, remove: async () => {} },
       onChanged: { addListener(fn) { storageListener = fn; } }
     },
     runtime: { sendMessage: async message => {
