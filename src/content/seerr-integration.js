@@ -280,9 +280,15 @@
     return score === null ? null : Math.round(score);
   }
 
+  // TMDB and IMDb both report 0 for a title nobody has rated, and neither
+  // scale can otherwise reach 0 — their votes start at 1. So a zero here means
+  // "no rating", and showing it as 0/10 would read as a damning score and sort
+  // below genuine low ratings. A Rotten Tomatoes 0% is a real verdict and is
+  // handled by parsePercentScore, which keeps it.
   function parseTenPointScore(value) {
     const score = parseScore(value, 10);
-    return score === null ? null : Math.round(score * 10) / 10;
+    if (score === null || score === 0) return null;
+    return Math.round(score * 10) / 10;
   }
 
   function firstParsedScore(obj, keys, parser) {

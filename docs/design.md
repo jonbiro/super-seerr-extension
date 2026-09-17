@@ -60,7 +60,7 @@ Observed items and explicitly fetched lists accumulate into one bounded list, be
 
 ## Ratings resolution
 
-Bundles contain `rtCriticsScore`, `rtAudienceScore`, `imdbRating`, `tmdbRating`, `confidence`, `source`, and `lastUpdated`. RT uses a 0–100 scale; IMDb/TMDB use 0–10. Zero is valid. Missing or invalid numeric scores are null.
+Bundles contain `rtCriticsScore`, `rtAudienceScore`, `imdbRating`, `tmdbRating`, `confidence`, `source`, and `lastUpdated`. RT uses a 0–100 scale; IMDb/TMDB use 0–10. A Rotten Tomatoes zero is kept, because 0% is a real verdict. A TMDB or IMDb zero is discarded: both scales start their votes at 1, so a zero there means nobody has rated the title, and showing it would read as a damning score and sort below genuine low ratings. Missing or invalid numeric scores are null.
 
 Resolution preserves fields from earlier sources while filling missing fields:
 

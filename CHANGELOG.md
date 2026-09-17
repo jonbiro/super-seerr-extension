@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.36]
+
+- Unrated titles no longer show as `0/10`. TMDB and IMDb both report zero for a title nobody has rated, and the badge rendered that as a score — so an unreleased film read as damningly bad and sorted below genuine low ratings. Both scales start their votes at 1, so a zero is now treated as no rating. A Rotten Tomatoes 0% is still shown, because there it is a real verdict.
+
 ## [3.1.35]
 
 - The request flyout now matches the site it appears on rather than your operating system. It chose its theme from `prefers-color-scheme`, but IMDb, Letterboxd, Trakt and Metacritic are dark whichever theme you run, so anyone with a light system setting got a white panel on a dark page. It now reads the page's own background, falling back to the system preference only when the page does not say.

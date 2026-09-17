@@ -92,7 +92,7 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local
   // Expose closure functions in the test VM only; execute the real production code.
   vm.runInContext(source.replace(/\}\)\(\);\s*$/, `globalThis.overlay = {
     getRatings, resolveRatings, mergeBundles, isBundleComplete, fetchSeerrSessionRatings, buildSummary, injectDetailRatings,
-    extractSeerrNativeRatings, cleanupOverlay, ratingsCache, isSeerrPage, isRequestableTitle, detectRoute, isListRoute,
+    extractSeerrNativeRatings, bundleFromRatingObject, cleanupOverlay, ratingsCache, isSeerrPage, isRequestableTitle, detectRoute, isListRoute,
     applyScoreSort, applyScoreFilters,
     loadPersistedRatings, flushPersistedRatings, forgetRatings, ratingsCacheAge, ratingsCacheKey, explainUnresolvedCards,
     setSort: order => { currentSort = order; },
