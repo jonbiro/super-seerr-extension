@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.34]
+
+- Card badges now hold their contrast on any poster. A dark fill with no edge disappeared against dark artwork, which is common, and a blanket opacity weakened it further; the badge now carries a light edge and a shadow instead. Rendered against bright, busy, dark, near-black and washed-out posters to check.
+- Tightened the detail-page ratings row, which was dimming its labels twice over, once on the row and again on each label.
+
 ## [3.1.32]
 
 - Redesigned the grid controls. Labels sat at 55% opacity on a grey wash, and the sort control, the thresholds and the buttons all carried identical weight, so nothing was legible or findable. The bar is now a panel with recessed fields, labels at readable contrast, and buttons ranked by what they do — violet marks an action, Reset stays quiet.

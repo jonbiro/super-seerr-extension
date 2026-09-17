@@ -1082,7 +1082,7 @@
               audienceBadge.className = 'seerr-card-badge seerr-card-audience-badge';
               audienceBadge.setAttribute('data-seerr-overlay', 'true');
               audienceBadge.textContent = `🍿 ${bundle.confidence < 1 ? '~' : ''}${bundle.rtAudienceScore}%`;
-              if (bundle.rtCriticsScore !== null || bundle.tmdbRating !== null) audienceBadge.style.top = '28px';
+              if (bundle.rtCriticsScore !== null || bundle.tmdbRating !== null) audienceBadge.classList.add('seerr-card-badge-stacked');
               card.appendChild(audienceBadge);
             }
             if ((bundle.rtCriticsScore === null || bundle.confidence < Config.confidenceThreshold) && bundle.tmdbRating !== null) {

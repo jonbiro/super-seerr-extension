@@ -357,3 +357,32 @@ test('every filter field declares which score it belongs to', async t => {
     assert.ok(css.includes(`[data-score="${score}"]`), `${score} should have its own accent`);
   }
 });
+
+test('a card badge keeps the edge and shadow that make it readable on any poster', async t => {
+  // Posters run from near-white to near-black, so a dark fill alone vanishes
+  // against a dark one. The light border and shadow are what carry it.
+  const css = require('node:fs').readFileSync('src/content/seerr-overlay.css', 'utf8');
+  const rule = css.slice(css.indexOf('.seerr-card-badge {'), css.indexOf('}', css.indexOf('.seerr-card-badge {')));
+
+  assert.match(rule, /border:\s*1px solid rgba\(255, 255, 255/, 'a light edge, for dark posters');
+  assert.match(rule, /box-shadow:/, 'a shadow, for light posters');
+  assert.ok(!/^\s*opacity:/m.test(rule), 'no blanket opacity weakening it further');
+
+  const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  const badge = fixture.window.document.querySelector('.seerr-card-badge');
+  assert.ok(badge, 'badges should still render');
+});
+
+test('the stacked badge offset lives with the styles that determine it', async t => {
+  const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+
+  const source = require('node:fs').readFileSync('src/content/seerr-integration.js', 'utf8');
+  assert.ok(!source.includes("style.top = '28px'"), 'no magic offset in the script');
+
+  const stacked = fixture.window.document.querySelector('.seerr-card-badge-stacked');
+  if (stacked) assert.ok(stacked.classList.contains('seerr-card-badge'), 'it is still a badge');
+  const css = require('node:fs').readFileSync('src/content/seerr-overlay.css', 'utf8');
+  assert.match(css, /\.seerr-card-badge-stacked\s*\{[^}]*top:/, 'the offset is defined in CSS');
+});

@@ -3,23 +3,34 @@
 
 /* ─── Card Badges ─── */
 
+/* A badge sits on an arbitrary poster, so it cannot rely on the artwork for
+   contrast. A dark fill alone disappears against a dark poster: the light
+   edge and the drop shadow are what keep the pill readable on any of them. */
 .seerr-card-badge {
   position: absolute;
   top: 6px;
   right: 6px;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(10, 12, 18, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px) saturate(120%);
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
   color: #fff;
   font-size: 10px;
   font-weight: 600;
-  padding: 2px 5px;
-  border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+  padding: 2px 6px;
+  border-radius: 5px;
   pointer-events: none;
   z-index: 5;
   line-height: 1.4;
   letter-spacing: 0.2px;
-  opacity: 0.92;
+}
+
+/* The second badge clears the first. Kept here rather than as a number in the
+   script, because the offset depends on the padding and border above. */
+.seerr-card-badge-stacked {
+  top: 30px;
 }
 
 /* ─── Detail Page Ratings Row ─── */
@@ -27,13 +38,13 @@
 .seerr-ratings-row {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 8px 20px;
   padding: 6px 0;
   margin-top: 4px;
   font-size: 13px;
   font-family: inherit;
+  font-variant-numeric: tabular-nums;
   flex-wrap: wrap;
-  opacity: 0.88;
 }
 
 .seerr-rating-item {
@@ -49,7 +60,8 @@
 
 .seerr-rating-item small {
   font-size: 10px;
-  opacity: 0.65;
+  opacity: 0.72;
+  letter-spacing: 0.02em;
 }
 
 .seerr-quality-summary {
