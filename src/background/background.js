@@ -302,15 +302,18 @@ class SeerrAPI {
     this.log('🔍 [Background] generateSearchTerms called with:', originalTitle);
     const terms = [originalTitle];
 
+    // Digit/word swaps target standalone numerals such as "Toy Story 2".
+    // Without the word boundaries these rewrote digits inside numbers, turning
+    // "Blade Runner 2049" into "Blade Runner Two0Four9" — a wasted request that
+    // could also fuzzy-match the wrong title.
+    const numberWords = [['2', 'Two'], ['3', 'Three'], ['4', 'Four']];
     const variations = [
       originalTitle.replace(/Se7en/gi, 'Seven'),
       originalTitle.replace(/Seven/gi, 'Se7en'),
-      originalTitle.replace(/2/g, 'Two'),
-      originalTitle.replace(/Two/gi, '2'),
-      originalTitle.replace(/3/g, 'Three'),
-      originalTitle.replace(/Three/gi, '3'),
-      originalTitle.replace(/4/g, 'Four'),
-      originalTitle.replace(/Four/gi, '4'),
+      ...numberWords.flatMap(([digit, word]) => [
+        originalTitle.replace(new RegExp(`\\b${digit}\\b`, 'g'), word),
+        originalTitle.replace(new RegExp(`\\b${word}\\b`, 'gi'), digit)
+      ]),
       originalTitle.replace(/[^a-zA-Z0-9\s]/g, ''),
       originalTitle.replace(/^(The|A|An)\s+/i, ''),
       originalTitle.split(':')[0].trim(),
