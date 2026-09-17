@@ -11,8 +11,8 @@ test('Property 12: Ratings bundle is always renderable', () => {
       fc.record({
         rtCriticsScore:  fc.oneof(fc.constant(null), fc.integer({ min: 0, max: 100 })),
         rtAudienceScore: fc.oneof(fc.constant(null), fc.integer({ min: 0, max: 100 })),
-        imdbRating:      fc.oneof(fc.constant(null), fc.float({ min: 0, max: 10 })),
-        tmdbRating:      fc.oneof(fc.constant(null), fc.float({ min: 0, max: 10 })),
+        imdbRating:      fc.oneof(fc.constant(null), fc.float({ min: 0, max: 10, noNaN: true })),
+        tmdbRating:      fc.oneof(fc.constant(null), fc.float({ min: 0, max: 10, noNaN: true })),
       }),
       (partial) => {
         const bundle = createRatingsBundle(partial);

@@ -25,9 +25,13 @@ class PopupManager {
 
   async checkStatus() {
     try {
-      // Load settings from storage
-      const settings = await chrome.storage.sync.get(['seerrUrl', 'seerrApiKey']);
-      
+      // The URL syncs across devices; the API key is device-local.
+      const [settings, local] = await Promise.all([
+        chrome.storage.sync.get(['seerrUrl']),
+        chrome.storage.local.get(['seerrApiKey'])
+      ]);
+      settings.seerrApiKey = local.seerrApiKey;
+
       if (!settings.seerrUrl) {
         this.showNotConfiguredState();
         return;

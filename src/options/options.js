@@ -10,7 +10,9 @@ class OptionsManager {
     this.toggleButton = document.getElementById('toggleApiKey');
     this.skipButton = document.getElementById('skipSetup');
     this.statusDiv = document.getElementById('status');
-    
+    this.permissionWarning = document.getElementById('permissionWarning');
+    this.grantButton = document.getElementById('grantPermission');
+
     this.init();
   }
 
@@ -24,15 +26,76 @@ class OptionsManager {
     this.reloadButton?.addEventListener('click', () => this.reloadSettings());
     this.toggleButton?.addEventListener('click', () => this.toggleApiKeyVisibility());
     this.skipButton?.addEventListener('click', () => window.close());
-    
+    this.grantButton?.addEventListener('click', () => this.grantOverlayAccess());
+
+    await this.refreshPermissionWarning();
+  }
+
+  // An origin match pattern for the URL in the form, or null when unusable.
+  originPattern(serverUrl = this.serverUrlInput.value.trim()) {
+    if (!serverUrl) return null;
+    try {
+      const url = new URL(serverUrl);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+      // Match patterns cannot carry a port; a bare host matches every port.
+      return `${url.protocol}//${url.hostname}/*`;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  async hasOverlayPermission(pattern = this.originPattern()) {
+    if (!pattern) return false;
+    try {
+      return await chrome.permissions.contains({ origins: [pattern] });
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // Shown whenever a server is saved but the overlay cannot run on it. Saving
+  // never blocks on the grant, so this is the standing reminder to fix that.
+  async refreshPermissionWarning() {
+    if (!this.permissionWarning) return;
+    const { seerrUrl } = await chrome.storage.sync.get(['seerrUrl']);
+    const pattern = this.originPattern(seerrUrl);
+    const missing = !!pattern && !(await this.hasOverlayPermission(pattern));
+    this.permissionWarning.classList.toggle('hidden', !missing);
+  }
+
+  // Requests the grant and nothing else. Callers decide what follows, because
+  // the ordering differs: saving must persist the new URL before the worker
+  // re-registers, while the banner's button has nothing to save.
+  // Chrome rejects this without an active user gesture, so callers must not
+  // await anything between the click and this call.
+  async requestOverlayPermission(pattern = this.originPattern()) {
+    if (!pattern) return false;
+    try {
+      return await chrome.permissions.request({ origins: [pattern] });
+    } catch (error) {
+      console.error('Host permission request failed:', error);
+      return false;
+    }
+  }
+
+  // The banner's button: nothing to save, so nudge the worker directly.
+  async grantOverlayAccess() {
+    const granted = await this.requestOverlayPermission();
+    if (granted) await chrome.runtime.sendMessage({ action: 'reloadSettings' }).catch(() => {});
+    await this.refreshPermissionWarning();
+    return granted;
   }
 
   async loadSettings() {
     try {
-      const settings = await chrome.storage.sync.get(['seerrUrl', 'seerrApiKey', 'overlayFeatures']);
-      
+      // The URL and feature flags sync across devices; the key stays local.
+      const [settings, local] = await Promise.all([
+        chrome.storage.sync.get(['seerrUrl', 'overlayFeatures']),
+        chrome.storage.local.get(['seerrApiKey'])
+      ]);
+
       this.serverUrlInput.value = settings.seerrUrl || '';
-      this.apiKeyInput.value = settings.seerrApiKey || '';
+      this.apiKeyInput.value = local.seerrApiKey || '';
       document.querySelectorAll('[data-overlay-feature]').forEach(input => {
         input.checked = settings.overlayFeatures?.[input.dataset.overlayFeature] !== false;
       });
@@ -73,16 +136,29 @@ class OptionsManager {
       return;
     }
 
+    // Ask for the host permission first: everything above is synchronous, so
+    // the submit that triggered this is still the active user gesture, which
+    // Chrome requires. It resolves true without prompting when the origin is
+    // already granted, so there is no pre-check to await the gesture away.
+    const granted = await this.requestOverlayPermission(this.originPattern(serverUrl));
+
     try {
-      // Save to storage
-      await chrome.storage.sync.set({
-        seerrUrl: serverUrl,
-        seerrApiKey: apiKey,
-        overlayFeatures: Object.fromEntries(Array.from(document.querySelectorAll('[data-overlay-feature]'), input => [input.dataset.overlayFeature, input.checked]))
-      });
+      // The key is a secret, so it stays on this device.
+      await Promise.all([
+        chrome.storage.sync.set({
+          seerrUrl: serverUrl,
+          overlayFeatures: Object.fromEntries(Array.from(document.querySelectorAll('[data-overlay-feature]'), input => [input.dataset.overlayFeature, input.checked]))
+        }),
+        chrome.storage.local.set({ seerrApiKey: apiKey })
+      ]);
+
+      // The worker re-registers off this storage change, so no nudge here.
+      await this.refreshPermissionWarning();
 
       if (showSuccess) {
-        this.showStatus('success', 'Settings saved successfully');
+        this.showStatus('success', granted
+          ? 'Settings saved successfully'
+          : 'Settings saved. Grant access to your Seerr server to enable the ratings overlay.');
       }
     } catch (error) {
       console.error('Error saving settings:', error);

@@ -1,25 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const vm = require('node:vm');
 const Config = require('../src/shared/RatingsConfig');
-
-function loadWorker({ get = async () => ({}), fetch = async () => ({ ok: true, text: async () => '' }) } = {}) {
-  const listeners = {};
-  const writes = [];
-  const removals = [];
-  const context = vm.createContext({
-    console: { log() {}, warn() {}, error() {} }, URL, fetch, AbortSignal, RatingsConfig: Config,
-    chrome: {
-      storage: { sync: { get, set: async value => writes.push(value), remove: async keys => removals.push(keys) }, onChanged: { addListener: fn => { listeners.storage = fn; } } },
-      action: { setBadgeText() {}, setBadgeBackgroundColor() {} },
-      runtime: { onMessage: { addListener: fn => { listeners.message = fn; } }, onInstalled: { addListener: fn => { listeners.installed = fn; } } }
-    }
-  });
-  const source = fs.readFileSync('src/background/background.js', 'utf8');
-  vm.runInContext(source.replace("import '../shared/RatingsConfig.js';", '') + '\nglobalThis.worker = seerrAPI; globalThis.ready = settingsReady;', context);
-  return { api: context.worker, ready: context.ready, listeners, writes, removals };
-}
+const { loadWorker } = require('./helpers/worker');
 
 test('worker registers listeners immediately and delays messages until settings are loaded', async () => {
   let release;

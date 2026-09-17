@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your Seerr server.
 
-![Version](https://img.shields.io/badge/version-3.1.10-blue)
+![Version](https://img.shields.io/badge/version-3.1.11-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -11,15 +11,20 @@ Request movies and TV shows from the pages where you discover them, and bring Ro
 1. Run `npm ci` and `make build` with Node.js 22.13 or newer and Make installed.
 2. In Chrome, open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose `dist/chrome`.
 3. Open Super Seerr’s **Settings**, enter your Seerr server URL, and click **Save Settings**.
-4. Refresh Seerr. For request and watchlist actions, add a Seerr API key from Seerr Settings → General → API Key.
+4. Approve the permission prompt for your Seerr server. Super Seerr only asks for the one origin you saved, and the ratings overlay cannot run until you approve it.
+5. Refresh Seerr. For request and watchlist actions, add a Seerr API key from Seerr Settings → General → API Key.
+
+If you dismiss the permission prompt, your settings are still saved and the site integrations keep working; Settings then shows a standing notice with a **Grant access** button. Changing the server URL asks again for the new origin and drops the old one.
 
 **Test Connection** checks the entered URL and key without saving them. Editing a field does not save it; use **Save Settings** to apply changes. You can leave the API key empty for ratings-only mode. The toolbar shows **RT** for URL-only setup, **ON** for URL plus API key, and no badge when no URL is saved. These badges describe configuration, not server health.
 
 After rebuilding, reload the extension in Chrome and refresh the pages using it. The local folder remains `dist/chrome`.
 
-### Firefox limitation
+### Firefox status
 
-`make build` also produces `dist/firefox`. Its current manifest retains the requested `background.service_worker` configuration. [Mozilla documents that Firefox does not support that entry](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background), so this package is not ready for Firefox runtime use. It needs a background module script configuration and browser validation. Packaging success is not proof of Firefox compatibility.
+`make build` also produces `dist/firefox`. Its manifest now uses the `background.scripts` module configuration [Mozilla documents for Firefox](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background) instead of the `service_worker` entry Firefox ignores, so the previously known-broken background configuration is fixed.
+
+This has **not been validated against a running Firefox**. The manifest is correct in principle; nobody has yet loaded the package in Firefox and exercised requests, the overlay, or dynamic script registration. Packaging success is not proof of Firefox compatibility. Treat Firefox as untested until someone reports otherwise.
 
 ## What it does
 
@@ -70,9 +75,13 @@ See [architecture](docs/design.md), [requirements and limits](docs/requirements.
 
 ## Data and permissions
 
-Seerr requests use your configured URL and API key. Overlay session requests use the logged-in Seerr page session. RT lookup sends a title search to Rotten Tomatoes. Broad URL matching accommodates self-hosted Seerr domains; the overlay checks your configured origin and path before injecting its interface.
+Seerr requests use your configured URL and API key. Overlay session requests use the logged-in Seerr page session. RT lookup sends a title search to Rotten Tomatoes.
 
-Connection settings use browser sync storage, including the API key. Treat exported profiles and shared machines accordingly. No telemetry service is configured by this project. Debug output can include media titles and server responses; review logs before sharing them.
+Super Seerr does not request access to all websites. The site integrations run only on the seven supported sites listed above. Because a self-hosted Seerr can live on any domain, access to your server is an *optional* permission requested at the moment you save its URL, and the overlay is registered against that one origin at runtime. Revoking the permission in your browser removes the overlay registration.
+
+The server URL and your feature toggles use browser sync storage, so they follow your browser profile across devices. **The API key is stored in device-local storage and does not sync** — enter it once per device. An API key saved by an earlier version is moved out of sync storage automatically on upgrade. Treat exported profiles and shared machines accordingly.
+
+No telemetry service is configured by this project. The background worker is quiet by default; verbose tracing is opt-in via the `debugLogging` flag in local storage. Debug output can include media titles and server responses, so review logs before sharing them.
 
 ## License
 

@@ -1,11 +1,11 @@
 {
   "manifest_version": 3,
   "name": "Super Seerr",
-  "version": "3.1.10",
+  "version": "3.1.11",
   "description": "Add movies and TV shows to Seerr directly from IMDB, Rotten Tomatoes, TheMovieDB, Letterboxd, Metacritic, Trakt and Filmweb.pl",
   "permissions": [
     "storage",
-    "activeTab"
+    "scripting"
   ],
   "host_permissions": [
     "https://www.imdb.com/*",
@@ -22,9 +22,9 @@
     "https://www.trakt.tv/*",
     "https://app.trakt.tv/*",
     "https://www.filmweb.pl/*",
-    "https://filmweb.pl/*",
-    "http://localhost/*",
-    "https://localhost/*",
+    "https://filmweb.pl/*"
+  ],
+  "optional_host_permissions": [
     "http://*/*",
     "https://*/*"
   ],
@@ -138,27 +138,6 @@
         "src/content/filmweb-integration.js"
       ],
       "run_at": "document_end"
-    },
-    {
-      "matches": [
-        "http://*/movie/*",
-        "https://*/movie/*",
-        "http://*/tv/*",
-        "https://*/tv/*",
-        "http://*/search*",
-        "https://*/search*",
-        "http://*/*",
-        "https://*/*"
-      ],
-      "js": [
-        "src/shared/RatingsModel.js",
-        "src/shared/RatingsConfig.js",
-        "src/content/seerr-integration.js"
-      ],
-      "css": [
-        "src/content/seerr-overlay.css"
-      ],
-      "run_at": "document_idle"
     }
   ],
   "action": {

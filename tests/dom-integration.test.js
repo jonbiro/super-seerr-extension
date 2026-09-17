@@ -22,10 +22,20 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
   let storageListener;
   const messages = [];
   const urls = [];
+  // The overlay reads the URL and flags from sync but asks the worker whether
+  // requests are enabled, so the key is never exposed to the page.
+  const syncedStorage = () => Object.fromEntries(Object.entries(storage).filter(([key]) => key !== 'seerrApiKey'));
   window.chrome = {
-    storage: { sync: { get: async () => storage }, onChanged: { addListener(fn) { storageListener = fn; } } },
+    storage: {
+      sync: { get: async () => syncedStorage() },
+      local: { get: async () => ({}) },
+      onChanged: { addListener(fn) { storageListener = fn; } }
+    },
     runtime: { sendMessage: async message => {
       messages.push(message);
+      if (message.action === 'getConfigState') {
+        return { success: true, data: { apiConfigured: !!storage.seerrApiKey, serverUrl: storage.seerrUrl ?? null } };
+      }
       return { success: true, data: message.action === 'getRottenTomatoesRatings' ? { rtCriticsScore: { Low: 30, High: 95 }[message.data.title] ?? null, confidence: 0.9 } : {} };
     } }
   };

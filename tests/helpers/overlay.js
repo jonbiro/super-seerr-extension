@@ -28,7 +28,7 @@ class Element {
   }
 }
 
-function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, sendMessage = async () => ({ success: false }), fetch = async () => ({ ok: false }) } = {}) {
+function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, apiConfigured = true, sendMessage = async () => ({ success: false }), fetch = async () => ({ ok: false }) } = {}) {
   const container = new Element();
   const title = container.appendChild(new Element('h1'));
   title.textContent = 'Example';
@@ -43,7 +43,17 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, sendM
     console, URL, document, fetch, AbortSignal,
     setTimeout() {}, clearTimeout() {}, setInterval() {}, clearInterval() {},
     history: { pushState() {}, replaceState() {} },
-    chrome: { storage: { sync: { get: async () => settings }, onChanged: { addListener() {} } }, runtime: { sendMessage } },
+    chrome: {
+      storage: {
+        sync: { get: async () => settings },
+        local: { get: async () => ({}) },
+        onChanged: { addListener() {} }
+      },
+      // Answered here so a test's sendMessage only ever sees ratings traffic.
+      runtime: { sendMessage: message => message?.action === 'getConfigState'
+        ? Promise.resolve({ success: true, data: { apiConfigured, serverUrl: settings.seerrUrl ?? null } })
+        : sendMessage(message) }
+    },
     window: { RatingsModel: Model, RatingsConfig: Config, location: { pathname, search: '', origin: 'https://seerr.example' }, addEventListener() {} }
   });
   const source = fs.readFileSync(path.join(__dirname, '../../src/content/seerr-integration.js'), 'utf8');

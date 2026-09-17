@@ -20,7 +20,14 @@ test('popup distinguishes ratings-only, unconfigured and request-enabled modes',
     let calls = 0;
     const context = vm.createContext({
       URL, console, document: { readyState: 'loading', getElementById: getNode, addEventListener() {} },
-      chrome: { storage: { sync: { get: async () => settings } }, runtime: { sendMessage: async () => { calls++; return { success: true, data: { user: 'Tester' } }; } } }
+      chrome: {
+        // The URL syncs; the API key is device-local.
+        storage: {
+          sync: { get: async () => ({ seerrUrl: settings.seerrUrl }) },
+          local: { get: async () => (settings.seerrApiKey === undefined ? {} : { seerrApiKey: settings.seerrApiKey }) }
+        },
+        runtime: { sendMessage: async () => { calls++; return { success: true, data: { user: 'Tester' } }; } }
+      }
     });
     vm.runInContext(fs.readFileSync('src/popup/popup.js', 'utf8') + '\nglobalThis.manager = new PopupManager();', context);
     await new Promise(resolve => setImmediate(resolve));

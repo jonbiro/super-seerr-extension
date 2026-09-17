@@ -25,28 +25,36 @@
   let apiConfigured = false;
   let configuredServer = null;
 
-  // Check API config — controls whether request features are available
-  function checkApiConfig() {
-    return chrome.storage.sync.get(['seerrUrl', 'seerrApiKey', 'overlayFeatures']).then(settings => {
+  // Check API config — controls whether request features are available.
+  // The API key is deliberately never read here: the worker answers whether
+  // requests are possible so the secret stays out of this page's heap.
+  async function checkApiConfig() {
+    try {
+      const settings = await chrome.storage.sync.get(['seerrUrl', 'overlayFeatures']);
       const previousServer = configuredServer?.href;
       for (const flag of Object.keys(FEATURE_FLAGS)) FEATURE_FLAGS[flag] = settings.overlayFeatures?.[flag] !== false;
-      apiConfigured = !!(settings.seerrUrl && settings.seerrApiKey);
       try {
         configuredServer = settings.seerrUrl ? new URL(settings.seerrUrl) : null;
       } catch (_) {
         configuredServer = null;
       }
       if (previousServer !== configuredServer?.href) ratingsCache.clear();
+
+      const response = await chrome.runtime.sendMessage({ action: 'getConfigState' }).catch(() => null);
+      apiConfigured = response?.success === true && response.data?.apiConfigured === true;
       log('API configured:', apiConfigured);
-    }).catch(error => log('Could not load Seerr settings:', error));
+    } catch (error) {
+      log('Could not load Seerr settings:', error);
+    }
   }
   checkApiConfig().then(() => injectOverlay());
 
-  // Update when settings change (e.g., user configures from options page)
+  // Update when settings change (e.g., user configures from options page).
+  // The URL and feature flags sync; the API key is device-local.
   chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === 'sync' && (changes.seerrUrl || changes.seerrApiKey || changes.overlayFeatures)) {
-      checkApiConfig().then(() => { cleanupOverlay(); injectOverlay(); });
-    }
+    const relevant = (namespace === 'sync' && (changes.seerrUrl || changes.overlayFeatures)) ||
+      (namespace === 'local' && changes.seerrApiKey);
+    if (relevant) checkApiConfig().then(() => { cleanupOverlay(); injectOverlay(); });
   });
 
   const ratingsCache = new Map(); // key: tmdbId (string), value: { bundle, expiresAt }

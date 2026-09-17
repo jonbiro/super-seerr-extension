@@ -10,6 +10,18 @@ function visit(dir) {
   }
 }
 visit(path.join(root, 'src'));
+
+// The overlay is registered at runtime, so its files are named in the worker
+// rather than in the manifest. Parse them out so a rename still fails the check.
+function dynamicOverlayFiles() {
+  const source = fs.readFileSync(path.join(root, 'src/background/background.js'), 'utf8');
+  const block = source.match(/const OVERLAY_SCRIPT_FILES = \{([\s\S]*?)\n\};/);
+  if (!block) throw new Error('Could not find OVERLAY_SCRIPT_FILES in the background worker');
+  const files = [...block[1].matchAll(/'([^']+\.(?:js|css))'/g)].map(match => match[1]);
+  if (files.length === 0) throw new Error('OVERLAY_SCRIPT_FILES listed no files');
+  return files;
+}
+
 for (const browser of ['chrome', 'firefox']) {
   const base = JSON.parse(fs.readFileSync(path.join(root, 'manifest.base.json')));
   const override = JSON.parse(fs.readFileSync(path.join(root, `manifest.${browser}.json`)));
@@ -17,6 +29,15 @@ for (const browser of ['chrome', 'firefox']) {
   const files = manifest.content_scripts.flatMap(entry => [...(entry.js || []), ...(entry.css || [])]);
   files.push(...(manifest.background.scripts || []));
   if (manifest.background.service_worker) files.push(manifest.background.service_worker);
+  files.push(...dynamicOverlayFiles());
   for (const file of files) if (!fs.existsSync(path.join(root, file))) throw new Error(`Missing ${file}`);
+
+  // Dynamic registration only works if the worker can actually request the origin.
+  if (!manifest.permissions.includes('scripting')) throw new Error(`${browser}: missing "scripting" permission`);
+  if (!(manifest.optional_host_permissions || []).some(pattern => pattern.startsWith('https://'))) {
+    throw new Error(`${browser}: no optional https host permission for the Seerr origin`);
+  }
+  const wildcard = (manifest.host_permissions || []).filter(pattern => /^https?:\/\/\*\/\*$/.test(pattern));
+  if (wildcard.length > 0) throw new Error(`${browser}: all-sites host permission should be optional, found ${wildcard.join(', ')}`);
 }
 console.log('Source syntax and manifest paths verified.');

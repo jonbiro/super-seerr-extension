@@ -149,14 +149,25 @@ test('Bulk selection tracks card elements so sorting/filtering cannot change sel
   );
 });
 
-test('Seerr overlay manifest entry does not double-load shared UIComponents', () => {
-  const seerrEntry = manifest.content_scripts.find(entry =>
-    entry.js && entry.js.includes('src/content/seerr-integration.js')
+test('Seerr overlay is registered dynamically and does not double-load shared UIComponents', () => {
+  // The overlay must not be a static match: the Seerr origin is only known at
+  // runtime, so a manifest entry would mean running on every site again.
+  assert.ok(
+    !manifest.content_scripts.some(entry => (entry.js || []).includes('src/content/seerr-integration.js')),
+    'Overlay must not be a static content_scripts entry'
+  );
+  assert.ok(
+    !manifest.content_scripts.some(entry => entry.matches.some(pattern => /^https?:\/\/\*\/\*$/.test(pattern))),
+    'No content script may match every site'
   );
 
-  assert.ok(seerrEntry, 'Seerr overlay content script entry should exist');
+  const worker = fs.readFileSync('src/background/background.js', 'utf8');
+  const declared = worker.match(/const OVERLAY_SCRIPT_FILES = \{([\s\S]*?)\n\};/);
+  assert.ok(declared, 'Worker should declare the overlay files it registers');
+  const files = [...declared[1].matchAll(/'([^']+)'/g)].map(match => match[1]);
+  assert.ok(files.includes('src/content/seerr-integration.js'), 'Overlay script should be registered');
   assert.ok(
-    !seerrEntry.js.includes('src/shared/UIComponents.js'),
-    'Broad Seerr overlay entry must not redeclare UIComponents on third-party sites'
+    !files.includes('src/shared/UIComponents.js'),
+    'Overlay registration must not redeclare UIComponents alongside the site integrations'
   );
 });

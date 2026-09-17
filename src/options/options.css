@@ -315,3 +315,6 @@ footer a:hover {
 .overlay-options label { display: flex; align-items: center; gap: 8px; }
 .overlay-options input[type="checkbox"] { width: auto; accent-color: #8b5cf6; }
 .overlay-options small { line-height: 1.5; }
+.permission-warning { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border: 1px solid #f59e0b; border-left-width: 4px; border-radius: 8px; background: rgba(245, 158, 11, 0.12); padding: 16px; margin: 20px 0; }
+.permission-warning.hidden { display: none; }
+.permission-warning-text { flex: 1 1 260px; line-height: 1.5; }

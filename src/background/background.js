@@ -2,13 +2,50 @@
 import '../shared/RatingsConfig.js';
 const RatingsConfig = globalThis.RatingsConfig;
 
+// Persisted RT cache lives under one storage.local key so a whole grid of
+// lookups collapses into a single debounced write.
+const RT_CACHE_STORAGE_KEY = 'rtCacheV1';
+const RT_CACHE_FLUSH_DELAY_MS = 500;
+
+// The Seerr server is self-hosted, so its origin is only known at runtime and
+// cannot be a static content_scripts match. The overlay is registered against
+// the saved origin instead, once the user grants that optional host permission.
+const OVERLAY_SCRIPT_ID = 'seerr-overlay';
+const OVERLAY_SCRIPT_FILES = {
+  js: ['src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/seerr-integration.js'],
+  css: ['src/content/seerr-overlay.css']
+};
+
+// An origin match pattern for the saved server, or null when it is unusable.
+function overlayOriginPattern(seerrUrl) {
+  if (!seerrUrl) return null;
+  try {
+    const url = new URL(seerrUrl);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    // Match patterns cannot carry a port, and url.origin includes one. A
+    // host without a port matches every port, which is what a self-hosted
+    // Seerr on :5055 needs.
+    return `${url.protocol}//${url.hostname}/*`;
+  } catch (_) {
+    return null;
+  }
+}
+
 class SeerrAPI {
   constructor() {
     this.baseUrl = null;
     this.apiKey = null;
+    this.debugLogging = false;
     this.rtCache = new Map();
     this.rtPending = new Map();
+    this.rtCacheReady = null;
+    this.rtCacheFlushTimer = null;
+    this.rtCacheFlushing = null;
   }
+
+  // Verbose tracing is opt-in; errors always surface.
+  log(...args) { if (this.debugLogging) console.log(...args); }
+  warn(...args) { if (this.debugLogging) console.warn(...args); }
 
   async migrateStorage() {
     try {
@@ -28,18 +65,35 @@ class SeerrAPI {
       if (removals.length > 0) {
         await chrome.storage.sync.set(updates);
         await chrome.storage.sync.remove(removals);
-        console.log('✅ [Seerr] Storage migration complete');
+        this.log('✅ [Seerr] Storage migration complete');
       }
+
+      await this.migrateApiKeyToLocal(updates.seerrApiKey ?? old.seerrApiKey);
     } catch (error) {
       console.error('❌ [Seerr] Storage migration failed, continuing:', error);
     }
   }
 
+  // The API key is a secret, so it belongs in device-local storage rather than
+  // replicated through the browser account. Copy before removing so an
+  // interrupted migration degrades to a duplicate, never to a lost key.
+  async migrateApiKeyToLocal(syncedApiKey) {
+    if (syncedApiKey === undefined) return;
+    const local = await chrome.storage.local.get(['seerrApiKey']);
+    if (local.seerrApiKey === undefined) await chrome.storage.local.set({ seerrApiKey: syncedApiKey });
+    await chrome.storage.sync.remove(['seerrApiKey']);
+    this.log('✅ [Seerr] API key moved to device-local storage');
+  }
+
   async loadSettings() {
     try {
-      const settings = await chrome.storage.sync.get(['seerrUrl', 'seerrApiKey']);
-      this.baseUrl = settings.seerrUrl;
-      this.apiKey = settings.seerrApiKey;
+      const [synced, local] = await Promise.all([
+        chrome.storage.sync.get(['seerrUrl']),
+        chrome.storage.local.get(['seerrApiKey', 'debugLogging'])
+      ]);
+      this.baseUrl = synced.seerrUrl;
+      this.apiKey = local.seerrApiKey;
+      this.debugLogging = local.debugLogging === true;
       this.updateIconBadge();
     } catch (error) {
       console.error('Error loading Seerr settings:', error);
@@ -59,15 +113,47 @@ class SeerrAPI {
     }
   }
 
+  // Keep the registered overlay in step with the saved server and the granted
+  // permission. Safe to call repeatedly; it converges rather than toggling.
+  async syncOverlayRegistration() {
+    // settingsReady gates every message, so this must never reject.
+    if (!chrome.scripting?.registerContentScripts || !chrome.permissions?.contains) return false;
+    const pattern = overlayOriginPattern(this.baseUrl);
+    let registered = [];
+    try {
+      registered = await chrome.scripting.getRegisteredContentScripts({ ids: [OVERLAY_SCRIPT_ID] });
+    } catch (_) {
+      registered = [];
+    }
+
+    const granted = pattern && await chrome.permissions.contains({ origins: [pattern] }).catch(() => false);
+    try {
+      if (!granted) {
+        if (registered.length > 0) await chrome.scripting.unregisterContentScripts({ ids: [OVERLAY_SCRIPT_ID] });
+        this.log('🔌 [Background] Overlay not registered; no permission for', pattern);
+        return false;
+      }
+      const script = { id: OVERLAY_SCRIPT_ID, matches: [pattern], runAt: 'document_idle', ...OVERLAY_SCRIPT_FILES };
+      if (registered.length > 0) await chrome.scripting.updateContentScripts([script]);
+      else await chrome.scripting.registerContentScripts([script]);
+      this.log('✅ [Background] Overlay registered for', pattern);
+      return true;
+    } catch (error) {
+      console.error('Could not update the Seerr overlay registration:', error);
+      return false;
+    }
+  }
+
   async handleMessage(request, sender, sendResponse) {
     try {
       switch (request.action) {
-        case 'requestMedia':
+        case 'requestMedia': {
           const result = await this.requestMedia(request.data);
           sendResponse({ success: true, data: result });
           break;
+        }
 
-        case 'testConnection':
+        case 'testConnection': {
           const connectionClient = request.data ? new SeerrAPI() : this;
           if (request.data) {
             const url = new URL(request.data.seerrUrl);
@@ -80,45 +166,61 @@ class SeerrAPI {
           const connectionResult = await connectionClient.testConnection();
           sendResponse({ success: true, data: connectionResult });
           break;
+        }
 
-        case 'searchMedia':
+        case 'searchMedia': {
           const searchResult = await this.searchMedia(request.query, request.mediaType);
           sendResponse({ success: true, data: searchResult });
           break;
+        }
 
-        case 'debugSearch':
+        case 'debugSearch': {
           const debugResult = await this.debugSearch(request.title, request.mediaType);
           sendResponse({ success: true, data: debugResult });
           break;
+        }
 
         case 'ping':
           sendResponse({ success: true, data: 'pong' });
           break;
 
-        case 'debugAPI':
+        case 'debugAPI': {
           const apiDebugResult = await this.debugAPI(request.tmdbId, request.mediaType);
           sendResponse({ success: true, data: apiDebugResult });
           break;
+        }
 
-        case 'getMediaStatus':
+        case 'getMediaStatus': {
           const statusResult = await this.getMediaStatus(request.data);
           sendResponse({ success: true, data: statusResult });
           break;
+        }
 
-        case 'reloadSettings':
+        case 'reloadSettings': {
           await this.loadSettings();
+          await this.syncOverlayRegistration();
           sendResponse({ success: true, data: 'Settings reloaded' });
           break;
+        }
 
-        case 'addToWatchlist':
+        // The overlay must never hold the API key, so it asks whether requests
+        // are available rather than reading the secret itself.
+        case 'getConfigState': {
+          sendResponse({ success: true, data: { apiConfigured: !!(this.baseUrl && this.apiKey), serverUrl: this.baseUrl ?? null } });
+          break;
+        }
+
+        case 'addToWatchlist': {
           const watchlistResult = await this.addToWatchlist(request.data);
           sendResponse({ success: true, data: watchlistResult });
           break;
+        }
 
-        case 'getRottenTomatoesRatings':
+        case 'getRottenTomatoesRatings': {
           const rtResult = await this.getRottenTomatoesRatings(request.data || {});
           sendResponse({ success: true, data: rtResult });
           break;
+        }
 
         default:
           sendResponse({ success: false, error: 'Unknown action' });
@@ -134,36 +236,36 @@ class SeerrAPI {
       throw new Error('Seerr server URL and API key are required. Please configure them in the extension options.');
     }
 
-    console.log('🎬 [Background] Requesting media:', mediaData);
+    this.log('🎬 [Background] Requesting media:', mediaData);
 
     // Use TMDB ID directly if provided — skip search entirely
     let tmdbId = mediaData.tmdbId ? parseInt(mediaData.tmdbId) : null;
     if (tmdbId && !isNaN(tmdbId)) {
-      console.log('✅ [Background] Using provided TMDB ID:', tmdbId);
+      this.log('✅ [Background] Using provided TMDB ID:', tmdbId);
     } else {
       // No TMDB ID provided — do a title search
       const searchTerms = this.generateSearchTerms(mediaData.title);
-      console.log('🔍 [Background] Generated search terms:', searchTerms);
+      this.log('🔍 [Background] Generated search terms:', searchTerms);
 
       let searchResults = [];
       let bestMatch = null;
 
       for (const searchTerm of searchTerms) {
         try {
-          console.log('🔍 [Background] Searching for:', searchTerm, 'type:', mediaData.mediaType);
+          this.log('🔍 [Background] Searching for:', searchTerm, 'type:', mediaData.mediaType);
           searchResults = await this.searchMedia(searchTerm, mediaData.mediaType);
-          console.log('🔍 [Background] Search results for "' + searchTerm + '":', searchResults.length, 'items');
+          this.log('🔍 [Background] Search results for "' + searchTerm + '":', searchResults.length, 'items');
 
           bestMatch = this.findBestMatch(searchResults, { ...mediaData, title: searchTerm });
-          console.log('🎯 [Background] Best match for "' + searchTerm + '":', bestMatch);
+          this.log('🎯 [Background] Best match for "' + searchTerm + '":', bestMatch);
 
           if (bestMatch) {
             tmdbId = parseInt(bestMatch.id);
-            console.log('✅ [Background] Using TMDB ID:', tmdbId, 'from search term:', searchTerm);
+            this.log('✅ [Background] Using TMDB ID:', tmdbId, 'from search term:', searchTerm);
             break;
           }
         } catch (searchError) {
-          console.warn('⚠️ [Background] Search failed for "' + searchTerm + '":', searchError);
+          this.warn('⚠️ [Background] Search failed for "' + searchTerm + '":', searchError);
           continue;
         }
       }
@@ -184,9 +286,9 @@ class SeerrAPI {
       seasons: mediaData.mediaType === 'tv' ? 'all' : undefined
     };
 
-    console.log('📡 [Background] Sending request to Seerr:', requestData);
+    this.log('📡 [Background] Sending request to Seerr:', requestData);
     const response = await this.makeAPIRequest('POST', '/api/v1/request', requestData);
-    console.log('✅ [Background] Request successful:', response);
+    this.log('✅ [Background] Request successful:', response);
 
     return {
       id: response.id,
@@ -197,7 +299,7 @@ class SeerrAPI {
   }
 
   generateSearchTerms(originalTitle) {
-    console.log('🔍 [Background] generateSearchTerms called with:', originalTitle);
+    this.log('🔍 [Background] generateSearchTerms called with:', originalTitle);
     const terms = [originalTitle];
 
     const variations = [
@@ -221,18 +323,18 @@ class SeerrAPI {
       originalTitle.replace(/\s+(for|of|the|and|in|on|at|to)\s+/gi, ' ').replace(/\s+/g, ' ').trim()
     ];
 
-    console.log('🔍 [Background] Initial variations generated:', variations.length);
+    this.log('🔍 [Background] Initial variations generated:', variations.length);
 
     variations.forEach((variation, index) => {
       const cleaned = variation.trim();
-      console.log(`🔍 [Background] Variation ${index}: "${variation}" -> cleaned: "${cleaned}"`);
+      this.log(`🔍 [Background] Variation ${index}: "${variation}" -> cleaned: "${cleaned}"`);
       if (cleaned && cleaned !== originalTitle && !terms.includes(cleaned)) {
         terms.push(cleaned);
-        console.log('🔍 [Background] Added variation:', cleaned);
+        this.log('🔍 [Background] Added variation:', cleaned);
       }
     });
 
-    console.log('🔍 [Background] Final search terms:', terms);
+    this.log('🔍 [Background] Final search terms:', terms);
     return terms;
   }
 
@@ -350,7 +452,7 @@ class SeerrAPI {
   }
 
   async debugSearch(title, mediaType = 'movie') {
-    console.log('🔍 [Background] Debug search for:', title, 'type:', mediaType);
+    this.log('🔍 [Background] Debug search for:', title, 'type:', mediaType);
 
     const searchTerms = this.generateSearchTerms(title);
     const results = [];
@@ -363,7 +465,7 @@ class SeerrAPI {
           resultCount: searchResults.length,
           results: searchResults.slice(0, 3)
         });
-        console.log(`🔍 [Background] Debug: "${searchTerm}" -> ${searchResults.length} results`);
+        this.log(`🔍 [Background] Debug: "${searchTerm}" -> ${searchResults.length} results`);
       } catch (error) {
         results.push({ searchTerm, error: error.message });
       }
@@ -373,52 +475,52 @@ class SeerrAPI {
   }
 
   async getMediaStatus(mediaData) {
-    console.log('📊 [Background] Getting media status for:', mediaData);
-    console.log('📊 [Background] API Config - baseUrl:', this.baseUrl, 'apiKey:', this.apiKey ? '[SET]' : '[NOT SET]');
+    this.log('📊 [Background] Getting media status for:', mediaData);
+    this.log('📊 [Background] API Config - baseUrl:', this.baseUrl, 'apiKey:', this.apiKey ? '[SET]' : '[NOT SET]');
 
     if (!this.baseUrl || !this.apiKey) {
-      console.error('📊 [Background] Missing API configuration');
+      this.warn('📊 [Background] Missing API configuration');
       throw new Error('Seerr server URL and API key are required');
     }
 
     try {
-      console.log('📊 [Background] Starting search for title:', mediaData.title, 'type:', mediaData.mediaType);
+      this.log('📊 [Background] Starting search for title:', mediaData.title, 'type:', mediaData.mediaType);
       const searchTerms = this.generateSearchTerms(mediaData.title);
-      console.log('📊 [Background] Generated search terms:', searchTerms);
+      this.log('📊 [Background] Generated search terms:', searchTerms);
       let bestMatch = null;
       let searchResults = [];
 
       for (let i = 0; i < searchTerms.length; i++) {
         const searchTerm = searchTerms[i];
         try {
-          console.log(`📊 [Background] Searching term ${i + 1}/${searchTerms.length}: "${searchTerm}"`);
+          this.log(`📊 [Background] Searching term ${i + 1}/${searchTerms.length}: "${searchTerm}"`);
           searchResults = await this.searchMedia(searchTerm, mediaData.mediaType);
-          console.log(`📊 [Background] Search results for "${searchTerm}":`, searchResults.length, 'items');
+          this.log(`📊 [Background] Search results for "${searchTerm}":`, searchResults.length, 'items');
 
           if (searchResults.length > 0) {
-            console.log('📊 [Background] First few results:', searchResults.slice(0, 3).map(r => ({
+            this.log('📊 [Background] First few results:', searchResults.slice(0, 3).map(r => ({
               id: r.id, title: r.title || r.name, year: r.releaseDate || r.firstAirDate, mediaType: r.mediaType
             })));
           }
 
           bestMatch = this.findBestMatch(searchResults, { ...mediaData, title: searchTerm });
-          console.log(`📊 [Background] Best match for "${searchTerm}":`, bestMatch ? {
+          this.log(`📊 [Background] Best match for "${searchTerm}":`, bestMatch ? {
             id: bestMatch.id, title: bestMatch.title || bestMatch.name, mediaType: bestMatch.mediaType
           } : 'none');
 
           if (bestMatch) {
-            console.log('📊 [Background] ✅ Found best match, breaking search loop');
+            this.log('📊 [Background] ✅ Found best match, breaking search loop');
             break;
           }
         } catch (error) {
-          console.warn(`📊 [Background] Search failed for "${searchTerm}":`, error.message);
+          this.warn(`📊 [Background] Search failed for "${searchTerm}":`, error.message);
           continue;
         }
       }
 
       if (!bestMatch) {
-        console.log('📊 [Background] ❌ No media found after trying all search terms');
-        console.log('📊 [Background] Returning available status (not in database)');
+        this.log('📊 [Background] ❌ No media found after trying all search terms');
+        this.log('📊 [Background] Returning available status (not in database)');
         return {
           status: 'available',
           message: 'Ready to request',
@@ -428,14 +530,14 @@ class SeerrAPI {
       }
 
       const tmdbId = parseInt(bestMatch.id);
-      console.log('📊 [Background] ✅ Found media with TMDB ID:', tmdbId);
+      this.log('📊 [Background] ✅ Found media with TMDB ID:', tmdbId);
 
-      console.log('📊 [Background] Fetching detailed status...');
+      this.log('📊 [Background] Fetching detailed status...');
       const mediaDetails = await this.getMediaDetails(tmdbId, mediaData.mediaType);
-      console.log('📊 [Background] Media details response:', mediaDetails);
+      this.log('📊 [Background] Media details response:', mediaDetails);
 
       const formattedStatus = this.formatMediaStatus(mediaDetails, mediaData.mediaType);
-      console.log('📊 [Background] Final formatted status:', formattedStatus);
+      this.log('📊 [Background] Final formatted status:', formattedStatus);
 
       return formattedStatus;
 
@@ -452,42 +554,42 @@ class SeerrAPI {
   }
 
   async getMediaDetails(tmdbId, mediaType) {
-    console.log(`📊 [Background] Getting media details for TMDB ID ${tmdbId} (${mediaType})`);
+    this.log(`📊 [Background] Getting media details for TMDB ID ${tmdbId} (${mediaType})`);
 
-    console.log('📊 [Background] Checking requests first for accurate status...');
+    this.log('📊 [Background] Checking requests first for accurate status...');
     const requestResult = await this.searchRequests(tmdbId, mediaType);
 
     if (requestResult) {
-      console.log('📊 [Background] Found in requests, using request status');
+      this.log('📊 [Background] Found in requests, using request status');
       return requestResult;
     }
 
     try {
       const endpoint = mediaType === 'tv' ? `/api/v1/tv/${tmdbId}` : `/api/v1/movie/${tmdbId}`;
-      console.log(`📊 [Background] Not in requests, trying direct lookup: ${endpoint}`);
+      this.log(`📊 [Background] Not in requests, trying direct lookup: ${endpoint}`);
 
       const response = await this.makeAPIRequest('GET', endpoint);
-      console.log('📊 [Background] Direct lookup response:', response);
+      this.log('📊 [Background] Direct lookup response:', response);
 
       return response;
 
     } catch (error) {
-      console.log(`📊 [Background] Direct lookup failed (${error.message})`);
+      this.log(`📊 [Background] Direct lookup failed (${error.message})`);
       return null;
     }
   }
 
   async searchRequests(tmdbId, mediaType) {
     try {
-      console.log(`📊 [Background] Searching requests for TMDB ID ${tmdbId} (${mediaType})`);
+      this.log(`📊 [Background] Searching requests for TMDB ID ${tmdbId} (${mediaType})`);
       const response = await this.makeAPIRequest('GET', '/api/v1/request?take=100&skip=0');
-      console.log('📊 [Background] Requests API response:', response);
+      this.log('📊 [Background] Requests API response:', response);
 
       const requests = response.results || response || [];
-      console.log(`📊 [Background] Found ${requests.length} total requests`);
+      this.log(`📊 [Background] Found ${requests.length} total requests`);
 
       if (requests.length > 0) {
-        console.log('📊 [Background] Sample requests:', requests.slice(0, 3).map(r => ({
+        this.log('📊 [Background] Sample requests:', requests.slice(0, 3).map(r => ({
           id: r.id, type: r.type, status: r.status,
           mediaId: r.media?.tmdbId || r.media?.id,
           title: r.media?.title || r.media?.name
@@ -499,7 +601,7 @@ class SeerrAPI {
         const matchesType = requestMediaType === mediaType;
         const matchesTmdbId = request.media?.tmdbId === tmdbId || request.media?.id === tmdbId;
 
-        console.log(`📊 [Background] Checking request:`, {
+        this.log(`📊 [Background] Checking request:`, {
           requestId: request.id, requestType: requestMediaType, matchesType,
           mediaId: request.media?.tmdbId || request.media?.id, matchesTmdbId,
           title: request.media?.title || request.media?.name
@@ -509,7 +611,7 @@ class SeerrAPI {
       });
 
       if (matchingRequest) {
-        console.log('📊 [Background] ✅ Found matching request:', {
+        this.log('📊 [Background] ✅ Found matching request:', {
           id: matchingRequest.id, type: matchingRequest.type,
           status: matchingRequest.status,
           title: matchingRequest.media?.title || matchingRequest.media?.name
@@ -522,7 +624,7 @@ class SeerrAPI {
         };
       }
 
-      console.log('📊 [Background] ❌ No matching request found');
+      this.log('📊 [Background] ❌ No matching request found');
       return null;
     } catch (error) {
       console.error('📊 [Background] Could not search requests:', error);
@@ -540,9 +642,9 @@ class SeerrAPI {
       };
     }
 
-    console.log('📊 [Background] Raw mediaDetails for status formatting:');
-    console.log('📊 [Background] mediaDetails.status:', mediaDetails.status);
-    console.log('📊 [Background] mediaDetails.media:', mediaDetails.media ? {
+    this.log('📊 [Background] Raw mediaDetails for status formatting:');
+    this.log('📊 [Background] mediaDetails.status:', mediaDetails.status);
+    this.log('📊 [Background] mediaDetails.media:', mediaDetails.media ? {
       status: mediaDetails.media.status,
       tmdbId: mediaDetails.media.tmdbId,
       mediaUrl: mediaDetails.media.mediaUrl ? '[HAS_URL]' : null,
@@ -553,16 +655,16 @@ class SeerrAPI {
       lastAirDate: mediaDetails.media.lastAirDate,
       status: mediaDetails.media.status
     } : null);
-    console.log('📊 [Background] mediaDetails.mediaInfo:', mediaDetails.mediaInfo ? {
+    this.log('📊 [Background] mediaDetails.mediaInfo:', mediaDetails.mediaInfo ? {
       status: mediaDetails.mediaInfo.status,
       inProduction: mediaDetails.mediaInfo.inProduction,
       seasons: mediaDetails.mediaInfo.seasons
     } : null);
-    console.log('📊 [Background] mediaDetails.requests:', mediaDetails.requests ? mediaDetails.requests.length + ' requests' : null);
+    this.log('📊 [Background] mediaDetails.requests:', mediaDetails.requests ? mediaDetails.requests.length + ' requests' : null);
 
-    console.log('📊 [Background] Full object keys for monitoring detection:', Object.keys(mediaDetails));
+    this.log('📊 [Background] Full object keys for monitoring detection:', Object.keys(mediaDetails));
     if (mediaDetails.seasons) {
-      console.log('📊 [Background] Seasons data available:', mediaDetails.seasons.length);
+      this.log('📊 [Background] Seasons data available:', mediaDetails.seasons.length);
     }
 
     let status = null;
@@ -573,8 +675,8 @@ class SeerrAPI {
       status = mediaDetails.status;
       mediaUrl = mediaDetails.media.mediaUrl;
       serviceUrl = mediaDetails.media.serviceUrl;
-      console.log('📊 [Background] Found REQUEST object with status:', status);
-      console.log('📊 [Background] Media has status', mediaDetails.media.status, 'but using request status', status);
+      this.log('📊 [Background] Found REQUEST object with status:', status);
+      this.log('📊 [Background] Media has status', mediaDetails.media.status, 'but using request status', status);
     } else if (mediaDetails.requests && mediaDetails.requests.length > 0) {
       const latestRequest = mediaDetails.requests[0];
       status = latestRequest.status;
@@ -582,27 +684,27 @@ class SeerrAPI {
         mediaUrl = latestRequest.media.mediaUrl;
         serviceUrl = latestRequest.media.serviceUrl;
       }
-      console.log('📊 [Background] Found status in requests array:', status);
+      this.log('📊 [Background] Found status in requests array:', status);
     } else if (mediaDetails.mediaInfo && mediaDetails.mediaInfo.status !== undefined) {
       status = mediaDetails.mediaInfo.status;
       mediaUrl = mediaDetails.mediaInfo.mediaUrl;
       serviceUrl = mediaDetails.mediaInfo.serviceUrl;
-      console.log('📊 [Background] Found status in mediaInfo:', status);
+      this.log('📊 [Background] Found status in mediaInfo:', status);
     } else if (mediaDetails.media && mediaDetails.media.status !== undefined) {
       status = mediaDetails.media.status;
       mediaUrl = mediaDetails.media.mediaUrl;
       serviceUrl = mediaDetails.media.serviceUrl;
-      console.log('📊 [Background] Found status in media object:', status);
+      this.log('📊 [Background] Found status in media object:', status);
     } else if (mediaDetails.status !== undefined) {
       status = mediaDetails.status;
-      console.log('📊 [Background] Found direct status:', status);
+      this.log('📊 [Background] Found direct status:', status);
     }
 
-    console.log('📊 [Background] Final extracted status:', status);
-    console.log('📊 [Background] Media URLs - mediaUrl:', mediaUrl, 'serviceUrl:', serviceUrl);
+    this.log('📊 [Background] Final extracted status:', status);
+    this.log('📊 [Background] Media URLs - mediaUrl:', mediaUrl, 'serviceUrl:', serviceUrl);
 
     if (status === null || status === undefined) {
-      console.log('📊 [Background] No status found, returning available for request');
+      this.log('📊 [Background] No status found, returning available for request');
       return {
         status: 'available',
         message: 'Not requested',
@@ -623,20 +725,20 @@ class SeerrAPI {
     if (mediaUrl) result.watchUrl = mediaUrl;
     if (serviceUrl) result.serviceUrl = serviceUrl;
 
-    console.log('📊 [Background] Mapping status:', status, '(type:', typeof status, ') to UI format');
-    console.log('📊 [Background] Raw status value for debugging:', JSON.stringify(status));
+    this.log('📊 [Background] Mapping status:', status, '(type:', typeof status, ') to UI format');
+    this.log('📊 [Background] Raw status value for debugging:', JSON.stringify(status));
 
     const numericStatus = parseInt(status);
     if (isNaN(numericStatus)) {
-      console.warn('📊 [Background] Unparseable status value:', status, 'treating as unknown');
+      this.warn('📊 [Background] Unparseable status value:', status, 'treating as unknown');
       result.status = 'unknown';
       result.message = 'Status unavailable';
       result.buttonText = 'Request on Seerr';
       result.buttonClass = 'request';
-      console.log('📊 [Background] Formatted status:', result);
+      this.log('📊 [Background] Formatted status:', result);
       return result;
     }
-    console.log('📊 [Background] Numeric status:', numericStatus);
+    this.log('📊 [Background] Numeric status:', numericStatus);
 
     switch (numericStatus) {
       case 1:
@@ -659,8 +761,8 @@ class SeerrAPI {
         result.buttonText = 'Processing...';
         result.buttonClass = 'downloading';
 
-        console.log('🔍 [DEBUG] DOWNLOADING STATUS DETECTED - Investigating available data');
-        console.log('🔍 [DEBUG] Full mediaDetails object:', JSON.stringify(mediaDetails, null, 2));
+        this.log('🔍 [DEBUG] DOWNLOADING STATUS DETECTED - Investigating available data');
+        this.log('🔍 [DEBUG] Full mediaDetails object:', JSON.stringify(mediaDetails, null, 2));
 
         const progressFields = ['progress', 'percentage', 'downloadProgress', 'completion', 'percent'];
         const speedFields = ['speed', 'downloadSpeed', 'rate', 'transferRate'];
@@ -669,37 +771,37 @@ class SeerrAPI {
 
         progressFields.forEach(field => {
           if (mediaDetails[field] !== undefined) {
-            console.log(`🔍 [DEBUG] Found progress field '${field}':`, mediaDetails[field]);
+            this.log(`🔍 [DEBUG] Found progress field '${field}':`, mediaDetails[field]);
             result.progress = mediaDetails[field];
           }
         });
 
         speedFields.forEach(field => {
           if (mediaDetails[field] !== undefined) {
-            console.log(`🔍 [DEBUG] Found speed field '${field}':`, mediaDetails[field]);
+            this.log(`🔍 [DEBUG] Found speed field '${field}':`, mediaDetails[field]);
             result.downloadSpeed = mediaDetails[field];
           }
         });
 
         etaFields.forEach(field => {
           if (mediaDetails[field] !== undefined) {
-            console.log(`🔍 [DEBUG] Found ETA field '${field}':`, mediaDetails[field]);
+            this.log(`🔍 [DEBUG] Found ETA field '${field}':`, mediaDetails[field]);
             result.eta = mediaDetails[field];
           }
         });
 
         clientFields.forEach(field => {
           if (mediaDetails[field] !== undefined) {
-            console.log(`🔍 [DEBUG] Found client field '${field}':`, mediaDetails[field]);
+            this.log(`🔍 [DEBUG] Found client field '${field}':`, mediaDetails[field]);
             result.downloadClient = mediaDetails[field];
           }
         });
 
         if (mediaDetails.media) {
-          console.log('🔍 [DEBUG] Checking media sub-object for progress data...');
+          this.log('🔍 [DEBUG] Checking media sub-object for progress data...');
           [...progressFields, ...speedFields, ...etaFields, ...clientFields].forEach(field => {
             if (mediaDetails.media[field] !== undefined) {
-              console.log(`🔍 [DEBUG] Found media.${field}:`, mediaDetails.media[field]);
+              this.log(`🔍 [DEBUG] Found media.${field}:`, mediaDetails.media[field]);
             }
           });
         }
@@ -737,7 +839,7 @@ class SeerrAPI {
         break;
 
       default:
-        console.log('📊 [Background] Unknown status value:', status, 'treating as available');
+        this.log('📊 [Background] Unknown status value:', status, 'treating as available');
         result.status = 'available';
         result.message = 'Ready to request';
         result.buttonText = 'Request on Seerr';
@@ -748,10 +850,10 @@ class SeerrAPI {
     const monitoringInfo = this.detectMonitoringStatus(mediaDetails, mediaType);
     if (monitoringInfo) {
       result.monitoring = monitoringInfo;
-      console.log('📊 [Background] Monitoring info:', monitoringInfo);
+      this.log('📊 [Background] Monitoring info:', monitoringInfo);
     }
 
-    console.log('📊 [Background] Formatted status:', result);
+    this.log('📊 [Background] Formatted status:', result);
     return result;
   }
 
@@ -874,7 +976,7 @@ class SeerrAPI {
         rtAudienceScore: this.parseRtPercent(data.audienceScore?.score)
       };
     } catch (error) {
-      console.warn('Could not parse Rotten Tomatoes scorecard:', error);
+      this.warn('Could not parse Rotten Tomatoes scorecard:', error);
       return {};
     }
   }
@@ -908,6 +1010,56 @@ class SeerrAPI {
     this.rtCache.delete(key);
     while (this.rtCache.size >= RatingsConfig.cacheMaxEntries) this.rtCache.delete(this.rtCache.keys().next().value);
     this.rtCache.set(key, { value, expiresAt: Date.now() + ttl });
+    this.scheduleRtCacheFlush();
+  }
+
+  // ── Persisted RT cache ──
+  // The worker is evicted after seconds of idle, so an in-memory Map alone can
+  // never honour rtCacheTtlMs. storage.local carries entries across restarts.
+
+  loadRtCache() {
+    this.rtCacheReady ??= (async () => {
+      try {
+        const stored = (await chrome.storage.local.get([RT_CACHE_STORAGE_KEY]))[RT_CACHE_STORAGE_KEY];
+        if (!stored || typeof stored !== 'object') return;
+        const now = Date.now();
+        for (const [key, entry] of Object.entries(stored)) {
+          // A live in-memory entry is newer than anything on disk.
+          if (this.rtCache.has(key)) continue;
+          if (!entry || typeof entry !== 'object' || typeof entry.expiresAt !== 'number') continue;
+          if (now >= entry.expiresAt) continue;
+          this.rtCache.set(key, { value: entry.value ?? null, expiresAt: entry.expiresAt });
+        }
+      } catch (error) {
+        console.error('Could not read the persisted Rotten Tomatoes cache:', error);
+      }
+    })();
+    return this.rtCacheReady;
+  }
+
+  scheduleRtCacheFlush() {
+    if (this.rtCacheFlushTimer !== null) return;
+    this.rtCacheFlushTimer = setTimeout(() => {
+      this.rtCacheFlushTimer = null;
+      this.flushRtCache();
+    }, RT_CACHE_FLUSH_DELAY_MS);
+  }
+
+  // Serialised so overlapping flushes cannot interleave their writes.
+  flushRtCache() {
+    this.rtCacheFlushing = (this.rtCacheFlushing ?? Promise.resolve()).then(async () => {
+      try {
+        const now = Date.now();
+        const payload = {};
+        for (const [key, entry] of this.rtCache) {
+          if (now < entry.expiresAt) payload[key] = entry;
+        }
+        await chrome.storage.local.set({ [RT_CACHE_STORAGE_KEY]: payload });
+      } catch (error) {
+        console.error('Could not persist the Rotten Tomatoes cache:', error);
+      }
+    });
+    return this.rtCacheFlushing;
   }
 
   async getRottenTomatoesRatings(data) {
@@ -925,13 +1077,15 @@ class SeerrAPI {
   async resolveRottenTomatoesRatings({ title, year = null, mediaType = 'movie' }) {
     if (!title) return null;
 
+    await this.loadRtCache();
+
     const cacheKey = `${mediaType}:${title}:${year || ''}`;
     const cached = this.rtCache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) return cached.value;
 
-    // Bound the worker cache during long browsing sessions.
+    // Bound the worker cache during long browsing sessions. Insertion enforces
+    // the hard limit; this only clears entries that have already expired.
     for (const [key, entry] of this.rtCache) if (Date.now() >= entry.expiresAt) this.rtCache.delete(key);
-    if (this.rtCache.size >= RatingsConfig.cacheMaxEntries) this.rtCache.delete(this.rtCache.keys().next().value);
     const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`;
     const searchHtml = await this.fetchRtHtml(searchUrl);
     const candidates = this.parseRtSearchResults(searchHtml, mediaType)
@@ -952,7 +1106,7 @@ class SeerrAPI {
     try {
       detailScores = this.parseRtScorecard(await this.fetchRtHtml(best.href));
     } catch (error) {
-      console.warn('Could not fetch Rotten Tomatoes detail page:', error);
+      this.warn('Could not fetch Rotten Tomatoes detail page:', error);
     }
 
     const result = {
@@ -972,7 +1126,7 @@ class SeerrAPI {
   }
 
   async debugAPI(tmdbId, mediaType) {
-    console.log(`🛠️ [Background] Debugging API endpoints for TMDB ID ${tmdbId} (${mediaType})`);
+    this.log(`🛠️ [Background] Debugging API endpoints for TMDB ID ${tmdbId} (${mediaType})`);
     const results = {};
 
     try {
@@ -986,7 +1140,7 @@ class SeerrAPI {
 
       for (const endpoint of endpoints) {
         try {
-          console.log(`🛠️ [Background] Testing endpoint: ${endpoint}`);
+          this.log(`🛠️ [Background] Testing endpoint: ${endpoint}`);
           const response = await this.makeAPIRequest('GET', endpoint);
           results[endpoint] = {
             success: true,
@@ -995,10 +1149,10 @@ class SeerrAPI {
             keys: Object.keys(response).slice(0, 10),
             sample: endpoint.includes('request') ? (response.results || response)?.slice(0, 2) : response
           };
-          console.log(`🛠️ [Background] ${endpoint} - SUCCESS:`, results[endpoint]);
+          this.log(`🛠️ [Background] ${endpoint} - SUCCESS:`, results[endpoint]);
         } catch (error) {
           results[endpoint] = { success: false, error: error.message };
-          console.log(`🛠️ [Background] ${endpoint} - FAILED:`, error.message);
+          this.log(`🛠️ [Background] ${endpoint} - FAILED:`, error.message);
         }
       }
 
@@ -1091,15 +1245,24 @@ class SeerrAPI {
 const seerrAPI = new SeerrAPI();
 
 // Synchronous listener registration (guaranteed before worker considers itself ready)
+// The URL and feature flags sync across devices; the API key stays local.
 chrome.storage.onChanged.addListener((changes, namespace) => {
-  if (namespace === 'sync' && (changes.seerrUrl || changes.seerrApiKey)) {
-    console.log('🔄 [Background] Settings changed, reloading...');
-    seerrAPI.loadSettings().then(() => {
-      console.log('🔄 [Background] Settings reloaded. Current URL:', seerrAPI.baseUrl);
-      console.log('🔄 [Background] Settings reloaded. API Key set:', !!seerrAPI.apiKey);
-    }).catch(err => console.error('🔄 [Background] Settings reload failed:', err));
-  }
+  const relevant = (namespace === 'sync' && changes.seerrUrl) ||
+    (namespace === 'local' && (changes.seerrApiKey || changes.debugLogging));
+  if (!relevant) return;
+  seerrAPI.log('🔄 [Background] Settings changed, reloading...');
+  seerrAPI.loadSettings()
+    .then(() => seerrAPI.syncOverlayRegistration())
+    .then(() => {
+      seerrAPI.log('🔄 [Background] Settings reloaded. Current URL:', seerrAPI.baseUrl);
+      seerrAPI.log('🔄 [Background] Settings reloaded. API Key set:', !!seerrAPI.apiKey);
+    })
+    .catch(err => console.error('🔄 [Background] Settings reload failed:', err));
 });
+
+// A revoked host permission must tear the overlay registration back down.
+chrome.permissions?.onRemoved?.addListener(() => { seerrAPI.syncOverlayRegistration(); });
+chrome.permissions?.onAdded?.addListener(() => { seerrAPI.syncOverlayRegistration(); });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   settingsReady.then(() => seerrAPI.handleMessage(request, sender, sendResponse))
@@ -1118,4 +1281,5 @@ const settingsReady = (async () => {
   await seerrAPI.loadSettings();
   await seerrAPI.migrateStorage();
   await seerrAPI.loadSettings();
+  await seerrAPI.syncOverlayRegistration();
 })();

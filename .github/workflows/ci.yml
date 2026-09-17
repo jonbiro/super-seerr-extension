@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.13'
+          cache: npm
+      - run: npm ci
+      - name: Verify source syntax and manifest wiring
+        run: npm run check
+      - name: Run tests
+        run: npm test
+      - name: Build both browser targets
+        run: make build
+      - name: Fail if the build touched anything beyond the version bump
+        run: |
+          # Read-only on purpose: never `git restore` here, those four files
+          # carry real edits in a working tree.
+          changed=$(git status --porcelain --untracked-files=no | awk '{print $2}' | sort)
+          expected=$(printf '%s\n' README.md manifest.base.json package-lock.json package.json | sort)
+          if [ "$changed" != "$expected" ]; then
+            echo "Unexpected build output. Changed:"; echo "$changed"
+            echo "Expected only the version-bump files:"; echo "$expected"
+            exit 1
+          fi
