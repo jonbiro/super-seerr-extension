@@ -5,6 +5,14 @@ const RatingsConfig = {
   // Minimum confidence to render an RT score at all
   confidenceThreshold: 0.7,
 
+  // Which revision of the title-matching rules produced a cached score. Both
+  // caches store the confidence their lookup earned, and neither re-runs the
+  // matcher on a hit, so a change to normalisation or scoring would otherwise
+  // leave every cached title wearing the verdict the old rules reached.
+  // Bump this whenever normalizeTitleForMatch or scoreRtSearchResult changes:
+  // entries stamped with anything else are looked up again.
+  matcherVersion: 2,
+
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {
     criticsCertifiedFresh: 75,   // "Critics love it"

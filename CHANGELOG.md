@@ -10,7 +10,7 @@ heading per change.
 
 - Fixed rating badges appearing on things that are not titles. A detail page's external-links row points at `themoviedb.org/movie/1241982`, whose path is the same shape as Seerr's own `/movie/:id`, so the raw href matched and the TMDB logo was treated as a card. Links are now resolved and required to be same-origin.
 - Stopped relearning that a server has no ratings backend on every page load. Giving up after repeated 404s only lasted as long as the page, so each navigation spent a dozen failed requests and a dozen red console lines per endpoint reaching the same conclusion. The verdict is now remembered per server for a day, and a stale one is retested with a single request rather than another dozen. Clearing the cache or pressing “Refresh scores” forgets it immediately.
-- Cached scores are now re-resolved when the matching rules change. A stored bundle carries the confidence the matcher gave it and a cache hit never re-runs the matcher, so titles cached before the Rotten Tomatoes match was tightened kept displaying a “~” however exact the match had become. The cache records which rules scored it and is looked up again when those change.
+- Cached scores are now re-resolved when the matching rules change, in both caches that hold one. A stored bundle carries the confidence the matcher gave it and a cache hit never re-runs the matcher, so titles cached before the Rotten Tomatoes match was tightened kept displaying a “~” however exact the match had become — the overlay's cache indefinitely, and the worker's own Rotten Tomatoes cache for a day. Both now record which rules scored them, and entries stamped with anything else are looked up again.
 
 ## [3.1.45]
 

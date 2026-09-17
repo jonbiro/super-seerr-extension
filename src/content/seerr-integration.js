@@ -78,12 +78,8 @@
   // or the user clears the cache from Settings.
   const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';
   // A cached bundle carries the confidence the matcher gave it, and a cache hit
-  // never re-runs the matcher. So when the matching rules change, every stored
-  // entry keeps the verdict the old rules reached: scores that are now certain
-  // stay marked approximate for as long as the cache lives, which is forever.
-  // Bump this whenever title normalisation or match scoring changes, and the
-  // entries are re-resolved once under the new rules.
-  const RATINGS_MATCHER_VERSION = 2;
+  // never re-runs the matcher, so entries scored under superseded rules would
+  // keep the old verdict forever. Config.matcherVersion is the stamp; see there.
   const PERSISTED_RATINGS_FLUSH_MS = 500;
   let persistedRatingsReady = null;
   let persistedRatingsFlushTimer = null;
@@ -98,7 +94,7 @@
         if (stored.server !== configuredServer?.href) return;
         // Scored under rules we no longer use: cheaper to look them up again
         // than to show every title a verdict the current matcher disagrees with.
-        if (stored.matcher !== RATINGS_MATCHER_VERSION) {
+        if (stored.matcher !== Config.matcherVersion) {
           log('The ratings matcher has changed since these were cached; resolving them again');
           return;
         }
@@ -142,7 +138,7 @@
           entries[key] = { bundle: value.bundle, cachedAt: value.cachedAt ?? null };
         }
         await chrome.storage.local.set({
-          [PERSISTED_RATINGS_KEY]: { server: configuredServer.href, matcher: RATINGS_MATCHER_VERSION, entries }
+          [PERSISTED_RATINGS_KEY]: { server: configuredServer.href, matcher: Config.matcherVersion, entries }
         });
       } catch (error) {
         log('Could not persist the ratings cache:', error);

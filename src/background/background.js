@@ -1178,8 +1178,15 @@ class SeerrAPI {
       try {
         const stored = (await chrome.storage.local.get([RT_CACHE_STORAGE_KEY]))[RT_CACHE_STORAGE_KEY];
         if (!stored || typeof stored !== 'object') return;
+        // A stored result carries the confidence its match earned. Scored under
+        // rules we no longer use, it would keep that verdict for a full day
+        // after the rules changed, however the matcher would judge it now.
+        if (stored.matcher !== RatingsConfig.matcherVersion) {
+          this.log('The title-matching rules have changed; discarding cached Rotten Tomatoes results');
+          return;
+        }
         const now = Date.now();
-        for (const [key, entry] of Object.entries(stored)) {
+        for (const [key, entry] of Object.entries(stored.entries || {})) {
           // A live in-memory entry is newer than anything on disk.
           if (this.rtCache.has(key)) continue;
           if (!entry || typeof entry !== 'object' || typeof entry.expiresAt !== 'number') continue;
@@ -1210,7 +1217,9 @@ class SeerrAPI {
         for (const [key, entry] of this.rtCache) {
           if (now < entry.expiresAt) payload[key] = entry;
         }
-        await chrome.storage.local.set({ [RT_CACHE_STORAGE_KEY]: payload });
+        await chrome.storage.local.set({
+          [RT_CACHE_STORAGE_KEY]: { matcher: RatingsConfig.matcherVersion, entries: payload }
+        });
       } catch (error) {
         console.error('Could not persist the Rotten Tomatoes cache:', error);
       }
