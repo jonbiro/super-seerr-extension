@@ -135,16 +135,20 @@ test('entries record when they were cached, and it survives a reload', async () 
   assert.equal(second.ratingsCacheAge([{ tmdbId: 550, mediaType: 'movie' }]), entry.cachedAt);
 });
 
-test('entries stored before this change still load', async () => {
-  // Older builds persisted the bare bundle with no wrapper.
-  const legacy = { [CACHE_KEY]: { server: SERVER, entries: { 'movie:550': { rtCriticsScore: 77, rtAudienceScore: null, imdbRating: null, tmdbRating: null, confidence: 1, source: 'x', lastUpdated: 1 } } } };
-  const overlay = loadOverlay({ settings, local: legacy });
-  const resolved = withResolver(overlay, () => ({ rtCriticsScore: 80 }));
+test('entries scored under older matching rules are looked up again', async () => {
+  // A stored bundle carries its confidence, and a cache hit never re-runs the
+  // matcher, so tightening the match rules left every cached title wearing the
+  // old verdict: scores that are now exact still displayed as approximate.
+  // Anything stored without the current matcher stamp is resolved afresh.
+  const stale = { [CACHE_KEY]: { server: SERVER, matcher: 1, entries: {
+    'movie:550': { bundle: { rtCriticsScore: 77, confidence: 0.97 }, cachedAt: Date.now() }
+  } } };
+  const overlay = loadOverlay({ settings, local: stale });
+  const resolved = withResolver(overlay, () => ({ rtCriticsScore: 77, confidence: 1 }));
 
   const bundle = await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
-  assert.equal(resolved.timesFor(550), 0, 'a legacy entry is still a cache hit');
-  assert.equal(bundle.rtCriticsScore, 77);
-  assert.equal(overlay.ratingsCacheAge([{ tmdbId: 550, mediaType: 'movie' }]), null, 'with no recorded age, report none');
+  assert.equal(resolved.timesFor(550), 1, 'a stale verdict is not reused');
+  assert.equal(bundle.confidence, 1, 'the current rules decide how sure we are');
 });
 
 test('the reported age is the oldest of the titles on screen', async () => {
@@ -152,6 +156,7 @@ test('the reported age is the oldest of the titles on screen', async () => {
   const stored = {
     [CACHE_KEY]: {
       server: SERVER,
+      matcher: 2,
       entries: {
         'movie:1': { bundle: { rtCriticsScore: 80 }, cachedAt: Date.now() - 6 * day },
         'movie:2': { bundle: { rtCriticsScore: 80 }, cachedAt: Date.now() - 1 * day }

@@ -258,6 +258,25 @@ test('a card with no link is resolved from observed API traffic, without a hover
   assert.ok(doc.querySelectorAll('.seerr-card-badge').length > 0, 'and a badge appears without any hover');
 });
 
+test('a card carries its release year into the Rotten Tomatoes lookup', async t => {
+  // The year decides the match: an exact title with no year can only be a
+  // partial match, which is why every badge on a grid wore a "~". The observed
+  // list entry knows the release date, so there is no reason to discard it.
+  const fixture = createOverlay({ posters: true, linkless: true });
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+
+  observe(fixture, [
+    { id: 11, mediaType: 'movie', title: 'Low', posterPath: '/poster1.jpg', releaseDate: '2016-11-23' }
+  ]);
+  await new Promise(resolve => setTimeout(resolve, 300));
+  await settle();
+
+  const asked = fixture.messages.filter(message => message.action === 'getRottenTomatoesRatings');
+  assert.ok(asked.length > 0, 'the card should have been looked up at all');
+  assert.equal(asked[0].data.year, 2016, 'the year the page already knows must reach the lookup');
+});
+
 test('a message from another origin or channel is ignored', async t => {
   const fixture = createOverlay({ posters: true, linkless: true });
   t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));

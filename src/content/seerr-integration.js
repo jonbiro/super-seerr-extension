@@ -77,6 +77,13 @@
   // There is no expiry by design: entries live until the entry cap evicts them
   // or the user clears the cache from Settings.
   const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';
+  // A cached bundle carries the confidence the matcher gave it, and a cache hit
+  // never re-runs the matcher. So when the matching rules change, every stored
+  // entry keeps the verdict the old rules reached: scores that are now certain
+  // stay marked approximate for as long as the cache lives, which is forever.
+  // Bump this whenever title normalisation or match scoring changes, and the
+  // entries are re-resolved once under the new rules.
+  const RATINGS_MATCHER_VERSION = 2;
   const PERSISTED_RATINGS_FLUSH_MS = 500;
   let persistedRatingsReady = null;
   let persistedRatingsFlushTimer = null;
@@ -89,12 +96,17 @@
         if (!stored || typeof stored !== 'object') return;
         // Entries belong to the server they were read from.
         if (stored.server !== configuredServer?.href) return;
+        // Scored under rules we no longer use: cheaper to look them up again
+        // than to show every title a verdict the current matcher disagrees with.
+        if (stored.matcher !== RATINGS_MATCHER_VERSION) {
+          log('The ratings matcher has changed since these were cached; resolving them again');
+          return;
+        }
         if (!stored.entries || typeof stored.entries !== 'object') return;
         for (const [key, entry] of Object.entries(stored.entries)) {
           // A live entry from this session is fresher than anything stored.
           if (ratingsCache.has(key) || !entry || typeof entry !== 'object') continue;
-          // Older builds persisted the bare bundle with no wrapper.
-          const bundle = entry.bundle ?? entry;
+          const bundle = entry.bundle;
           if (!bundle || typeof bundle !== 'object') continue;
           ratingsCache.set(key, {
             bundle: Model.createRatingsBundle(bundle),
@@ -129,7 +141,9 @@
           if (!Model.hasAnyScore(value.bundle)) continue;
           entries[key] = { bundle: value.bundle, cachedAt: value.cachedAt ?? null };
         }
-        await chrome.storage.local.set({ [PERSISTED_RATINGS_KEY]: { server: configuredServer.href, entries } });
+        await chrome.storage.local.set({
+          [PERSISTED_RATINGS_KEY]: { server: configuredServer.href, matcher: RATINGS_MATCHER_VERSION, entries }
+        });
       } catch (error) {
         log('Could not persist the ratings cache:', error);
       }
