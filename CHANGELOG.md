@@ -2,6 +2,11 @@
 
 All notable changes to the Super Seerr extension will be documented in this file.
 
+## [3.1.16]
+
+- Added a **Settings → Troubleshooting → Verbose logging** checkbox. Worker tracing was made opt-in in 3.1.11 but the flag was only reachable by hand-editing storage, which is not a usable control when the troubleshooting docs ask you to collect logs.
+- Added a guard test so the API key cannot drift back into synced storage; only the migration may read it there.
+
 ## [3.1.15]
 
 - Fixed title-search fallback mangling numeric titles. The digit/word swaps ran globally, so "Blade Runner 2049" generated "Blade Runner Two0Four9" and "2012" generated "Two01Two" — wasted sequential API calls that could also fuzzy-match the wrong title. The swaps are now word-anchored, so those titles produce a single term while "Toy Story 2" still also tries "Toy Story Two".

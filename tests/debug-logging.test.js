@@ -51,3 +51,12 @@ test('errors are never gated behind the debug flag', () => {
   const bare = [...source.replace(gated, '').matchAll(/(?<!\w)console\.(\w+)\(/g)].map(match => match[1]);
   assert.deepEqual([...new Set(bare)].sort(), ['error']);
 });
+
+test('the verbose logging flag is reachable from the options page', () => {
+  // A flag only settable by hand-editing storage is not a usable control.
+  const html = fs.readFileSync('src/options/options.html', 'utf8');
+  const script = fs.readFileSync('src/options/options.js', 'utf8');
+  assert.ok(html.includes('id="debugLogging"'), 'Settings should expose the toggle');
+  assert.ok(/chrome\.storage\.local\.set\([^)]*debugLogging/.test(script), 'saving should persist it');
+  assert.ok(/chrome\.storage\.local\.get\(\[[^\]]*debugLogging/.test(script), 'loading should restore it');
+});

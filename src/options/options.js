@@ -11,6 +11,7 @@ class OptionsManager {
     this.skipButton = document.getElementById('skipSetup');
     this.statusDiv = document.getElementById('status');
     this.permissionWarning = document.getElementById('permissionWarning');
+    this.debugLoggingInput = document.getElementById('debugLogging');
     this.grantButton = document.getElementById('grantPermission');
 
     this.init();
@@ -91,11 +92,12 @@ class OptionsManager {
       // The URL and feature flags sync across devices; the key stays local.
       const [settings, local] = await Promise.all([
         chrome.storage.sync.get(['seerrUrl', 'overlayFeatures']),
-        chrome.storage.local.get(['seerrApiKey'])
+        chrome.storage.local.get(['seerrApiKey', 'debugLogging'])
       ]);
 
       this.serverUrlInput.value = settings.seerrUrl || '';
       this.apiKeyInput.value = local.seerrApiKey || '';
+      if (this.debugLoggingInput) this.debugLoggingInput.checked = local.debugLogging === true;
       document.querySelectorAll('[data-overlay-feature]').forEach(input => {
         input.checked = settings.overlayFeatures?.[input.dataset.overlayFeature] !== false;
       });
@@ -149,7 +151,7 @@ class OptionsManager {
           seerrUrl: serverUrl,
           overlayFeatures: Object.fromEntries(Array.from(document.querySelectorAll('[data-overlay-feature]'), input => [input.dataset.overlayFeature, input.checked]))
         }),
-        chrome.storage.local.set({ seerrApiKey: apiKey })
+        chrome.storage.local.set({ seerrApiKey: apiKey, debugLogging: this.debugLoggingInput?.checked === true })
       ]);
 
       // The worker re-registers off this storage change, so no nudge here.

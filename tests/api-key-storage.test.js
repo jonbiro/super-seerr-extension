@@ -57,3 +57,36 @@ test('the overlay content script never reads the API key from storage', () => {
   assert.ok(!overlay.includes('seerrApiKey\''), 'overlay must not request the seerrApiKey storage key');
   assert.ok(overlay.includes('getConfigState'), 'overlay should ask the worker whether requests are available');
 });
+
+test('no code outside the migration reads or writes the key in synced storage', () => {
+  // The split is easy to undo by habit: storage.sync.get(['seerrUrl',
+  // 'seerrApiKey']) reads naturally and would silently start syncing the
+  // secret again.
+  const sources = {
+    'src/background/background.js': 'migration only',
+    'src/options/options.js': null,
+    'src/popup/popup.js': null,
+    'src/content/seerr-integration.js': null
+  };
+
+  for (const [file, allowance] of Object.entries(sources)) {
+    const text = fs.readFileSync(file, 'utf8');
+    const syncCalls = [...text.matchAll(/chrome\.storage\.sync\.(get|set)\(([^)]*)\)/g)]
+      .filter(match => match[2].includes('seerrApiKey'));
+
+    if (allowance === null) {
+      assert.equal(syncCalls.length, 0, `${file} must not touch seerrApiKey in sync storage`);
+    } else {
+      // The worker may only read the legacy value in order to migrate it away.
+      for (const call of syncCalls) {
+        assert.ok(call[1] === 'get', `${file}: sync.set of seerrApiKey is never correct`);
+        assert.ok(call[2].includes('jellyseerrApiKey'), `${file}: only the migration read is allowed`);
+      }
+    }
+  }
+});
+
+test('the key is removed from synced storage, not merely copied', () => {
+  const worker = fs.readFileSync('src/background/background.js', 'utf8');
+  assert.ok(worker.includes("chrome.storage.sync.remove(['seerrApiKey'])"), 'migration must clear the synced copy');
+});

@@ -56,6 +56,15 @@
                     <label><input type="checkbox" data-overlay-feature="bulkActions" checked> Bulk request selection</label>
                     <small>Click Save Settings to apply changes. Testing a connection does not save it.</small>
                 </fieldset>
+
+                <fieldset class="overlay-options">
+                    <legend>Troubleshooting</legend>
+                    <label><input type="checkbox" id="debugLogging"> Verbose logging in the background console</label>
+                    <small>
+                        Off by default. Turn this on only while reproducing a problem: the log can include
+                        media titles and Seerr responses, so review it before sharing.
+                    </small>
+                </fieldset>
                 <div class="form-actions">
                     <button type="button" id="testConnection" class="button secondary">
                         Test Connection

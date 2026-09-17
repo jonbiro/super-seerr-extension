@@ -772,7 +772,7 @@ class SeerrAPI {
         result.buttonClass = 'pending';
         break;
 
-      case 3:
+      case 3: {
         result.status = 'downloading';
         result.message = 'Processing download (detailed progress not available)';
         result.buttonText = 'Processing...';
@@ -829,6 +829,7 @@ class SeerrAPI {
         }
 
         break;
+      }
 
       case 4:
         result.status = 'partial';

@@ -48,4 +48,4 @@ The server URL and overlay preferences sync across devices; the API key does not
 
 ## Reporting a bug
 
-Use https://github.com/jonbiro/super-seerr-extension/issues. Include browser and extension versions, the supported site/route, steps, and a sanitized screenshot or error. Debug helpers are under `window.seerr_debug` in the content-script execution context; inspect logs before sharing them because they may contain media or server response details.
+Use https://github.com/jonbiro/super-seerr-extension/issues. Include browser and extension versions, the supported site/route, steps, and a sanitized screenshot or error. Debug helpers are under `window.seerr_debug` in the content-script execution context. The background worker is quiet unless **Settings → Troubleshooting → Verbose logging** is on; turn it on to reproduce, then off again. Inspect logs before sharing them because they may contain media titles or server response details.

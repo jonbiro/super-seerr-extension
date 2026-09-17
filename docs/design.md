@@ -31,7 +31,7 @@ The API helper sends `X-Api-Key` to the configured Seerr endpoint, has a finite 
 
 ## Configuration and migration
 
-Active settings are `seerrUrl` and `overlayFeatures` in `storage.sync`, and `seerrApiKey` and `debugLogging` in `storage.local`. The key is device-local because sync replicates through the browser account; the cost is re-entering it per device. Features default on unless explicitly false. Changes apply after Save Settings and trigger overlay cleanup/reinjection. The popup distinguishes missing configuration, ratings-only configuration, and request-enabled configuration.
+Active settings are `seerrUrl` and `overlayFeatures` in `storage.sync`, and `seerrApiKey` and `debugLogging` in `storage.local`. `debugLogging` is a Settings checkbox and gates all worker tracing; errors are never gated. The key is device-local because sync replicates through the browser account; the cost is re-entering it per device. Features default on unless explicitly false. Changes apply after Save Settings and trigger overlay cleanup/reinjection. The popup distinguishes missing configuration, ratings-only configuration, and request-enabled configuration.
 
 Migration reads historical keys only in the worker. It fills active keys only when they are undefined, preserves an intentionally empty API key, and removes only historical keys after a successful write. The key is then copied to local storage before being removed from sync, so an interrupted migration leaves a duplicate rather than losing it. Storage failures are logged without deleting active settings. The actual implementation and worker runtime tests are authoritative.
 

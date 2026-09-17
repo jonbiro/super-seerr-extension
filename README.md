@@ -81,7 +81,7 @@ Super Seerr does not request access to all websites. The site integrations run o
 
 The server URL and your feature toggles use browser sync storage, so they follow your browser profile across devices. **The API key is stored in device-local storage and does not sync** — enter it once per device. An API key saved by an earlier version is moved out of sync storage automatically on upgrade. Treat exported profiles and shared machines accordingly.
 
-No telemetry service is configured by this project. The background worker is quiet by default; verbose tracing is opt-in via the `debugLogging` flag in local storage. Debug output can include media titles and server responses, so review logs before sharing them.
+No telemetry service is configured by this project. The background worker is quiet by default; **Settings → Troubleshooting → Verbose logging** turns tracing on while you reproduce a problem. Debug output can include media titles and server responses, so review logs before sharing them.
 
 ## License
 
