@@ -2,6 +2,14 @@
 
 All notable changes to the Super Seerr extension will be documented in this file.
 
+## [3.1.12]
+
+- Fixed release-year extraction, which used a hardcoded `1[8-9]\d{2}|20[0-2]\d` range and would have silently stopped recognising years from 2030. The plausible range is now derived from the clock, so there is no cliff. The metadata path also accepted any four-digit run, reading `2160` out of `2160p`; both paths now share one bounded, word-anchored helper.
+- Fixed a timer leak on all seven supported sites. `BaseIntegration.destroy()` existed but nothing ever called it, so the one-second SPA navigation poller and the popstate listener outlived the page. The poller is now released on `pagehide` and re-armed on `pageshow`.
+- Fixed navigation detection for a second integration instance on one page: the double-patch guard returned early and skipped the per-instance popstate listener and polling fallback, not just the history patch it was meant to guard.
+- `window.seerr_debug.<site>.mediaData` is a live getter rather than a snapshot taken before the first navigation.
+- Added a jsdom harness for the shared content-script layer, which previously had no direct test coverage.
+
 ## [3.1.11]
 
 Breaking for existing installs: the extension now asks for permission to run on your Seerr server, and the API key stops syncing between devices.

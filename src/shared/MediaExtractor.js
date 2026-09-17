@@ -1,6 +1,27 @@
 // Shared Media Data Extraction Utilities
 // Common patterns for extracting media data from different websites
 
+// Cinema starts in the 1870s; the upper bound allows announced productions
+// without accepting arbitrary four-digit numbers. Derived from the clock so
+// there is no year at which extraction silently stops working.
+const EARLIEST_RELEASE_YEAR = 1870;
+const FUTURE_RELEASE_YEARS = 10;
+
+function isPlausibleReleaseYear(year) {
+  return Number.isInteger(year) &&
+    year >= EARLIEST_RELEASE_YEAR &&
+    year <= new Date().getFullYear() + FUTURE_RELEASE_YEARS;
+}
+
+// The first plausible release year in a string, or null.
+function findReleaseYear(text) {
+  for (const match of String(text ?? '').matchAll(/\b(\d{4})\b/g)) {
+    const year = parseInt(match[1], 10);
+    if (isPlausibleReleaseYear(year)) return year;
+  }
+  return null;
+}
+
 class MediaExtractor {
   constructor(options = {}) {
     this.debug = options.debug || false;
@@ -103,9 +124,8 @@ class MediaExtractor {
       const element = document.querySelector(selector);
       this.log(`Year selector "${selector}":`, element ? element.textContent.trim() : 'not found');
       if (element) {
-        const yearMatch = element.textContent.match(/\b(1[8-9]\d{2}|20[0-2]\d)\b/);
-        if (yearMatch) {
-          const year = parseInt(yearMatch[1]);
+        const year = findReleaseYear(element.textContent);
+        if (year !== null) {
           this.log('Found year using selector:', selector, '-> year:', year);
           return year;
         }
@@ -118,9 +138,8 @@ class MediaExtractor {
       for (const element of elements) {
         const text = element.textContent.trim();
         this.log('Checking metadata element:', text);
-        const yearMatch = text.match(/(\d{4})/);
-        if (yearMatch) {
-          const year = parseInt(yearMatch[1]);
+        const year = findReleaseYear(text);
+        if (year !== null) {
           this.log('Found year in metadata:', text, '-> year:', year);
           return year;
         }
@@ -143,14 +162,14 @@ class MediaExtractor {
     // Try page title
     const pageTitle = document.title;
     const titleYearMatch = pageTitle.match(/\((\d{4})\)/);
-    if (titleYearMatch) {
-      return parseInt(titleYearMatch[1]);
+    if (titleYearMatch && isPlausibleReleaseYear(parseInt(titleYearMatch[1], 10))) {
+      return parseInt(titleYearMatch[1], 10);
     }
     
     // Try URL slug
     const urlYearMatch = window.location.pathname.match(/_(\d{4})$/);
-    if (urlYearMatch) {
-      return parseInt(urlYearMatch[1]);
+    if (urlYearMatch && isPlausibleReleaseYear(parseInt(urlYearMatch[1], 10))) {
+      return parseInt(urlYearMatch[1], 10);
     }
     
     return null;
@@ -300,6 +319,8 @@ class MediaExtractor {
 // Export for use in content scripts
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = MediaExtractor;
+  module.exports.isPlausibleReleaseYear = isPlausibleReleaseYear;
+  module.exports.findReleaseYear = findReleaseYear;
 } else if (typeof window !== 'undefined') {
   window.MediaExtractor = MediaExtractor;
 }

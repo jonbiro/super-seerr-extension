@@ -91,6 +91,46 @@ class BaseIntegration {
 
     // Setup SPA navigation detection
     this.setupNavigationDetection();
+    this.setupLifecycleHandlers();
+  }
+
+  /**
+   * Release the polling timer while the page is in the back/forward cache, and
+   * re-arm it if the page is restored. Without this the interval outlives the
+   * page: destroy() existed but nothing ever called it.
+   */
+  setupLifecycleHandlers() {
+    if (this._lifecycleBound) return;
+    this._lifecycleBound = true;
+
+    this._pagehideListener = () => this.suspendNavigationPolling();
+    this._pageshowListener = () => {
+      if (!this.destroyed) this.resumeNavigationPolling();
+    };
+    window.addEventListener('pagehide', this._pagehideListener);
+    window.addEventListener('pageshow', this._pageshowListener);
+  }
+
+  suspendNavigationPolling() {
+    if (this.navigationListener) {
+      clearInterval(this.navigationListener);
+      this.navigationListener = null;
+    }
+  }
+
+  resumeNavigationPolling() {
+    if (this.navigationListener) return;
+    this.navigationListener = setInterval(() => this.pollForNavigation(), 1000);
+  }
+
+  pollForNavigation() {
+    if (this.destroyed) return;
+    const newUrl = window.location.href;
+    if (newUrl !== this.currentUrl) {
+      this.log('Navigation detected via polling:', this.currentUrl, '->', newUrl);
+      this.currentUrl = newUrl;
+      this.handleNavigationChange();
+    }
   }
 
   /**
@@ -506,6 +546,7 @@ class BaseIntegration {
    * Setup debug functions on window object
    */
   setupDebugFunctions() {
+    const self = this;
     if (!window.seerr_debug) {
       window.seerr_debug = {};
     }
@@ -513,7 +554,9 @@ class BaseIntegration {
     window.seerr_debug[this.siteName.toLowerCase()] = {
       updateStatus: () => this.updateStatus(),
       testAPI: () => this.client.debugAPI(),
-      mediaData: this.mediaData,
+      // A getter, not a snapshot: this object is built once, but mediaData is
+      // replaced on every SPA navigation.
+      get mediaData() { return self.mediaData; },
       testExtensionConnection: () => this.client.testExtensionConnection(),
       testServerConnection: () => this.client.testServerConnection(),
       debugSearch: (title, mediaType) => this.client.debugSearch(title || this.mediaData?.title, mediaType || this.mediaData?.mediaType),
@@ -587,16 +630,6 @@ class BaseIntegration {
   setupNavigationDetection() {
     this.log('Setting up SPA navigation detection');
 
-    // Method 1: Override pushState and replaceState (most reliable)
-    // Guard against double-patching: only patch if history.pushState hasn't
-    // already been wrapped by another instance of this integration.
-    if (history.pushState.__seerrPatched) {
-      this.log('history.pushState already patched, skipping');
-      return;
-    }
-
-    const originalPushState = history.pushState;
-    const originalReplaceState = history.replaceState;
     const handleNavigation = () => {
       const newUrl = window.location.href;
       if (newUrl !== this.currentUrl) {
@@ -606,37 +639,39 @@ class BaseIntegration {
       }
     };
 
-    const wrappedPushState = function(...args) {
-      originalPushState.apply(history, args);
-      setTimeout(handleNavigation, 100); // Small delay for React to update DOM
-    };
-    wrappedPushState.__seerrPatched = true;
-    history.pushState = wrappedPushState;
+    // Method 1: Override pushState and replaceState (most reliable).
+    // Only the patch is skipped when another instance already installed one;
+    // methods 2 and 3 below are per-instance and must still be set up.
+    if (history.pushState.__seerrPatched) {
+      this.log('history.pushState already patched, skipping the patch only');
+    } else {
+      const originalPushState = history.pushState;
+      const originalReplaceState = history.replaceState;
 
-    const wrappedReplaceState = function(...args) {
-      originalReplaceState.apply(history, args);
-      setTimeout(handleNavigation, 100);
-    };
-    wrappedReplaceState.__seerrPatched = true;
-    history.replaceState = wrappedReplaceState;
+      const wrappedPushState = function(...args) {
+        originalPushState.apply(history, args);
+        setTimeout(handleNavigation, 100); // Small delay for React to update DOM
+      };
+      wrappedPushState.__seerrPatched = true;
+      history.pushState = wrappedPushState;
 
-    this._originalPushState = originalPushState;
-    this._originalReplaceState = originalReplaceState;
+      const wrappedReplaceState = function(...args) {
+        originalReplaceState.apply(history, args);
+        setTimeout(handleNavigation, 100);
+      };
+      wrappedReplaceState.__seerrPatched = true;
+      history.replaceState = wrappedReplaceState;
+
+      this._originalPushState = originalPushState;
+      this._originalReplaceState = originalReplaceState;
+    }
 
     // Method 2: Listen for popstate (back/forward buttons)
     this._popstateListener = () => setTimeout(handleNavigation, 100);
     window.addEventListener('popstate', this._popstateListener);
 
     // Method 3: Polling as fallback (for edge cases)
-    this.navigationListener = setInterval(() => {
-      if (this.destroyed) return;
-      const newUrl = window.location.href;
-      if (newUrl !== this.currentUrl) {
-        this.log('Navigation detected via polling:', this.currentUrl, '->', newUrl);
-        this.currentUrl = newUrl;
-        this.handleNavigationChange();
-      }
-    }, 1000);
+    this.resumeNavigationPolling();
   }
 
   /**
@@ -708,6 +743,13 @@ class BaseIntegration {
     if (this._popstateListener) {
       window.removeEventListener('popstate', this._popstateListener);
       this._popstateListener = null;
+    }
+    if (this._pagehideListener) {
+      window.removeEventListener('pagehide', this._pagehideListener);
+      window.removeEventListener('pageshow', this._pageshowListener);
+      this._pagehideListener = null;
+      this._pageshowListener = null;
+      this._lifecycleBound = false;
     }
     if (this._originalPushState && history.pushState.__seerrPatched) {
       history.pushState = this._originalPushState;
