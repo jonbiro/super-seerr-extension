@@ -502,6 +502,11 @@
   // dropping only the combined endpoint simply moved every failure onto
   // /ratings, because the skip for it depended on combined failing first.
   const seerrRatingsFailures = { ratings: 0, ratingscombined: 0 };
+  // Every ratings request this overlay has actually issued. Seerr's own front
+  // end asks the same endpoints for the same missing data, so a console full of
+  // 404s says nothing about who caused them; this does. It counts attempts, not
+  // failures, and is never reset.
+  const seerrRatingsRequests = { ratings: 0, ratingscombined: 0 };
   const RATINGS_ENDPOINTS = new Set(['ratings', 'ratingscombined']);
 
   // Counted per endpoint, because the two fail independently: Seerr answers
@@ -600,9 +605,10 @@
         continue;
       }
       try {
-        const result = await fetchJsonFromSeerr(endpoint);
         const kind = endpoint.endsWith('/ratingscombined') ? 'ratingscombined'
           : endpoint.endsWith('/ratings') ? 'ratings' : null;
+        if (kind) seerrRatingsRequests[kind]++;
+        const result = await fetchJsonFromSeerr(endpoint);
         if (kind) {
           if (result.ok) seerrRatingsFailures[kind] = 0;
           else if (result.status === 404) {
@@ -1961,6 +1967,7 @@
           byPath: Object.fromEntries(observedStats.byUrl)
         },
         seerrRatings: {
+          requestsMade: { ...seerrRatingsRequests },
           consecutiveFailures: { ...seerrRatingsFailures },
           givenUp: { ratings: seerrRatingsGivenUp('ratings'), ratingscombined: seerrRatingsGivenUp('ratingscombined') }
         },

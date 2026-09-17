@@ -275,3 +275,20 @@ test('refreshing forgets the written-down verdict too', async () => {
   assert.equal(overlay.localStore.seerrRatingsUnavailableV1, undefined,
     'a refresh must not leave a record that silences the retry it just asked for');
 });
+
+test('diagnose counts the requests this overlay actually made', async () => {
+  // Seerr's own front end asks these same endpoints for the same missing data,
+  // so a console full of 404s cannot be attributed by counting it. This can.
+  const { overlay } = overlayRemembering(null, allRatingsMissing);
+
+  for (let i = 0; i < Config.seerrRatingsFailureLimit + 20; i++) {
+    await overlay.fetchSeerrSessionRatings(1000 + i, 'movie', null);
+  }
+
+  const { requestsMade } = overlay.context.window.seerr_debug.ratings.diagnose().seerrRatings;
+  assert.ok(requestsMade.ratingscombined > 0, 'it tried before giving up');
+  assert.ok(requestsMade.ratingscombined <= Config.seerrRatingsFailureLimit,
+    `the overlay cannot have issued more than the limit, reported ${requestsMade.ratingscombined}`);
+  assert.ok(requestsMade.ratings + requestsMade.ratingscombined <= Config.seerrRatingsFailureLimit * 2,
+    'the ceiling for one page session is the limit per endpoint');
+});
