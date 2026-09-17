@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.1.40-blue)
+![Version](https://img.shields.io/badge/version-3.1.41-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -46,7 +46,7 @@ Sorting and filtering apply to loaded cards in the grid associated with the cont
 
 Ratings you have already seen are cached on your device, so returning to Seerr does not look them up again. They do not expire. Scores move as reviews arrive, so the grid controls show when the loaded titles were cached and offer **Refresh scores**, which refetches just those titles. For everything at once, **Settings → Troubleshooting → Clear ratings cache** forces a fresh lookup, and takes effect in open Seerr tabs without a reload. Changing your server URL discards them automatically.
 
-Scores are partial data: missing values stay absent. An unrated or unreleased title shows no IMDb or TMDB score rather than zero, since those scales treat zero as “not rated”; a 0% from Rotten Tomatoes is shown, because there it is a real verdict. RT matches below the confidence threshold are hidden; approximate accepted matches have a `~` prefix. Summary labels are heuristics, not official RT certification. External title matching can still be wrong, especially for remakes or missing years.
+Scores are partial data: missing values stay absent. An unrated or unreleased title shows no IMDb or TMDB score rather than zero, since those scales treat zero as “not rated”; a 0% from Rotten Tomatoes is shown, because there it is a real verdict. RT matches below the confidence threshold are hidden; approximate accepted matches have a `~` prefix. A score without `~` matched the title exactly in the expected year. Where a title is shared by more than one film and no year is known, no score is shown rather than a guess. Summary labels are heuristics, not official RT certification. External title matching can still be wrong, especially for remakes or missing years.
 
 ### Bulk requests
 

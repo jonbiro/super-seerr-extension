@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.41]
+
+- Fixed the `~` approximate marker appearing on every Rotten Tomatoes score. Confidence could not exceed 0.97, so full certainty was unreachable and the marker never distinguished anything. An exact title in the expected year now scores 1 and is shown plainly.
+- Stopped guessing between films that share a title. Several films can carry the same title exactly — *Moana* is both a 2016 feature and a 1926 documentary — and with no year to choose between them the score shown was whichever Rotten Tomatoes ranked first. Where that ambiguity exists and no year is known, no score is shown.
+
 ## [3.1.40]
 
 - Fixed the previous release moving its 404s rather than stopping them. Skipping `/ratings` relied on `/ratingscombined` being asked first and failing, so once the latter was given up on, that signal never fired and every card asked `/ratings` instead. Both endpoints are now given up on together.

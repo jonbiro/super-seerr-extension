@@ -62,7 +62,9 @@ test('RT lookup works without Seerr config and uses central positive and negativ
   const result = await api.getRottenTomatoesRatings({ title: 'Example', year: 2020 });
   assert.equal(result.rtAudienceScore, 90);
   assert.equal(result.rtCriticsScore, 80);
-  assert.equal(result.confidence, 0.97);
+  // Exact title, exact year: full confidence, so the badge is not marked
+  // approximate. This used to cap at 0.97, which marked every score ever shown.
+  assert.equal(result.confidence, 1);
   await api.getRottenTomatoesRatings({ title: 'Example', year: 2020 });
   assert.equal(calls, 2);
   assert.ok(api.rtCache.get('movie:Example:2020').expiresAt >= start + Config.rtCacheTtlMs);

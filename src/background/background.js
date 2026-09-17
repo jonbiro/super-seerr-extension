@@ -1075,26 +1075,40 @@ class SeerrAPI {
     const resultTitle = this.normalizeTitleForMatch(result.title);
     if (!requestedTitle || !resultTitle) return 0;
 
-    let score = 0;
+    let score;
     if (requestedTitle === resultTitle) {
-      score = 0.82;
+      score = 0.8;
     } else if (requestedTitle.includes(resultTitle) || resultTitle.includes(requestedTitle)) {
-      score = 0.68;
+      score = 0.6;
     } else {
       const requestedWords = new Set(requestedTitle.split(' ').filter(Boolean));
       const resultWords = new Set(resultTitle.split(' ').filter(Boolean));
       const overlap = [...requestedWords].filter(word => resultWords.has(word)).length;
-      score = overlap / Math.max(requestedWords.size, resultWords.size) * 0.7;
+      score = overlap / Math.max(requestedWords.size, resultWords.size) * 0.6;
     }
 
-    if (requested.year && result.year) {
-      const delta = Math.abs(requested.year - result.year);
-      if (delta === 0) score += 0.15;
-      else if (delta <= 1) score += 0.08;
-      else if (delta >= 3) score -= 0.25;
-    }
+    // An exact title in the right year is as sure as this method gets, so it
+    // reaches 1. While the ceiling was below 1 every score ever shown was
+    // marked approximate, which told the reader nothing.
+    // No year to check against. The title tiers above all sit below 1 by
+    // design, so a match nothing corroborates can never come back certain.
+    if (!requested.year || !result.year) return Math.max(0, score);
+
+    const delta = Math.abs(requested.year - result.year);
+    if (delta === 0) score += 0.2;
+    else if (delta === 1) score += 0.1;
+    else if (delta >= 3) score -= 0.3;
 
     return Math.max(0, Math.min(1, score));
+  }
+
+  // Whether another candidate is as good a match as the best one, which means
+  // the choice between them rests on Rotten Tomatoes' own ordering.
+  rtMatchIsAmbiguous(candidates, best) {
+    return candidates.some(candidate =>
+      candidate !== best &&
+      candidate.confidence >= best.confidence &&
+      this.normalizeTitleForMatch(candidate.title) === this.normalizeTitleForMatch(best.title));
   }
 
   parseRtScorecard(html) {
@@ -1234,6 +1248,14 @@ class SeerrAPI {
       .sort((a, b) => b.confidence - a.confidence);
 
     const best = candidates[0];
+    // Several films can share a title exactly. With no year to choose between
+    // them, taking whichever Rotten Tomatoes ranked first is a guess, and a
+    // wrong score presented as fact is worse than none.
+    if (best && !year && this.rtMatchIsAmbiguous(candidates, best)) {
+      this.log(`Rotten Tomatoes has more than one "${best.title}" and no year was known; not guessing`);
+      this.cacheRottenTomatoesResult(cacheKey, null, RatingsConfig.rtNegativeCacheTtlMs);
+      return null;
+    }
     if (!best || best.confidence < RatingsConfig.confidenceThreshold) {
       const empty = null;
       this.cacheRottenTomatoesResult(cacheKey, empty, RatingsConfig.rtNegativeCacheTtlMs);
