@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.43]
+
+- Fixed titles outside plain English never matching on Rotten Tomatoes. Normalisation kept only `a-z`, so an accent became a space that split the word — *Amélie* became `am lie`, *Podziemny krąg* became `podziemny kr g` — and a title in any non-Latin script became an empty string that could not match anything at all. Accents are now folded to their base letter, the Latin letters carrying no combining mark are mapped, and letters of any script are kept. This most affects Filmweb.pl, which is Polish, and any title shown in a language other than English.
+
 ## [3.1.42]
 
 - Added coverage for the release year reaching the Rotten Tomatoes lookup, which is what separates a film from its own remake. A card withholds its year until hovered, so the year has to arrive from the list data Seerr fetches for itself; nothing had tested that it does.

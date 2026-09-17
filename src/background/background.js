@@ -1017,11 +1017,21 @@ class SeerrAPI {
     return null;
   }
 
+  // Titles are matched against Rotten Tomatoes by text, so what survives here
+  // decides whether a score can be found. Restricting to a-z turned an accent
+  // into a space, splitting the word it sat in, and reduced a title in any
+  // non-Latin script to an empty string that could never match anything.
   normalizeTitleForMatch(title = '') {
     return String(title)
       .toLowerCase()
       .replace(/&amp;/g, '&')
-      .replace(/[^a-z0-9]+/g, ' ')
+      // Latin letters carrying no combining mark, so NFD leaves them alone.
+      .replace(/ß/g, 'ss').replace(/æ/g, 'ae').replace(/œ/g, 'oe')
+      .replace(/ł/g, 'l').replace(/ø/g, 'o').replace(/đ/g, 'd').replace(/ð/g, 'd').replace(/þ/g, 'th')
+      // Split the rest into base letter plus mark, then drop the marks.
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      // Keep letters of any script rather than only a-z.
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
       .replace(/\b(the|a|an)\b/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
