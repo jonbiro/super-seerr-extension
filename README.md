@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.1.20-blue)
+![Version](https://img.shields.io/badge/version-3.1.22-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -32,9 +32,9 @@ This has **not been validated against a running Firefox**. The manifest is corre
 | --- | --- |
 | IMDb, Rotten Tomatoes, TMDB, Metacritic, Trakt, Filmweb | Movie/TV detection and a themed request flyout |
 | Letterboxd | Movie detection and a themed request flyout |
-| Your configured Seerr server | Ratings on cards and detail pages, quality summaries, sorting, filters, bulk review |
+| Your configured Seerr server | Ratings on cards and detail pages, quality summaries, sorting, filters, bulk review — on discover, search, requests, collections, people, the blocklist and your watchlist |
 
-The flyout reports request status, supports watchlisting, and links to Jellyfin when a playable URL is supplied by Seerr. Jellyfin is a separate product; its name and links are intentional.
+The flyout reports request status, supports watchlisting, and links to your media server when Seerr supplies a playable URL. Seerr can be backed by Plex, Jellyfin or Emby; Super Seerr asks your server which one it uses and names it accordingly, or says simply “Watch” if it cannot tell. Those are separate products; their names and links are intentional.
 
 ### Ratings and sorting
 

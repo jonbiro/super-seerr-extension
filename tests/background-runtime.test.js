@@ -96,10 +96,14 @@ test('temporary connection tests do not replace saved worker settings', async ()
   assert.equal(result.success, true);
   assert.equal(api.baseUrl, 'https://saved.example');
   assert.equal(api.apiKey, 'saved-key');
-  assert.equal(requests[0].url, 'https://test.example/api/v1/auth/me');
-  assert.equal(requests[0].options.headers['X-Api-Key'], 'temporary');
-  assert.ok(requests[0].options.signal);
-  assert.equal(requests[0].options.redirect, 'error');
+  // loadSettings also reads /settings/public, so find the connection test's
+  // own request rather than assuming it is first.
+  const authRequest = requests.find(entry => entry.url.endsWith('/api/v1/auth/me'));
+  assert.ok(authRequest, `expected an auth/me request, saw ${requests.map(r => r.url).join(', ')}`);
+  assert.equal(authRequest.url, 'https://test.example/api/v1/auth/me');
+  assert.equal(authRequest.options.headers['X-Api-Key'], 'temporary');
+  assert.ok(authRequest.options.signal);
+  assert.equal(authRequest.options.redirect, 'error');
 });
 
 test('RT cache remains bounded when distinct lookups finish concurrently', async () => {

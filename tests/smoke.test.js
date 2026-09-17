@@ -100,17 +100,16 @@ test('HTML files use Seerr branding', () => {
   assert.ok(popupHtml.includes('Unable to connect to your Seerr server'), 'popup.html error state');
 });
 
-test('"Watch on Jellyfin" is preserved', () => {
-  const files = readAllFiles(SRC_DIR, /\.js$/);
-  let foundJellyfin = false;
-  for (const file of files) {
+test('the watch action names no product it has not confirmed', () => {
+  // Superseded rule: a source file used to be required to contain the literal
+  // "Watch on Jellyfin". Seerr supports Plex, Jellyfin and Emby, so the label
+  // is now built from the server's reported mediaServerType.
+  for (const file of readAllFiles(SRC_DIR, /\.js$/)) {
     const content = fs.readFileSync(file, 'utf-8');
-    if (content.includes('Watch on Jellyfin')) {
-      foundJellyfin = true;
-      break;
-    }
+    assert.ok(!content.includes('Watch on Jellyfin'), `${file} hardcodes a media server`);
   }
-  assert.ok(foundJellyfin, 'At least one source file should still contain "Watch on Jellyfin"');
+  const worker = fs.readFileSync(path.join(SRC_DIR, 'background', 'background.js'), 'utf-8');
+  assert.ok(worker.includes('mediaServerType'), 'the worker should read the configured server type');
 });
 
 test('Project-level files use Seerr branding', () => {

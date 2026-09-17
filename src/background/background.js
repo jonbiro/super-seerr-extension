@@ -19,6 +19,10 @@ const OVERLAY_SCRIPT_FILES = {
 // Seerr unmounts a card's link and title until it is hovered, so an un-hovered
 // card cannot be identified from the DOM. This runs in the page's own world at
 // document_start to observe the API responses the page already receives.
+// Seerr's MediaServerType. Anything else, including NOT_CONFIGURED, gets
+// neutral wording rather than a guess at the product name.
+const MEDIA_SERVER_NAMES = { 1: 'Plex', 2: 'Jellyfin', 3: 'Emby' };
+
 const OBSERVER_SCRIPT_ID = 'seerr-api-observer';
 const OBSERVER_SCRIPT_FILES = { js: ['src/content/seerr-api-observer.js'] };
 
@@ -42,6 +46,7 @@ class SeerrAPI {
     this.baseUrl = null;
     this.apiKey = null;
     this.debugLogging = false;
+    this.mediaServerName = null;
     this.rtCache = new Map();
     this.rtPending = new Map();
     this.rtCacheReady = null;
@@ -101,6 +106,7 @@ class SeerrAPI {
       this.apiKey = local.seerrApiKey;
       this.debugLogging = local.debugLogging === true;
       this.updateIconBadge();
+      await this.loadMediaServerName();
     } catch (error) {
       console.error('Error loading Seerr settings:', error);
     }
@@ -156,6 +162,37 @@ class SeerrAPI {
       console.error('Could not update the Seerr overlay registration:', error);
       return false;
     }
+  }
+
+  // Which media server Seerr is configured against, so the flyout can name it.
+  // /settings/public needs no API key, so this also works in ratings-only mode.
+  async loadMediaServerName() {
+    this.mediaServerName = null;
+    if (!this.baseUrl) return;
+    try {
+      const url = `${this.baseUrl.replace(/\/$/, '')}/api/v1/settings/public`;
+      const response = await fetch(url, {
+        method: 'GET',
+        redirect: 'error',
+        signal: AbortSignal.timeout(RatingsConfig.requestTimeoutMs),
+        headers: { Accept: 'application/json' }
+      });
+      if (!response.ok) return;
+      const settings = await response.json();
+      this.mediaServerName = MEDIA_SERVER_NAMES[settings?.mediaServerType] ?? null;
+      this.log('📺 [Background] Media server:', this.mediaServerName ?? 'not identified');
+    } catch (error) {
+      // Naming is a nicety; neutral wording is always correct.
+      this.log('📺 [Background] Could not identify the media server:', error);
+    }
+  }
+
+  availableMessage() {
+    return this.mediaServerName ? `Available on ${this.mediaServerName}` : 'Available to watch';
+  }
+
+  watchButtonText() {
+    return this.mediaServerName ? `Watch on ${this.mediaServerName}` : 'Watch';
   }
 
   async handleMessage(request, sender, sendResponse) {
@@ -827,12 +864,12 @@ class SeerrAPI {
 
       case 5:
         result.status = 'available_watch';
-        result.message = 'Available on Jellyfin';
+        result.message = this.availableMessage();
         result.buttonText = 'Available';
         result.buttonClass = 'available';
         if (mediaUrl) {
           result.watchUrl = mediaUrl;
-          result.buttonText = 'Watch on Jellyfin';
+          result.buttonText = this.watchButtonText();
           result.buttonClass = 'watch';
         }
         break;
@@ -888,21 +925,21 @@ class SeerrAPI {
         result.buttonText = 'Partially Available';
         result.buttonClass = 'partial';
         if (mediaUrl) {
-          result.message = 'Available on Jellyfin';
+          result.message = this.availableMessage();
           result.watchUrl = mediaUrl;
-          result.buttonText = 'Watch on Jellyfin';
+          result.buttonText = this.watchButtonText();
           result.buttonClass = 'watch';
         }
         break;
 
       case 5:
         result.status = 'available_watch';
-        result.message = 'Available on Jellyfin';
+        result.message = this.availableMessage();
         result.buttonText = 'Available';
         result.buttonClass = 'available';
         if (mediaUrl) {
           result.watchUrl = mediaUrl;
-          result.buttonText = 'Watch on Jellyfin';
+          result.buttonText = this.watchButtonText();
           result.buttonClass = 'watch';
         }
         break;

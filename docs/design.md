@@ -28,6 +28,8 @@ The content-script client retries only a failed round trip. A reply of `{ succes
 
 Messages use an `action` plus action-specific fields. Request/status/watchlist/RT actions use `data`; search and debug helpers also have legacy top-level arguments. Replies are `{ success: true, data }` or `{ success: false, error }`.
 
+The flyout names the media server Seerr is configured against, read from `mediaServerType` on `/api/v1/settings/public`, which needs no API key and so also works in ratings-only mode. Seerr supports Plex, Jellyfin and Emby; when the type is unconfigured or unrecognised the wording stays neutral rather than guessing a product. The watch button is identified by its class, never its label, because that label varies.
+
 Seerr has two status enums and the same number means different things in each: a request carries `MediaRequestStatus` (pending, approved, declined, failed, completed) while media carries `MediaStatus` (unknown, pending, processing, partially available, available, blocklisted, deleted). Status extraction records which kind it found and maps with the matching table. Blocklisted media is reported as such rather than offered for request; deleted media, and media of unknown status, are requestable, which matches Seerr's own cards.
 
 Principal actions are `requestMedia`, `getMediaStatus`, `searchMedia`, `addToWatchlist`, `testConnection`, `getRottenTomatoesRatings`, `getConfigState`, `reloadSettings`, and `ping`. `getConfigState` reports whether requests are available without returning the API key, so the overlay never holds the secret. `testConnection` optionally accepts `data: { seerrUrl, seerrApiKey }` and uses a separate client instance; it never replaces saved settings.
@@ -80,7 +82,7 @@ RT search parsing and title matching are heuristic, not an official guaranteed R
 
 ## DOM lifecycle
 
-The overlay only activates on the configured server origin and path. Supported routes include discover, search, requests, and movie/TV detail pages. Base paths are retained when constructing session API URLs.
+The overlay only activates on the configured server origin and path. Grid routes are discover (including its trending and watchlist tabs), search, requests, a collection, a person's credits, the blocklist and the profile watchlist; movie and TV pages are detail routes. A route that is not recognised gets no badges and no controls, so this list is the boundary of where the overlay appears. Base paths are retained when constructing session API URLs.
 
 History hooks, popstate, and polling detect route changes, including query-only navigation. The history patch is installed once per page, but the popstate listener and the polling fallback are per instance. Polling is needed because a content script’s isolated-world history patch may not see page-world calls. Route generations discard stale rendering work. Cleanup restores loaded card order and visibility, removes overlay elements, clears page indexes/selection, and disconnects observers. Page hide/show manages polling and observers for page restoration.
 

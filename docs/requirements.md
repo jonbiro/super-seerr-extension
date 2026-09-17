@@ -20,7 +20,7 @@ These criteria describe the current product contract. They replace the historica
 - Supported sites: IMDb, RT, TMDB, Letterboxd, Metacritic, Trakt, Filmweb.
 - Letterboxd handles movies; other integrations support movies and TV where the site provides sufficient metadata.
 - Extract identity through layered selectors and fallbacks; prefer explicit media IDs where available.
-- Display request status and monitoring context. Use Jellyfin links supplied by Seerr for available media.
+- Display request status and monitoring context. Use the media-server links supplied by Seerr for available media, naming the server from its reported type and staying neutral when that is unknown.
 - Offer watchlisting for requestable media.
 - Avoid duplicate flyouts and duplicate submissions during navigation or repeated clicks.
 

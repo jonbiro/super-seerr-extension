@@ -1,7 +1,7 @@
 // Property tests 3, 4, 5: Branding correctness
 // - Property 3: Button text never references old brand (Requirement 6.1)
 // - Property 4: Status response button text references new brand (Requirement 6.2)
-// - Property 5: "Watch on Jellyfin" is preserved (Requirement 10.1/10.2)
+// - Property 5: the watch action names the configured media server
 const { test } = require('node:test');
 const assert = require('node:assert');
 const fc = require('fast-check');
@@ -39,23 +39,20 @@ test('Property 4: SeerrClient error message references Seerr not Jellyseerr', ()
   assert.ok(!content.includes('Cannot connect to Jellyseerr server'), 'Error message should NOT reference Jellyseerr');
 });
 
-test('Property 5: "Watch on Jellyfin" is preserved in background.js', () => {
-  // For any status code 5 (available) with a non-empty mediaUrl,
-  // the formatMediaStatus should return buttonText === "Watch on Jellyfin"
-
-  // This is a structural check — the source must contain the Watch on Jellyfin string
-  // and must not accidentally rename it
+test('Property 5: the watch action names the configured media server', () => {
+  // Superseded rule: this used to require the literal "Watch on Jellyfin".
+  // Seerr supports Plex, Jellyfin and Emby, so the label is derived from the
+  // server's own mediaServerType instead of being fixed to one product.
   const fs = require('fs');
   const path = require('path');
   const bgContent = fs.readFileSync(path.join(__dirname, '..', 'src', 'background', 'background.js'), 'utf-8');
-
-  assert.ok(bgContent.includes("'Watch on Jellyfin'"), 'background.js should preserve Watch on Jellyfin');
-
-  // Also check BaseIntegration.js
   const baseContent = fs.readFileSync(path.join(__dirname, '..', 'src', 'shared', 'BaseIntegration.js'), 'utf-8');
-  assert.ok(baseContent.includes("'Watch on Jellyfin'"), 'BaseIntegration.js should preserve Watch on Jellyfin');
 
-  // Verify there's no accidental "Watch on Seerr" variant
+  assert.ok(bgContent.includes('watchButtonText()'), 'the label should come from the server type');
+  assert.ok(!bgContent.includes("'Watch on Jellyfin'"), 'no product should be hardcoded');
+  assert.ok(!baseContent.includes("'Watch on Jellyfin'"), 'no product should be hardcoded');
+
+  // Seerr is the request manager, never the thing you watch on.
   assert.ok(!bgContent.includes("'Watch on Seerr'"), 'Should not have Watch on Seerr');
   assert.ok(!baseContent.includes("'Watch on Seerr'"), 'Should not have Watch on Seerr');
 });

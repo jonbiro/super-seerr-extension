@@ -6,7 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
-## [3.1.20]
+## [3.1.21]
+
+- The ratings overlay now works on every Seerr page that shows title cards. Collections, a person's credits, the blocklist and your profile watchlist were unrecognised routes, so they got no badges and no sort or filter controls.
+- The flyout no longer claims everything is Jellyfin. Seerr supports Plex, Jellyfin and Emby and reports which is configured, so the label follows your server, and stays neutral when the type is unconfigured or unrecognised. The watch button is now identified by its class rather than its exact label, which that change would otherwise have broken.
+
 
 - Fixed request status being read through the wrong table. Seerr has two status enums where the same number means different things, and request statuses were mapped as media statuses: a **declined** request reported "Processing download", a **failed** one reported "Partially ready", and a pending one reported "Status unclear". Each now maps through the table it belongs to, and a failed request offers a retry.
 - Fixed blocklisted media being offered as requestable. `BLOCKLISTED` is new in Seerr and fell through to "Ready to request", where requesting could only fail. Deleted media stays requestable, and media of unknown status now offers the request rather than reporting itself unclear, matching Seerr's own cards.

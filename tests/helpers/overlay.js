@@ -17,6 +17,24 @@ class Element {
   set textContent(text) { this.ownText = String(text); this.children = []; }
   get textContent() { return this.ownText + this.children.map(child => typeof child === 'string' ? child : child.textContent).join(''); }
   setAttribute(name, value) { this.attributes[name] = value; }
+  getAttribute(name) { return this.attributes[name] ?? null; }
+  hasAttribute(name) { return name in this.attributes; }
+  removeAttribute(name) { delete this.attributes[name]; }
+  // Enough of an element for list-route code paths, which build controls.
+  addEventListener() {}
+  removeEventListener() {}
+  remove() { if (this.parentElement) this.parentElement.children = this.parentElement.children.filter(child => child !== this); }
+  focus() {}
+  querySelectorAll() { return []; }
+  get classList() {
+    const classes = () => this.className.split(' ').filter(Boolean);
+    return {
+      add: (...names) => { this.className = [...new Set([...classes(), ...names])].join(' '); },
+      remove: (...names) => { this.className = classes().filter(name => !names.includes(name)).join(' '); },
+      contains: name => classes().includes(name),
+      toggle: (name, force) => { const on = force ?? !classes().includes(name); this.classList[on ? 'add' : 'remove'](name); }
+    };
+  }
   appendChild(child) { this.children.push(child); child.parentElement = this; return child; }
   append(...children) { this.children.push(...children); }
   closest() { return this.parentElement; }
@@ -35,8 +53,9 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local
   const container = new Element();
   const title = container.appendChild(new Element('h1'));
   title.textContent = 'Example';
+  const body = new Element('body');
   const document = {
-    readyState: 'loading', title: 'Seerr',
+    readyState: 'loading', title: 'Seerr', body,
     addEventListener() {}, getElementById() { return null; },
     createElement: tag => new Element(tag),
     querySelector: selector => selector.includes('h1') ? title : null,
@@ -73,7 +92,7 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local
   // Expose closure functions in the test VM only; execute the real production code.
   vm.runInContext(source.replace(/\}\)\(\);\s*$/, `globalThis.overlay = {
     getRatings, resolveRatings, mergeBundles, isBundleComplete, fetchSeerrSessionRatings, buildSummary, injectDetailRatings,
-    extractSeerrNativeRatings, cleanupOverlay, ratingsCache, isSeerrPage, isRequestableTitle,
+    extractSeerrNativeRatings, cleanupOverlay, ratingsCache, isSeerrPage, isRequestableTitle, detectRoute, isListRoute,
     applyScoreSort, applyScoreFilters,
     loadPersistedRatings, flushPersistedRatings, forgetRatings, ratingsCacheAge, ratingsCacheKey,
     setSort: order => { currentSort = order; },

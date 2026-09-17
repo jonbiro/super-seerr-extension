@@ -153,19 +153,28 @@
       ? window.location.pathname.slice(base.length) : window.location.pathname;
   }
 
+  // Every Seerr page that renders title cards. A route that is not recognised
+  // gets no badges and no sort or filter controls.
+  const LIST_ROUTES = new Set(['discover', 'search', 'requests', 'collection', 'person', 'blocklist', 'watchlist']);
+
   function detectRoute() {
     const path = serverPath();
     if (/^\/movie\/\d+/.test(path)) return { type: 'movie-detail', id: path.match(/\/movie\/(\d+)/)[1] };
     if (/^\/tv\/\d+/.test(path))    return { type: 'tv-detail',    id: path.match(/\/tv\/(\d+)/)[1] };
+    if (/^\/collection\/\d+/.test(path)) return { type: 'collection', id: path.match(/\/collection\/(\d+)/)[1] };
+    if (/^\/person\/\d+/.test(path))     return { type: 'person',     id: path.match(/\/person\/(\d+)/)[1] };
     if (/^\/search/.test(path))     return { type: 'search' };
     if (/^\/discover/.test(path))   return { type: 'discover' };
     if (/^\/requests(?:\/|$)/.test(path)) return { type: 'requests' };
+    if (/^\/blocklist(?:\/|$)/.test(path)) return { type: 'blocklist' };
+    // Only the watchlist tab of a profile shows titles; its settings do not.
+    if (/^\/profile\/watchlist(?:\/|$)/.test(path)) return { type: 'watchlist' };
     if (path === '/')               return { type: 'discover' };
     return null;
   }
 
   function isListRoute(route) {
-    return route && (route.type === 'discover' || route.type === 'search' || route.type === 'requests');
+    return !!route && LIST_ROUTES.has(route.type);
   }
 
   // ──────────────── SPA Navigation ────────────────

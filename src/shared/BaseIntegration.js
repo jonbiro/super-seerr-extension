@@ -346,7 +346,9 @@ class BaseIntegration {
 
     const currentButton = this.uiElements.button;
     const buttonText = currentButton?.querySelector('span')?.textContent ?? '';
-    const isWatchButton = buttonText === 'Watch on Jellyfin' || currentButton?.classList.contains('watch');
+    // The label names whichever media server Seerr is configured against, so
+    // the class is what identifies this button, not its text.
+    const isWatchButton = currentButton?.classList.contains('watch') || /^Watch\b/.test(buttonText);
 
     this.log('Button analysis:', { buttonText, isWatchButton });
 
@@ -359,17 +361,18 @@ class BaseIntegration {
   }
 
   /**
-   * Handle "Watch on Jellyfin" button click
+   * Handle a click on the watch button, which opens the configured media
+   * server. Its label varies, so callers rely on the button class.
    */
   async handleWatchButtonClick() {
-    this.log('Detected Watch on Jellyfin button click');
+    this.log('Detected watch button click');
 
-    this.setUILoading(`Opening "${this.mediaData.title}" on Jellyfin...`, 'Opening...');
+    this.setUILoading(`Opening "${this.mediaData.title}"...`, 'Opening...');
 
     // Try to use cached watch URL first
     if (this.currentStatusData?.watchUrl) {
       this.log('Using cached watch URL');
-      await this.openJellyfin(this.currentStatusData.watchUrl);
+      await this.openMediaServer(this.currentStatusData.watchUrl);
       return;
     }
 
@@ -379,7 +382,7 @@ class BaseIntegration {
       const statusData = await this.client.getMediaStatus(this.mediaData);
 
       if (statusData.watchUrl) {
-        await this.openJellyfin(statusData.watchUrl);
+        await this.openMediaServer(statusData.watchUrl);
         return;
       }
     } catch (err) {
@@ -389,7 +392,7 @@ class BaseIntegration {
     // If we get here, something went wrong
     this.ui.createNotification(
         'Watch URL Not Available',
-        'Could not find Jellyfin watch URL. Trying to request instead...',
+        'Could not find a watch URL. Trying to request instead...',
         'warning',
         4000
     );
@@ -399,17 +402,18 @@ class BaseIntegration {
   }
 
   /**
-   * Open Jellyfin in a new window
+   * Open the configured media server in a new window. Seerr may be backed by
+   * Plex, Jellyfin or Emby, so nothing here names a particular product.
    */
-  async openJellyfin(watchUrl) {
-    this.log('Opening Jellyfin URL:', watchUrl);
+  async openMediaServer(watchUrl) {
+    this.log('Opening media server URL:', watchUrl);
 
     setTimeout(() => {
       window.open(watchUrl, '_blank');
 
       this.ui.createNotification(
-          'Opening Jellyfin',
-          `Opening "${this.mediaData.title}" on Jellyfin`,
+          'Opening media server',
+          `Opening "${this.mediaData.title}"`,
           'success',
           3000
       );
