@@ -93,7 +93,7 @@ test('repeated syncs converge rather than toggling the registration', async () =
 });
 
 test('a port in the server URL is stripped, because match patterns cannot carry one', async () => {
-  // Overseerr's default is :5055, so this is the common self-hosted shape.
+  // Seerr's default port is 5055, so this is the common self-hosted shape.
   for (const [seerrUrl, expected] of [
     ['http://localhost:5055', 'http://localhost/*'],
     ['https://seerr.example:8443/requests', 'https://seerr.example/*'],

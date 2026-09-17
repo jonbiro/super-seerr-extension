@@ -6,7 +6,7 @@ These criteria describe the current product contract. They replace the historica
 
 - Product metadata, popup, options, and flyout use Super Seerr.
 - Project links point to https://github.com/jonbiro/super-seerr-extension.
-- Seerr and Jellyfin retain their names as external products.
+- Seerr and Jellyfin retain their names as external products. Seerr means https://github.com/seerr-team/seerr, the unified successor to Overseerr and Jellyseerr; those predecessors share its API surface but are not what this is tested against.
 - Required MIT attribution and historical settings migration remain intact.
 - A saved server URL enables ratings-only mode; request actions additionally require an API key.
 - The server URL and overlay preferences sync across devices; the API key is device-local and must be entered per device. An API key saved by an earlier version migrates out of sync storage on upgrade.

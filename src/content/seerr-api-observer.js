@@ -1,10 +1,10 @@
 // Seerr API observer — runs in the page's own world at document_start.
 //
-// Overseerr's title cards keep their link, title and alt text inside a
-// Transition that unmounts when not hovered, so an un-hovered card exposes
-// nothing but its poster image. The data needed to identify it is already
-// being fetched by the page, so rather than re-request it we watch what the
-// page receives and forward a narrow projection to the content script.
+// Seerr's title cards keep their link, title and alt text inside a Transition
+// that unmounts when not hovered, so an un-hovered card exposes nothing but
+// its poster image. The data needed to identify it is already being fetched by
+// the page, so rather than re-request it we watch what the page receives and
+// forward a narrow projection to the content script.
 //
 // Nothing here trusts or is trusted: it reads responses, takes a fixed set of
 // fields, and posts them same-origin. The content script revalidates.
@@ -16,10 +16,11 @@
   const MAX_ITEMS = 200;
   const MAX_DEPTH = 4;
 
-  // Endpoints that carry title lists. Anything about the account, the server
-  // configuration or other users is deliberately not observed.
-  const WATCHED = /\/api\/v1\/(discover|search|request|media|movie|tv|collection|watchlist)(\/|\?|$)/;
-  const IGNORED = /\/api\/v1\/(auth|user|settings|service|status)(\/|\?|$)/;
+  // Endpoints that carry title lists, per Seerr's router. Anything about the
+  // account, the server configuration, other users, or issue discussions is
+  // deliberately not observed.
+  const WATCHED = /\/api\/v1\/(discover|search|request|media|movie|tv|collection|watchlist|blocklist|person)(\/|\?|$)/;
+  const IGNORED = /\/api\/v1\/(auth|user|settings|service|status|issue|issueComment)(\/|\?|$)/;
 
   // Only these fields are ever forwarded.
   const FIELDS = [

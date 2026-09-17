@@ -1,8 +1,8 @@
 # Super Seerr
 
-Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your Seerr server.
+Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.1.19-blue)
+![Version](https://img.shields.io/badge/version-3.1.20-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -38,7 +38,7 @@ The flyout reports request status, supports watchlisting, and links to Jellyfin 
 
 ### Ratings and sorting
 
-Seerr's title cards hide their link and title until you hover them, so Super Seerr reads the title lists Seerr has already fetched to identify the cards on screen. It watches only same-origin `/api/v1/` list responses on your server, never anything about your account, and forwards a fixed set of fields.
+Seerr's title cards hide their link and title until you hover them, so Super Seerr reads the title lists Seerr has already fetched to identify the cards on screen. It watches only same-origin `/api/v1/` list responses on your server, never anything about your account or your issue threads, and forwards a fixed set of fields.
 
 On a supported Seerr grid, choose **Sort titles → RT critics: highest first** or an audience, TMDB or IMDb option. Both directions are available. Unrated titles stay last; ties retain their original relative order. **Original order** restores the initial order; **Reset** also clears filters. Sorting updates as ratings arrive.
 

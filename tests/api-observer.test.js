@@ -135,3 +135,33 @@ test('a huge response is capped rather than forwarded whole', async () => {
 
   assert.ok(itemsFrom(ctx.posted).length <= 200, `expected a cap, saw ${itemsFrom(ctx.posted).length}`);
 });
+
+test('every title-bearing Seerr endpoint is observed', async () => {
+  // Mirrors Seerr's router: these all return title lists that render cards.
+  const ctx = installObserver();
+  const endpoints = [
+    '/api/v1/discover/movies', '/api/v1/discover/tv', '/api/v1/discover/trending',
+    '/api/v1/discover/watchlist', '/api/v1/search?query=x', '/api/v1/request?take=20',
+    '/api/v1/media?filter=allavailable', '/api/v1/movie/550', '/api/v1/tv/1396',
+    '/api/v1/collection/1241', '/api/v1/watchlist', '/api/v1/blocklist',
+    '/api/v1/person/287/combined_credits'
+  ];
+  for (const endpoint of endpoints) {
+    ctx.respondWith(endpoint, { results: [{ id: 550, title: 'X', posterPath: '/x.jpg' }] });
+    await ctx.window.fetch(endpoint);
+  }
+  await flush();
+
+  assert.equal(ctx.posted.length, endpoints.length, `expected all ${endpoints.length} observed`);
+});
+
+test('endpoints about people rather than titles stay excluded', async () => {
+  const ctx = installObserver();
+  // Issue threads carry user comments, so they are excluded despite naming media.
+  for (const endpoint of ['/api/v1/issue', '/api/v1/issue/3', '/api/v1/issueComment/9']) {
+    ctx.respondWith(endpoint, { results: [{ id: 1, title: 'X', comment: 'private text' }] });
+    await ctx.window.fetch(endpoint);
+  }
+  await flush();
+  assert.equal(ctx.posted.length, 0);
+});
