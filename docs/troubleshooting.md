@@ -36,7 +36,15 @@ Cancel or Escape stops future submissions. A request already sent to Seerr may s
 
 ## Firefox fails to load
 
-The current Firefox manifest retains a service-worker entry that Firefox does not support. This is a known blocker, not a problem with your server. See README for the pending compatibility change.
+The Firefox manifest now uses the `background.scripts` module form that Firefox supports, but the package has not been exercised in a running Firefox. Treat Firefox as untested rather than supported. See README.
+
+## The ratings overlay does not appear on Seerr
+
+The site integrations and the Seerr overlay use different permissions. Open Settings: if a notice offers **Grant access**, the overlay has no permission to run on your server and cannot appear until you approve it. Changing the server URL asks again for the new origin, so re-saving after a move needs a fresh approval.
+
+## The API key is missing on another device
+
+The server URL and overlay preferences sync across devices; the API key does not, because it is a secret held in device-local storage. Enter it once per device from Seerr Settings → General → API Key. Upgrading from a version that synced the key moves it to local storage on the device where it was saved.
 
 ## Reporting a bug
 

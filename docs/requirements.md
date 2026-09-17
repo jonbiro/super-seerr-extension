@@ -9,6 +9,8 @@ These criteria describe the current product contract. They replace the historica
 - Seerr and Jellyfin retain their names as external products.
 - Required MIT attribution and historical settings migration remain intact.
 - A saved server URL enables ratings-only mode; request actions additionally require an API key.
+- The server URL and overlay preferences sync across devices; the API key is device-local and must be entered per device. An API key saved by an earlier version migrates out of sync storage on upgrade.
+- The extension must not hold an all-sites host permission. Access to the Seerr origin is optional and requested when its URL is saved; declining still saves settings and surfaces a standing notice.
 - Editing or testing settings must not save them. Save Settings applies connection values and overlay preferences together.
 - Temporary connection tests must not alter the worker’s active connection.
 - URLs must use HTTP(S) without embedded credentials, query strings, or fragments.
@@ -58,8 +60,9 @@ These criteria describe the current product contract. They replace the historica
 
 ## Known limits
 
-- Firefox’s current service-worker manifest cannot be treated as functional; resolving that explicit manifest requirement is pending.
+- The Firefox manifest uses the `background.scripts` module form, but has not been loaded in a running Firefox. Do not treat it as functional until that check happens.
 - Ratings depend on RT markup, match heuristics, Seerr API responses, and the user’s session.
 - Sorting covers loaded cards associated with the controls, not the complete catalogue or all carousels.
 - Cards without explicit links require a unique matching list title. Ambiguous or missing metadata is left unresolved.
 - Live validation across the seven external sites and a configured Seerr/Jellyfin instance is still needed before a store release.
+- Whether an existing Chrome install retains its host permission when that permission moves from required to optional is expected but unverified; check an actual upgrade before a store release.

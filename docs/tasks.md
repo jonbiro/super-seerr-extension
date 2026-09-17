@@ -36,14 +36,15 @@ Use controlled test titles; real requests can trigger downloads. Local DOM fixtu
 ## Package and publish
 
 - `make release` creates a new version and zip/xpi files. Inspect names, manifests, source presence, and LICENSE.
-- Firefox runtime remains blocked by its retained service-worker configuration. Do not publish it as compatible based on packaging tests.
+- The Firefox manifest is fixed but unvalidated on a running Firefox. Do not publish it as compatible based on packaging tests.
 - Commit only reviewed source/configuration/docs and intended artifacts.
 - Push to `git@github.com:jonbiro/super-seerr-extension.git` when authorized, then verify the remote commit.
 - Report exact test/build outcomes and outstanding live or signing checks.
 
 ## Follow-up work
 
-- Resolve the Firefox manifest requirement and perform an actual Firefox load test.
+- Perform an actual Firefox load test against the corrected `background.scripts` manifest.
+- Verify on a real Chrome upgrade that an existing install keeps the Seerr host permission when it moves from required to optional.
 - Validate current production Seerr layouts, especially separate carousels and cards without explicit links.
 - Replace remaining simulated legacy tests with production-code regressions when those areas change.
 - Validate cross-device sync of settings and reconnect behavior with a controlled server.
