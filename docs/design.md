@@ -92,6 +92,8 @@ Cards without explicit links are matched to unique list titles, never by DOM pos
 
 Card data is retained separately from badges, allowing sorting with badges disabled. Async completion rechecks route generation and element connectivity. Detail callbacks recheck whether a row already exists to prevent concurrent duplication.
 
+The flyout takes its light or dark treatment from the page it is injected into, measured from that page's own background, rather than from `prefers-color-scheme`. IMDb, Letterboxd, Trakt and Metacritic are dark whatever the visitor's system is set to, so following the system put a white panel on a dark site. The system preference is only the fallback, for a page whose background says nothing.
+
 A card badge sits on arbitrary artwork, so it cannot borrow contrast from the poster: a dark fill alone disappears against a dark one, which many posters are. The light edge and the drop shadow are what carry it, and there is no blanket opacity weakening them further. The second badge's offset is defined in CSS, beside the padding and border that determine the height it has to clear.
 
 The grid controls are styled as a panel with recessed fields rather than a flat wash, because the previous grey-on-grey left labels below readable contrast and gave the sort control, the thresholds and the buttons identical weight. Violet marks actions and nothing else. A threshold above zero takes the colour of the badge it filters — tomato for critics, popcorn for audience, and so on — so the bar shows at a glance what is narrowing the grid; at rest it stays neutral. Colours are applied with `color-mix`, preceded by plain fallbacks so an unsupported browser still shows the active state.

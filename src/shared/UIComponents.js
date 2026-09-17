@@ -126,6 +126,37 @@ class UIComponents {
     }
   }
 
+  /**
+   * Whether the page we are injected into is dark, judged by its own
+   * background rather than by prefers-color-scheme: IMDb, Letterboxd, Trakt
+   * and Metacritic are dark whatever the visitor's system is set to.
+   * Falls back to the system preference when the page does not say.
+   */
+  detectHostTheme() {
+    for (const element of [document.body, document.documentElement]) {
+      const luminance = this.backgroundLuminance(element);
+      if (luminance !== null) return luminance < 0.42 ? 'dark' : 'light';
+    }
+    try {
+      return window.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light';
+    } catch (_) {
+      return 'light';
+    }
+  }
+
+  // Perceived luminance of an element's background, or null when it is
+  // transparent or unreadable and the answer should come from elsewhere.
+  backgroundLuminance(element) {
+    if (!element || typeof window.getComputedStyle !== 'function') return null;
+    const colour = window.getComputedStyle(element).backgroundColor;
+    const parts = /rgba?\(([^)]+)\)/.exec(colour || '');
+    if (!parts) return null;
+    const [r, g, b, a = '1'] = parts[1].split(',').map(part => parseFloat(part));
+    if ([r, g, b].some(Number.isNaN) || parseFloat(a) === 0) return null;
+    // Rec. 601 luma: cheap, and close enough to decide light from dark.
+    return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  }
+
   createFlyout() {
     const flyoutId = `seerr-flyout-${this.siteName.toLowerCase()}`;
     document.getElementById(flyoutId)?.remove();
@@ -140,7 +171,10 @@ class UIComponents {
     ]);
 
     const panel = this.el('div', { className: 'seerr-panel' });
-    const flyout = this.el('div', { id: flyoutId, className: 'seerr-flyout collapsed' }, [tab, panel]);
+    const flyout = this.el('div', {
+      id: flyoutId,
+      className: `seerr-flyout collapsed seerr-theme-${this.detectHostTheme()}`
+    }, [tab, panel]);
 
     tab.addEventListener('click', () => {
       flyout.classList.toggle('collapsed');
@@ -617,28 +651,27 @@ class UIComponents {
         50% { opacity: 0.5; }
       }
 
-      /* Dark mode support */
-      @media (prefers-color-scheme: dark) {
-        .seerr-panel {
-          background: #1f2937;
-          border-color: #374151;
-        }
+      /* Theme follows the page we are injected into, not the operating
+         system: these sites are dark whatever the visitor prefers. */
+      .seerr-theme-dark .seerr-panel {
+        background: #1f2937;
+        border-color: #374151;
+      }
         
-        .seerr-title {
-          color: #f9fafb;
-        }
+      .seerr-theme-dark .seerr-title {
+        color: #f9fafb;
+      }
         
-        .seerr-year {
-          color: #9ca3af;
-        }
+      .seerr-theme-dark .seerr-year {
+        color: #9ca3af;
+      }
         
-        .seerr-status-text {
-          color: #d1d5db;
-        }
+      .seerr-theme-dark .seerr-status-text {
+        color: #d1d5db;
+      }
         
-        .seerr-status-section {
-          border-bottom-color: #374151;
-        }
+      .seerr-theme-dark .seerr-status-section {
+        border-bottom-color: #374151;
       }
 
       .seerr-watchlist-button {
