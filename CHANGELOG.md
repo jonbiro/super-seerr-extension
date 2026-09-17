@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.45]
+
+- Fixed detail pages reporting a correct Rotten Tomatoes score as approximate. A Seerr heading reads “Moana 2 (2024)”, and that whole string was used as the title while the year was discarded — so an exact match registered as a partial one and wore a `~`. A parenthesised trailing year is now split off and used as the year. Numbers that belong to the title, as in “Blade Runner 2049”, are left alone.
+
 ## [3.1.44]
 
 - Rotten Tomatoes lookups now also use a title's original name. Rotten Tomatoes lists most films under their English title, so a Seerr configured for another language, or a site like Filmweb, supplied a name it does not carry and no score was found. Results are also judged against every title the film is known by rather than against the query, so a localised search that returns the English title is now recognised instead of rejected. A title matching its original, including one differing only by accent, is still searched once.

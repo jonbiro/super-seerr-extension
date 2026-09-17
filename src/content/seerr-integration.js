@@ -384,6 +384,19 @@
 
   // Rotten Tomatoes lists most films under their English title, so the
   // original is worth keeping when Seerr shows a localised one.
+  // A Seerr detail heading reads "Moana 2 (2024)". Left whole, that title only
+  // ever substring-matches Rotten Tomatoes' "Moana 2", and the year it carries
+  // goes to waste. Only a parenthesised trailing year counts, so "Blade Runner
+  // 2049" and "Apollo 13" keep their numbers.
+  function splitDisplayTitle(heading) {
+    const text = String(heading ?? '').trim();
+    const match = text.match(/^(.*\S)\s*\((\d{4})\)$/);
+    if (!match) return { title: text, year: null };
+    const year = parseInt(match[2], 10);
+    if (year < 1870 || year > new Date().getFullYear() + 10) return { title: text, year: null };
+    return { title: match[1].trim(), year };
+  }
+
   function objectOriginalTitle(obj) {
     if (!obj || typeof obj !== 'object') return '';
     return obj.originalTitle || obj.originalName
@@ -800,6 +813,10 @@
   }
 
   async function resolveRatings(tmdbId, title, year, mediaType = null, options = {}) {
+    // Callers may hand over a display heading with its year still attached.
+    const heading = splitDisplayTitle(title);
+    title = heading.title || title;
+    year = year ?? heading.year;
     log(`Resolving ratings for TMDB ${tmdbId}`);
     const native = extractSeerrNativeRatings(tmdbId, mediaType);
     await indexCurrentListRatings();
@@ -1168,6 +1185,8 @@
 
     // Extract TMDB ID from route
     const tmdbId = route.id;
+    // The heading carries its year, as in "Moana 2 (2024)". resolveRatings
+    // splits that out for every caller, so it is passed through whole.
     const title = document.querySelector('h1')?.textContent?.trim() || '';
 
     const mediaType = route.type === 'tv-detail' ? 'tv' : 'movie';
