@@ -23,6 +23,8 @@ The seven site integrations are static `content_scripts` entries and load their 
 
 Message and storage listeners register synchronously. Initialization loads settings, migrates historical connection keys, reloads active settings, then reconciles the overlay registration. Message handling awaits the initialization promise so a waking worker does not process requests with empty configuration. Registration reconciliation must never reject, because that promise gates every message; a browser missing `chrome.scripting` or `chrome.permissions` disables only the overlay.
 
+The content-script client retries only a failed round trip. A reply of `{ success: false }` means the worker ran and Seerr answered, so it is final: `requestMedia` is a non-idempotent POST, and resending it risks a duplicate request.
+
 Messages use an `action` plus action-specific fields. Request/status/watchlist/RT actions use `data`; search and debug helpers also have legacy top-level arguments. Replies are `{ success: true, data }` or `{ success: false, error }`.
 
 Principal actions are `requestMedia`, `getMediaStatus`, `searchMedia`, `addToWatchlist`, `testConnection`, `getRottenTomatoesRatings`, `getConfigState`, `reloadSettings`, and `ping`. `getConfigState` reports whether requests are available without returning the API key, so the overlay never holds the secret. `testConnection` optionally accepts `data: { seerrUrl, seerrApiKey }` and uses a separate client instance; it never replaces saved settings.

@@ -1,6 +1,17 @@
 // Shared Seerr API Client
 // Handles all communication with background script and Seerr API
 
+// A definite answer from the worker: the round trip completed and Seerr (or
+// the worker) rejected the operation. Retrying cannot change the outcome, and
+// for a non-idempotent POST it risks creating duplicates.
+class SeerrResponseError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'SeerrResponseError';
+    this.definite = true;
+  }
+}
+
 class SeerrClient {
   constructor(options = {}) {
     this.debug = options.debug || false;
@@ -82,10 +93,11 @@ class SeerrClient {
         if (response && response.success) {
           return response.data;
         }
-        throw new Error(response?.error || 'No response received');
+        if (response) throw new SeerrResponseError(response.error || 'Status unavailable');
+        throw new Error('No response received');
 
       } catch (err) {
-        if (attempt === this.retryAttempts) throw err;
+        if (err.definite || attempt === this.retryAttempts) throw err;
         this.warn(`getMediaStatus attempt ${attempt} failed, retrying...`);
         await new Promise(r => setTimeout(r, this.retryDelay));
       }
@@ -118,11 +130,14 @@ class SeerrClient {
 
         const errorMsg = response ? response.error : 'Unknown error';
         this.error('Request failed:', errorMsg);
-        throw new Error(errorMsg);
+        // A reply means the POST reached Seerr and was answered. Resending it
+        // cannot help and can create a duplicate request; only a failed round
+        // trip is worth retrying.
+        throw response ? new SeerrResponseError(errorMsg) : new Error(errorMsg);
 
       } catch (err) {
         this.error(`Error on attempt ${attempt}:`, err);
-        if (attempt === this.retryAttempts) {
+        if (err.definite || attempt === this.retryAttempts) {
           throw err;
         }
         this.warn(`Retrying in ${this.retryDelay}ms...`);
@@ -198,6 +213,7 @@ class SeerrClient {
 // Export for use in content scripts
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = SeerrClient;
+  module.exports.SeerrResponseError = SeerrResponseError;
 } else if (typeof window !== 'undefined') {
   window.SeerrClient = SeerrClient;
 }
