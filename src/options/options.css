@@ -115,6 +115,7 @@ small {
     gap: 12px;
     justify-content: flex-end;
     margin-top: 32px;
+    flex-wrap: wrap;
 }
 
 .button {
@@ -125,6 +126,8 @@ small {
     cursor: pointer;
     transition: all 0.2s ease;
     border: none;
+    /* A two-word label was breaking across lines inside the button. */
+    white-space: nowrap;
 }
 
 .button.primary {
@@ -315,6 +318,8 @@ footer a:hover {
 .overlay-options label { display: flex; align-items: center; gap: 8px; }
 .overlay-options input[type="checkbox"] { width: auto; accent-color: #8b5cf6; }
 .overlay-options small { line-height: 1.5; }
+/* Sits above the form: it explains why the overlay is not running, so it
+   cannot be the last thing on the page, below the buttons. */
 .permission-warning { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border: 1px solid #f59e0b; border-left-width: 4px; border-radius: 8px; background: rgba(245, 158, 11, 0.12); padding: 16px; margin: 20px 0; }
 .permission-warning.hidden { display: none; }
 .permission-warning-text { flex: 1 1 260px; line-height: 1.5; }

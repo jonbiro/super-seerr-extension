@@ -11,7 +11,6 @@ class OptionsManager {
     this.testButton = document.getElementById('testConnection');
     this.reloadButton = document.getElementById('reloadSettings');
     this.toggleButton = document.getElementById('toggleApiKey');
-    this.skipButton = document.getElementById('skipSetup');
     this.statusDiv = document.getElementById('status');
     this.permissionWarning = document.getElementById('permissionWarning');
     this.debugLoggingInput = document.getElementById('debugLogging');
@@ -31,7 +30,6 @@ class OptionsManager {
     this.testButton?.addEventListener('click', () => this.testConnection());
     this.reloadButton?.addEventListener('click', () => this.reloadSettings());
     this.toggleButton?.addEventListener('click', () => this.toggleApiKeyVisibility());
-    this.skipButton?.addEventListener('click', () => window.close());
     this.grantButton?.addEventListener('click', () => this.grantOverlayAccess());
     this.clearCacheButton?.addEventListener('click', () => this.clearRatingsCache());
 

@@ -46,7 +46,7 @@ Migration reads historical keys only in the worker. It fills active keys only wh
 
 The seven supported sites are static `content_scripts` matches. Access to the Seerr server is an optional host permission, requested from the options page at the moment a URL is saved, because that origin is arbitrary. `permissions.request` must be the first await after the user gesture or Chrome rejects it.
 
-Declining still saves settings; the options page then shows a standing notice. The worker reconciles registration on startup, on storage changes, and on `permissions.onAdded`/`onRemoved`, so revoking access removes the registration. Match patterns cannot carry a port, so the saved origin is reduced to `protocol//hostname/*`, which matches every port — a server on `:5055` would otherwise produce an invalid pattern.
+Declining still saves settings; the options page then shows a standing notice above the form, since it explains why the overlay is not running and would be missed below the actions. The worker reconciles registration on startup, on storage changes, and on `permissions.onAdded`/`onRemoved`, so revoking access removes the registration. Match patterns cannot carry a port, so the saved origin is reduced to `protocol//hostname/*`, which matches every port — a server on `:5055` would otherwise produce an invalid pattern.
 
 ## Identifying cards before they are hovered
 

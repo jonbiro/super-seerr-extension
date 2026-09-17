@@ -170,3 +170,36 @@ test('an empty or missing ratings cache disables the clear button', async t => {
     assert.equal(ctx.window.document.getElementById('clearRatingsCache').disabled, true);
   }
 });
+
+test('the permission notice comes before the form, not after the buttons', async t => {
+  // It explains why the overlay is not running, so burying it below the
+  // action buttons put the page's most important message below the fold.
+  const ctx = openOptions({ granted: false, synced: { seerrUrl: 'https://seerr.example' } });
+  t.after(() => ctx.dom.window.close());
+  await flush();
+
+  const { document } = ctx.window;
+  const notice = document.getElementById('permissionWarning');
+  const form = document.getElementById('settingsForm');
+  assert.ok(notice && form);
+
+  const order = notice.compareDocumentPosition(form);
+  assert.ok(order & ctx.window.Node.DOCUMENT_POSITION_FOLLOWING,
+    'the notice should precede the form');
+});
+
+test('action labels do not break across lines', () => {
+  const css = require('node:fs').readFileSync('src/options/options.css', 'utf8');
+  const rule = css.slice(css.indexOf('.button {'), css.indexOf('}', css.indexOf('.button {')));
+  assert.match(rule, /white-space:\s*nowrap/, 'two-word labels were wrapping inside the button');
+});
+
+test('settings offers no vestigial skip action', () => {
+  // "Skip for now" only closed the window, and dated from when this page
+  // opened itself on install. That flow is gone, so the control asked the
+  // reader to skip something that was never being presented.
+  const html = require('node:fs').readFileSync('src/options/options.html', 'utf8');
+  const script = require('node:fs').readFileSync('src/options/options.js', 'utf8');
+  assert.ok(!html.includes('skipSetup'), 'no skip control in the markup');
+  assert.ok(!script.includes('skipButton'), 'and nothing left wiring it');
+});
