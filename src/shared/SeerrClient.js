@@ -15,8 +15,10 @@ class SeerrResponseError extends Error {
 class SeerrClient {
   constructor(options = {}) {
     this.debug = options.debug || false;
-    this.retryAttempts = options.retryAttempts || 3;
-    this.retryDelay = options.retryDelay || 1000;
+    // ?? not ||, so a caller's 0 survives. At least one attempt, or the
+    // retry loop would never run and requestMedia would return undefined.
+    this.retryAttempts = Math.max(1, options.retryAttempts ?? 3);
+    this.retryDelay = Math.max(0, options.retryDelay ?? 1000);
     this.siteName = options.siteName || 'UNKNOWN';
   }
 

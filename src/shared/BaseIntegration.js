@@ -6,13 +6,14 @@ class BaseIntegration {
     this.siteName = siteName;
     this.debug = options.debug || false;
     this.uiTheme = options.uiTheme || 'button'; // 'button' or 'flyout'
-    this.retryDelay = options.retryDelay || 2000;
+    // ?? not ||, so a caller asking for no delay gets none.
+    this.retryDelay = Math.max(0, options.retryDelay ?? 2000);
 
     // Initialize shared components
     this.client = new SeerrClient({
       debug: this.debug,
       siteName: this.siteName,
-      retryAttempts: options.retryAttempts || 3
+      retryAttempts: options.retryAttempts ?? 3
     });
 
     this.extractor = new MediaExtractor({
