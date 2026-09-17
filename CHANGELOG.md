@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.32]
+
+- Redesigned the grid controls. Labels sat at 55% opacity on a grey wash, and the sort control, the thresholds and the buttons all carried identical weight, so nothing was legible or findable. The bar is now a panel with recessed fields, labels at readable contrast, and buttons ranked by what they do — violet marks an action, Reset stays quiet.
+- A threshold above zero now takes the colour of the score it filters, so the bar shows which filters are narrowing the grid instead of leaving that invisible. At rest it stays neutral.
+
 ## [3.1.29]
 
 - Fixed the grid controls breaking apart when the bar wraps. Each label and its input were separate flex items, so at a narrower window a label could end one line with its own input starting the next — visible as a stranded "TMDB ≥" and a sort control truncated to "Origina". Labels and their controls are now single units, the sort control has room for its longest option, and the cache-age note is weighted as the supplementary text it is.

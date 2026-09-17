@@ -318,3 +318,42 @@ test('the sort control is not left to collapse to an unreadable width', async t 
   assert.ok(sortField, 'the sort control should sit in a field group');
   assert.ok(sortField.querySelector('label'), 'grouped with its own label');
 });
+
+test('a live filter marks itself, and clears when reset', async t => {
+  // The bar otherwise gives no sign of which thresholds are narrowing the grid.
+  const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  const doc = fixture.window.document;
+
+  const field = input => input.closest('.seerr-filter-field');
+  const critics = doc.querySelector('.seerr-min-critics');
+  const imdb = doc.querySelector('.seerr-min-imdb');
+
+  assert.equal(field(critics).classList.contains('is-active'), false, 'nothing is set yet');
+
+  critics.value = '75';
+  critics.dispatchEvent(new fixture.window.Event('input', { bubbles: true }));
+  await settle();
+
+  assert.equal(field(critics).classList.contains('is-active'), true, 'a set threshold is marked');
+  assert.equal(field(imdb).classList.contains('is-active'), false, 'an unset one is not');
+  assert.equal(field(critics).dataset.score, 'critics', 'each field names the score it filters');
+
+  doc.querySelector('.seerr-reset-sort').click();
+  await settle();
+  assert.equal(field(critics).classList.contains('is-active'), false, 'Reset clears the marking too');
+});
+
+test('every filter field declares which score it belongs to', async t => {
+  const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+
+  const scores = [...fixture.window.document.querySelectorAll('.seerr-filter-field[data-score]')]
+    .map(field => field.dataset.score).sort();
+  assert.deepEqual(scores, ['audience', 'critics', 'imdb', 'tmdb']);
+
+  const css = require('node:fs').readFileSync('src/content/seerr-overlay.css', 'utf8');
+  for (const score of scores) {
+    assert.ok(css.includes(`[data-score="${score}"]`), `${score} should have its own accent`);
+  }
+});

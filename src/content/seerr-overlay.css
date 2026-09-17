@@ -62,41 +62,93 @@
 /* ─── Sort & Filter Bar ─── */
 
 .seerr-sort-filter-bar {
+  --seerr-panel: #141a24;
+  --seerr-well: #1f2836;
+  --seerr-edge: #2f3a4c;
+  --seerr-text: #e8edf5;
+  --seerr-label: #97a4b8;
+  --seerr-violet: #8b5cf6;
+
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px 14px;
   width: 100%;
-  padding: 8px 12px;
-  margin: 0 0 12px;
+  padding: 10px 14px;
+  margin: 0 0 14px;
   font-size: 12px;
   font-family: inherit;
+  color: var(--seerr-text);
   flex-wrap: wrap;
-  background: rgba(128, 128, 128, 0.06);
-  border: 1px solid rgba(128, 128, 128, 0.12);
-  border-radius: 8px;
+  background: var(--seerr-panel);
+  border: 1px solid var(--seerr-edge);
+  border-radius: 10px;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
   box-sizing: border-box;
 }
 
+/* Coverage and cache age are status, not controls: quiet, but readable. */
 .seerr-score-coverage {
-  font-size: 10px;
-  opacity: 0.55;
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: rgba(128, 128, 128, 0.08);
-  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--seerr-text);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--seerr-well);
+  border: 1px solid var(--seerr-edge);
 }
 
-/* A label and its input are one unit: the bar wraps, and as separate flex
+.seerr-cache-age {
+  font-size: 11px;
+  color: var(--seerr-label);
+  /* Closes the gap to the coverage pill so the two read as one status group,
+     and opens one before the controls. */
+  margin: 0 6px 0 -6px;
+  padding-right: 14px;
+  border-right: 1px solid var(--seerr-edge);
+}
+
+.seerr-cache-age:empty {
+  margin: 0;
+  padding: 0;
+  border-right: 0;
+}
+
+/* A label and its control are one unit: the bar wraps, and as separate flex
    items they could end up on different lines from each other. */
 .seerr-filter-field {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
   white-space: nowrap;
+  padding: 2px 8px 2px 10px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.seerr-sort-filter-bar label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--seerr-label);
+  letter-spacing: 0.01em;
+}
+
+.seerr-sort-filter-bar select,
+.seerr-sort-filter-bar input[type="number"] {
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--seerr-edge);
+  background: var(--seerr-well);
+  color: var(--seerr-text);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  outline: none;
 }
 
 .seerr-filter-field input[type="number"] {
-  width: 55px;
+  width: 56px;
 }
 
 /* Wide enough to read the selected option rather than truncating it. */
@@ -105,44 +157,91 @@
   max-width: 100%;
 }
 
-.seerr-sort-filter-bar label {
-  font-size: 11px;
-  opacity: 0.55;
-  margin-right: 0;
+.seerr-sort-filter-bar select:hover,
+.seerr-sort-filter-bar input[type="number"]:hover {
+  border-color: #3d4a60;
 }
 
-.seerr-sort-filter-bar select,
-.seerr-sort-filter-bar input[type="number"] {
-  padding: 3px 6px;
-  border-radius: 4px;
-  border: 1px solid rgba(128, 128, 128, 0.18);
-  background: rgba(128, 128, 128, 0.06);
-  color: inherit;
-  font-size: 11px;
-  font-family: inherit;
-  outline: none;
+/* Keyboard focus must be obvious, not a tint. */
+.seerr-sort-filter-bar select:focus-visible,
+.seerr-sort-filter-bar input[type="number"]:focus-visible,
+.seerr-sort-filter-bar button:focus-visible {
+  border-color: var(--seerr-violet);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3);
 }
 
-.seerr-sort-filter-bar select:focus,
-.seerr-sort-filter-bar input[type="number"]:focus {
-  border-color: rgba(139, 92, 246, 0.5);
-  background: rgba(139, 92, 246, 0.06);
+/* A threshold above zero is live. The field takes the colour of the badge it
+   filters, so the bar says at a glance what is narrowing the grid. */
+.seerr-filter-field[data-score].is-active {
+  background: var(--seerr-well);
+  border-color: var(--score);
+  background: color-mix(in srgb, var(--score) 14%, transparent);
+  border-color: color-mix(in srgb, var(--score) 55%, transparent);
 }
+
+.seerr-filter-field[data-score].is-active label {
+  color: var(--score);
+}
+
+.seerr-filter-field[data-score].is-active input[type="number"] {
+  border-color: var(--score);
+  border-color: color-mix(in srgb, var(--score) 45%, transparent);
+  color: #fff;
+}
+
+.seerr-filter-field[data-score="critics"]  { --score: #f2584c; }
+.seerr-filter-field[data-score="audience"] { --score: #f5a623; }
+.seerr-filter-field[data-score="tmdb"]     { --score: #4cc2d4; }
+.seerr-filter-field[data-score="imdb"]     { --score: #f5c518; }
 
 .seerr-sort-filter-bar button {
-  padding: 3px 10px;
-  border-radius: 4px;
-  border: 1px solid rgba(128, 128, 128, 0.18);
-  background: rgba(128, 128, 128, 0.06);
-  color: inherit;
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--seerr-edge);
+  background: var(--seerr-well);
+  color: var(--seerr-text);
   font-size: 11px;
+  font-weight: 500;
   font-family: inherit;
   cursor: pointer;
-  transition: background 0.15s;
+  outline: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
 .seerr-sort-filter-bar button:hover {
-  background: rgba(128, 128, 128, 0.14);
+  background: #253044;
+  border-color: #3d4a60;
+}
+
+/* Reset only matters once something is set, so it stays the quietest thing. */
+.seerr-reset-sort {
+  background: transparent;
+  border-color: transparent;
+  color: var(--seerr-label);
+}
+
+.seerr-reset-sort:hover {
+  background: var(--seerr-well);
+  color: var(--seerr-text);
+}
+
+/* The two actions that reach the network or change mode carry the accent. */
+.seerr-refresh-scores,
+.seerr-toggle-select {
+  border-color: rgba(139, 92, 246, 0.45);
+  color: #cdbcfb;
+}
+
+.seerr-refresh-scores:hover,
+.seerr-toggle-select:hover {
+  background: rgba(139, 92, 246, 0.16);
+  border-color: rgba(139, 92, 246, 0.7);
+  color: #fff;
+}
+
+.seerr-refresh-scores:disabled {
+  opacity: 0.55;
+  cursor: default;
 }
 
 /* ─── Filter Toggle Button ─── */
@@ -368,13 +467,11 @@
   .seerr-bulk-action-bar,
   .seerr-confirmation-modal,
   .seerr-filter-toggle,
+  .seerr-sort-filter-bar,
+  .seerr-sort-filter-bar *,
   .seerr-select-checkbox {
     transition: none !important;
     animation: none !important;
   }
 }
 
-/* Supplementary metadata: match the coverage badge rather than outweighing it. */
-.seerr-cache-age { opacity: 0.55; font-size: 10px; }
-.seerr-refresh-scores { cursor: pointer; }
-.seerr-refresh-scores:disabled { opacity: 0.6; cursor: default; }

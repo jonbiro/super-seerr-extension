@@ -824,6 +824,14 @@
       .filter(info => info && info.tmdbId);
   }
 
+  // A threshold above zero is narrowing the grid, so show which ones are live.
+  function markActiveFilters(bar) {
+    bar.querySelectorAll('.seerr-filter-field[data-score]').forEach(field => {
+      const input = field.querySelector('input[type="number"]');
+      field.classList.toggle('is-active', (parseFloat(input?.value) || 0) > 0);
+    });
+  }
+
   function describeCacheAge(cachedAt) {
     if (cachedAt === null) return '';
     const days = Math.floor((Date.now() - cachedAt) / 86400000);
@@ -1394,13 +1402,13 @@
         <option value="imdb-desc">⭐ IMDb ↓</option>
         <option value="imdb-asc">⭐ IMDb ↑</option>
       </select></span>
-      <span class="seerr-filter-field"><label>Critics ≥</label>
+      <span class="seerr-filter-field" data-score="critics"><label>Critics ≥</label>
         <input type="number" class="seerr-min-critics" min="0" max="100" step="5" value="0"></span>
-      <span class="seerr-filter-field"><label>Audience ≥</label>
+      <span class="seerr-filter-field" data-score="audience"><label>Audience ≥</label>
         <input type="number" class="seerr-min-audience" min="0" max="100" step="5" value="0"></span>
-      <span class="seerr-filter-field"><label>TMDB ≥</label>
+      <span class="seerr-filter-field" data-score="tmdb"><label>TMDB ≥</label>
         <input type="number" class="seerr-min-tmdb" min="0" max="10" step="0.5" value="0"></span>
-      <span class="seerr-filter-field"><label>IMDb ≥</label>
+      <span class="seerr-filter-field" data-score="imdb"><label>IMDb ≥</label>
         <input type="number" class="seerr-min-imdb" min="0" max="10" step="0.5" value="0"></span>
       <button class="seerr-reset-sort">Reset</button>
       <button class="seerr-refresh-scores" title="Refetch scores for the titles loaded on this page">Refresh scores</button>
@@ -1463,6 +1471,7 @@
       currentFilters.minAudience = 0;
       currentFilters.minTmdb = 0;
       currentFilters.minImdb = 0;
+      markActiveFilters(bar);
       updateCoverage();
     });
 
@@ -1491,6 +1500,7 @@
       currentFilters.minAudience = parseInt(bar.querySelector('.seerr-min-audience').value, 10) || 0;
       currentFilters.minTmdb = parseFloat(bar.querySelector('.seerr-min-tmdb').value) || 0;
       currentFilters.minImdb = parseFloat(bar.querySelector('.seerr-min-imdb').value) || 0;
+      markActiveFilters(bar);
       applyScoreFilters(grid);
       updateCoverage();
     }
