@@ -13,6 +13,8 @@
   window.__seerrApiObserverInstalled = true;
 
   const CHANNEL = 'super-seerr:api';
+  const DIAGNOSE_REQUEST = 'super-seerr:diagnose';
+  const DIAGNOSE_RESULT = 'super-seerr:diagnosed';
   const MAX_ITEMS = 200;
   const MAX_DEPTH = 4;
 
@@ -76,6 +78,29 @@
       return false;
     }
   }
+
+  // The overlay's diagnostics live in the extension's isolated world, which a
+  // DevTools console cannot reach without switching context. Expose a bridge
+  // here so `superSeerrDiagnose()` works from the default console.
+  let diagnoseCounter = 0;
+  window.superSeerrDiagnose = function () {
+    const id = `d${++diagnoseCounter}`;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        window.removeEventListener('message', onResult);
+        reject(new Error('Super Seerr did not answer. Its overlay may not be running on this page.'));
+      }, 5000);
+      function onResult(event) {
+        if (event.source !== window || event.origin !== window.location.origin) return;
+        if (event.data?.channel !== DIAGNOSE_RESULT || event.data.id !== id) return;
+        clearTimeout(timer);
+        window.removeEventListener('message', onResult);
+        resolve(event.data.report);
+      }
+      window.addEventListener('message', onResult);
+      window.postMessage({ channel: DIAGNOSE_REQUEST, id }, window.location.origin);
+    });
+  };
 
   const originalFetch = window.fetch;
   if (typeof originalFetch === 'function') {

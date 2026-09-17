@@ -102,3 +102,71 @@ test('a TV lookup is unaffected, having no combined endpoint', async () => {
   const paths = callsForTitle();
   assert.ok(paths.some(path => path.endsWith('/ratings')), 'tv still asks for its ratings');
 });
+
+// Each endpoint supplies a known set of scores, so asking one that can only
+// return fields already in hand is a request spent on nothing.
+test('the combined endpoint is skipped once RT and IMDb are known', async () => {
+  const { overlay, callsForTitle } = overlayWithSeerr({ [DETAILS]: { voteAverage: 7.9 } });
+  const have = overlay.Model.createRatingsBundle({ rtCriticsScore: 88, rtAudienceScore: 91, imdbRating: 8.2 });
+
+  await overlay.fetchSeerrSessionRatings(TMDB_ID, 'movie', have);
+
+  const paths = callsForTitle();
+  assert.ok(!paths.includes(RATINGS_COMBINED), 'nothing left for it to add');
+  assert.ok(paths.includes(DETAILS), 'but the TMDB rating is still missing');
+});
+
+test('the detail endpoint is skipped once the TMDB rating is known', async () => {
+  const { overlay, callsForTitle } = overlayWithSeerr({ [RATINGS_COMBINED]: { rtCriticsScore: 88 } });
+  const have = overlay.Model.createRatingsBundle({ tmdbRating: 7.9 });
+
+  await overlay.fetchSeerrSessionRatings(TMDB_ID, 'movie', have);
+  assert.ok(!callsForTitle().includes(DETAILS), 'the list data already supplied it');
+});
+
+test('the common case costs one request, not three', async () => {
+  // A discover card typically arrives with a TMDB rating from the list and RT
+  // from the worker, leaving only IMDb to fetch.
+  const { overlay, callsForTitle } = overlayWithSeerr({ [RATINGS_COMBINED]: { imdbRating: 8.2 } });
+  const have = overlay.Model.createRatingsBundle({ rtCriticsScore: 88, rtAudienceScore: 91, tmdbRating: 7.9 });
+
+  const bundle = await overlay.fetchSeerrSessionRatings(TMDB_ID, 'movie', have);
+  assert.deepEqual([...callsForTitle()], [RATINGS_COMBINED]);
+  assert.equal(bundle.imdbRating, 8.2, 'and IMDb is still collected');
+});
+
+test('knowing nothing still asks everything it can', async () => {
+  const { overlay, callsForTitle } = overlayWithSeerr({
+    [RATINGS_COMBINED]: { rtCriticsScore: 88 },
+    [RATINGS]: { rtAudienceScore: 91 },
+    [DETAILS]: { voteAverage: 7.9 }
+  });
+  await overlay.fetchSeerrSessionRatings(TMDB_ID, 'movie', null);
+  assert.equal(callsForTitle().length, 3);
+});
+
+test('resolveRatings hands the session lookup what it already knows', async () => {
+  // Wires the skipping end to end: without this the filter is dead code,
+  // because every other test passes `known` by hand.
+  const paths = [];
+  const overlay = loadOverlay({
+    pathname: '/movie/550',
+    settings: { seerrUrl: 'https://seerr.example' },
+    // Embedded page data supplies the TMDB rating.
+    scripts: [{ props: { pageProps: { media: { id: 550, voteAverage: 7.9 } } } }],
+    // The worker supplies both RT scores.
+    sendMessage: async () => ({ success: true, data: { rtCriticsScore: 88, rtAudienceScore: 91, confidence: 1 } }),
+    fetch: async url => {
+      paths.push(new URL(String(url)).pathname);
+      return { ok: true, json: async () => ({ imdbRating: 8.2 }) };
+    }
+  });
+
+  const bundle = await overlay.resolveRatings(550, 'Fight Club', 1999, 'movie');
+  const forTitle = paths.filter(path => path.includes('/550'));
+
+  assert.deepEqual(forTitle, [RATINGS_COMBINED], `only IMDb was missing, saw ${forTitle.join(', ')}`);
+  assert.equal(bundle.tmdbRating, 7.9);
+  assert.equal(bundle.rtCriticsScore, 88);
+  assert.equal(bundle.imdbRating, 8.2);
+});

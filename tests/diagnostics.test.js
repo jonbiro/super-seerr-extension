@@ -16,10 +16,25 @@ function seerrPage({ posters = ['/poster1.jpg', '/poster2.jpg'] } = {}) {
     runtime: { sendMessage: async () => ({ success: true, data: {} }) }
   };
   window.fetch = async () => ({ ok: true, json: async () => ({ results: [] }) });
+  // jsdom leaves event.source null on window.postMessage. Browsers set it to
+  // the sending window, which is what makes the page/content-script bridge
+  // work at all, so model that here rather than weaken the listener. Delivery
+  // is asynchronous, as it is in a browser, so ordering can be exercised.
+  const posted = [];
+  window.postMessage = (data, origin) => {
+    posted.push(data);
+    setImmediate(() => window.dispatchEvent(
+      new window.MessageEvent('message', { data, origin: origin === '*' ? window.location.origin : origin, source: window })
+    ));
+  };
   for (const f of ['RatingsModel', 'RatingsConfig']) window.eval(fs.readFileSync(`src/shared/${f}.js`, 'utf8'));
   window.eval(fs.readFileSync('src/content/seerr-integration.js', 'utf8'));
   return {
-    dom, window,
+    dom, window, posted,
+    // A message as some other script on the page might send it.
+    inject: (data, origin = 'https://seerr.example') => window.dispatchEvent(
+      new window.MessageEvent('message', { data, origin, source: window })
+    ),
     diagnose: () => window.seerr_debug.ratings.diagnose(),
     observe: items => window.dispatchEvent(new window.MessageEvent('message', {
       data: { channel: 'super-seerr:api', url: 'https://seerr.example/api/v1/discover/movies', items },
@@ -115,4 +130,67 @@ test('a malformed message is counted rather than silently dropped', async t => {
   const report = page.diagnose();
   assert.equal(report.observed.messages, 0);
   assert.ok(report.observed.rejected >= 1, 'a rejected message should be visible in the report');
+});
+
+test('diagnostics are reachable from the page world, not only the isolated one', async t => {
+  // A DevTools console defaults to the page context, where the extension's
+  // globals do not exist. The observer bridges a request across.
+  const page = seerrPage(); t.after(() => page.dom.window.close());
+  await settle();
+
+  const { window } = page;
+  window.eval(fs.readFileSync('src/content/seerr-api-observer.js', 'utf8'));
+  assert.equal(typeof window.superSeerrDiagnose, 'function', 'the page world should expose the bridge');
+
+  const report = await window.superSeerrDiagnose();
+  assert.ok(report, 'the overlay should answer');
+  assert.equal(typeof report.observed.messages, 'number');
+  assert.equal(report.isSeerrPage, true);
+});
+
+test('the bridge answers only its own request', async t => {
+  const page = seerrPage(); t.after(() => page.dom.window.close());
+  await settle();
+  const { window } = page;
+  window.eval(fs.readFileSync('src/content/seerr-api-observer.js', 'utf8'));
+
+  const [first, second] = await Promise.all([window.superSeerrDiagnose(), window.superSeerrDiagnose()]);
+  assert.ok(first && second, 'concurrent requests each get an answer');
+});
+
+test('a diagnose request from another origin is never answered', async t => {
+  const page = seerrPage(); t.after(() => page.dom.window.close());
+  await settle();
+
+  page.inject({ channel: 'super-seerr:diagnose', id: 'x' }, 'https://evil.example');
+  await settle();
+
+  assert.ok(!page.posted.some(m => m.channel === 'super-seerr:diagnosed'),
+    'the overlay must not report to a foreign origin');
+});
+
+test('a reply from another origin cannot stand in for the overlay', async t => {
+  const page = seerrPage(); t.after(() => page.dom.window.close());
+  await settle();
+  page.window.eval(fs.readFileSync('src/content/seerr-api-observer.js', 'utf8'));
+
+  const pending = page.window.superSeerrDiagnose();
+  // Delivery is asynchronous, so this lands before the genuine answer.
+  page.inject({ channel: 'super-seerr:diagnosed', id: 'd1', report: { spoofed: true } }, 'https://evil.example');
+
+  const report = await pending;
+  assert.ok(!report.spoofed, 'a foreign origin must not answer for the overlay');
+  assert.equal(typeof report.observed.messages, 'number', 'the genuine answer arrived instead');
+});
+
+test('a reply for a different request is ignored', async t => {
+  const page = seerrPage(); t.after(() => page.dom.window.close());
+  await settle();
+  page.window.eval(fs.readFileSync('src/content/seerr-api-observer.js', 'utf8'));
+
+  const pending = page.window.superSeerrDiagnose();
+  page.inject({ channel: 'super-seerr:diagnosed', id: 'some-other-request', report: { wrong: true } });
+
+  const report = await pending;
+  assert.ok(!report.wrong, 'only the matching request id may resolve it');
 });

@@ -53,8 +53,10 @@ Seerr does not put a card's link or title in the page until you hover it, so Sup
 Open the browser console on a Seerr grid page and run:
 
 ```js
-seerr_debug.ratings.diagnose()
+await superSeerrDiagnose()
 ```
+
+That works in the console's default context. The same report is available as `seerr_debug.ratings.diagnose()`, but only after switching the console's context dropdown from `top` to **Super Seerr**, because the overlay runs in the extension's own world.
 
 `observed.messages` is how many list responses were seen. Read it first:
 

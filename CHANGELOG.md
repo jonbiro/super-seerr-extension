@@ -6,7 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
-## [3.1.23]
+## [3.1.24]
+
+- The overlay now asks Seerr only for ratings it does not already have. Each endpoint supplies a known set of scores, and one whose fields are all in hand is skipped: a typical card arrives with a TMDB rating from the page's own list data and Rotten Tomatoes from the background worker, so only IMDb remains and it costs one request instead of three.
+- Diagnostics are reachable as `await superSeerrDiagnose()` from the console's default context. They previously existed only in the extension's isolated world, which a DevTools console does not reach without changing its context dropdown — a debug tool you cannot open is not much of one.
+
 
 - Stopped asking Seerr a question whose answer was already known. For a title with no ratings, the overlay requested `/ratingscombined` and then `/ratings`, but Seerr only returns 404 from the combined endpoint when it has neither Rotten Tomatoes nor IMDb data, which guarantees the second call fails too. That halves both the requests and the 404s the browser logs to the page console.
 

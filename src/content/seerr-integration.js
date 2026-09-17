@@ -447,12 +447,29 @@
     return { ok: true, status: response.status, data: await response.json() };
   }
 
-  async function fetchSeerrSessionRatings(tmdbId, mediaType) {
+  // What each endpoint can contribute. Asking one whose fields are all known
+  // spends a request to learn nothing, and on a grid that is once per card.
+  const SESSION_ENDPOINT_FIELDS = {
+    ratingscombined: ['rtCriticsScore', 'rtAudienceScore', 'imdbRating'],
+    ratings: ['rtCriticsScore', 'rtAudienceScore'],
+    detail: ['tmdbRating']
+  };
+
+  function endpointCanHelp(bundle, fields) {
+    return !bundle || fields.some(field => bundle[field] === null || bundle[field] === undefined);
+  }
+
+  async function fetchSeerrSessionRatings(tmdbId, mediaType, known = null) {
     if (!tmdbId || !mediaType) return null;
 
-    const endpoints = mediaType === 'tv'
-      ? [`/api/v1/tv/${tmdbId}/ratings`, `/api/v1/tv/${tmdbId}`]
-      : [`/api/v1/movie/${tmdbId}/ratingscombined`, `/api/v1/movie/${tmdbId}/ratings`, `/api/v1/movie/${tmdbId}`];
+    const all = mediaType === 'tv'
+      ? [[`/api/v1/tv/${tmdbId}/ratings`, 'ratings'], [`/api/v1/tv/${tmdbId}`, 'detail']]
+      : [[`/api/v1/movie/${tmdbId}/ratingscombined`, 'ratingscombined'],
+         [`/api/v1/movie/${tmdbId}/ratings`, 'ratings'],
+         [`/api/v1/movie/${tmdbId}`, 'detail']];
+    const endpoints = all
+      .filter(([, kind]) => endpointCanHelp(known, SESSION_ENDPOINT_FIELDS[kind]))
+      .map(([endpoint]) => endpoint);
 
     let bundle = null;
     let ratingsAreAbsent = false;
@@ -659,6 +676,21 @@
 
   window.addEventListener('message', handleObservedApiResponse);
 
+  // Answer the page-world bridge so diagnostics are reachable from the default
+  // DevTools console, not only after switching to the extension's context.
+  window.addEventListener('message', event => {
+    if (event.source !== window || event.origin !== window.location.origin) return;
+    if (event.data?.channel !== 'super-seerr:diagnose') return;
+    let report;
+    try {
+      report = window.seerr_debug?.ratings?.diagnose?.() ?? { error: 'diagnostics unavailable' };
+    } catch (error) {
+      report = { error: String(error && error.message ? error.message : error) };
+    }
+    // Structured-clone safe: the report is plain data.
+    window.postMessage({ channel: 'super-seerr:diagnosed', id: event.data.id, report }, window.location.origin);
+  });
+
   async function indexCurrentListRatings() {
     const route = detectRoute();
     const endpoint = getListRatingsEndpoint(route);
@@ -728,8 +760,10 @@
       }
     }
     // Continue filling partial bundles without overwriting higher-trust data.
+    // Passing what is already known lets it skip endpoints that could only
+    // return those same fields.
     if (!isBundleComplete(bundle)) {
-      bundle = mergeBundles(bundle, await fetchSeerrSessionRatings(tmdbId, mediaType));
+      bundle = mergeBundles(bundle, await fetchSeerrSessionRatings(tmdbId, mediaType, bundle));
     }
     return bundle || Model.createRatingsBundle({ lastUpdated: Date.now() });
   }
