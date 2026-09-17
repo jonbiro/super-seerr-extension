@@ -587,7 +587,7 @@
     return !bundle || fields.some(field => bundle[field] === null || bundle[field] === undefined);
   }
 
-  async function fetchSeerrSessionRatings(tmdbId, mediaType, known = null) {
+  async function fetchSeerrSessionRatings(tmdbId, mediaType, known = null, outcome = {}) {
     if (!tmdbId || !mediaType) return null;
 
     const all = mediaType === 'tv'
@@ -633,6 +633,8 @@
         const next = bundleFromRatingObject(result.data, endpoint.includes('ratings') ? 'seerr-ratings-api' : 'seerr-details-api');
         bundle = mergeBundles(bundle, next);
       } catch (error) {
+        // A 404 is Seerr answering; a throw means we never got an answer.
+        outcome.conclusive = false;
         log(`Seerr ratings fetch failed for ${endpoint}:`, error);
       }
       // These run once per card. Walking the remaining endpoints when there is
@@ -863,7 +865,12 @@
     return promise;
   }
 
-  async function fetchRottenTomatoesRatings(title, year, mediaType, refresh = false, originalTitle = null) {
+  // `outcome` distinguishes "we asked and there is nothing" from "we could not
+  // ask". Both produce a null bundle, and only the first is worth remembering:
+  // MV3 evicts the worker after seconds of idle, so a sendMessage failing
+  // mid-burst is ordinary, and caching that as "unrated" would hide a real
+  // score for as long as the absence lives.
+  async function fetchRottenTomatoesRatings(title, year, mediaType, refresh = false, originalTitle = null, outcome = {}) {
     if (!title) return null;
 
     try {
@@ -873,7 +880,12 @@
         // have moved, so a refresh has to reach past that cache too.
         data: { title, originalTitle, year, mediaType, refresh }
       });
-      if (!response?.success || !response.data) return null;
+      // The worker answering "no match" is an answer. The worker failing is not.
+      if (!response?.success) {
+        outcome.conclusive = false;
+        return null;
+      }
+      if (!response.data) return null;
 
       return Model.createRatingsBundle({
         rtCriticsScore: response.data.rtCriticsScore ?? null,
@@ -884,6 +896,7 @@
       });
     } catch (error) {
       log('Rotten Tomatoes lookup failed:', error);
+      outcome.conclusive = false;
       return null;
     }
   }
@@ -904,7 +917,7 @@
 
     if (!bundle || bundle.rtCriticsScore === null || bundle.rtAudienceScore === null) {
       const rtBundle = await fetchRottenTomatoesRatings(
-        lookupTitle, lookupYear, mediaType, options.refresh === true, pageMeta?.originalTitle || null);
+        lookupTitle, lookupYear, mediaType, options.refresh === true, pageMeta?.originalTitle || null, options.outcome ?? {});
       if (rtBundle && rtBundle.confidence >= Config.confidenceThreshold) {
         bundle = mergeBundles(bundle, rtBundle);
       }
@@ -913,7 +926,7 @@
     // Passing what is already known lets it skip endpoints that could only
     // return those same fields.
     if (!isBundleComplete(bundle)) {
-      bundle = mergeBundles(bundle, await fetchSeerrSessionRatings(tmdbId, mediaType, bundle));
+      bundle = mergeBundles(bundle, await fetchSeerrSessionRatings(tmdbId, mediaType, bundle, options.outcome ?? {}));
     }
     return bundle || Model.createRatingsBundle({ lastUpdated: Date.now() });
   }
@@ -1029,13 +1042,21 @@
       return ratingsCache.get(pendingKey);
     }
 
-    const promise = resolveRatings(tmdbId, title, year, mediaType, options);
+    // Whether a null result means "nothing knows this title" or "we could not
+    // find out". Only the first is worth remembering.
+    const outcome = {};
+    const promise = resolveRatings(tmdbId, title, year, mediaType, { ...options, outcome });
     ratingsCache.set(pendingKey, promise);
 
     try {
       const bundle = await promise;
       // Storing the absence is the point: without it every visit asks again.
       const storable = bundle && Model.hasAnyScore(bundle) ? bundle : null;
+      // A lookup that could not complete tells us nothing about the title.
+      if (!storable && outcome.conclusive === false) {
+        log(`Not remembering ${key} as unrated; the lookup did not complete`);
+        return bundle;
+      }
       if (ratingsCache.get(pendingKey) === promise) {
         while (resolvedCacheSize() >= Config.overlayCacheMaxEntries) {
           const lru = [...ratingsCache.keys()].find(existingKey => !existingKey.startsWith('pending:'));

@@ -5,6 +5,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadWorker } = require('./helpers/worker');
 const { loadOverlay } = require('./helpers/overlay');
+const Config = require('../src/shared/RatingsConfig');
 
 const CACHE_KEY = 'overlayRatingsV1';
 const SERVER = 'https://seerr.example/';
@@ -156,7 +157,7 @@ test('the reported age is the oldest of the titles on screen', async () => {
   const stored = {
     [CACHE_KEY]: {
       server: SERVER,
-      matcher: 2,
+      matcher: Config.matcherVersion,
       entries: {
         'movie:1': { bundle: { rtCriticsScore: 80 }, cachedAt: Date.now() - 6 * day },
         'movie:2': { bundle: { rtCriticsScore: 80 }, cachedAt: Date.now() - 1 * day }

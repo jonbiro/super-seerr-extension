@@ -242,3 +242,56 @@ test('storing a bundle schedules the write on its own', async () => {
   assert.ok(overlay.localStore[CACHE_KEY], 'the debounced write must fire without being called by hand');
   assert.equal(overlay.localStore[CACHE_KEY].entries['movie:550'].bundle.rtCriticsScore, 80);
 });
+
+test('a lookup that could not complete is not remembered as unrated', async () => {
+  // MV3 evicts the worker after seconds of idle, so a sendMessage rejecting
+  // mid-burst is ordinary. Treating that as "nothing knows this title" hid a
+  // real score for a week — the first version of this cache did exactly that.
+  const overlay = loadOverlay({
+    settings,
+    sendMessage: async () => { throw new Error('Could not establish connection'); }
+  });
+
+  const bundle = await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(bundle.rtCriticsScore, null, 'nothing resolved');
+  await overlay.flushPersistedRatings();
+
+  assert.equal(overlay.ratingsCache.has('movie:550'), false, 'the failure must not be cached');
+  const stored = overlay.localStore[CACHE_KEY];
+  assert.ok(!stored?.entries?.['movie:550'], 'nor persisted');
+});
+
+test('a worker that answers "no match" is an answer, and is remembered', async () => {
+  const overlay = loadOverlay({ settings, sendMessage: async () => ({ success: true, data: null }) });
+
+  await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(overlay.ratingsCache.has('movie:550'), true, 'a conclusive nothing is still worth storing');
+  assert.equal(overlay.ratingsCache.get('movie:550').bundle, null);
+});
+
+test('a worker reporting failure is not an answer either', async () => {
+  // The worker can reply rather than throw — Rotten Tomatoes unreachable, a
+  // timeout, a parse failure. That reply carries success: false, and it says
+  // nothing about whether the title has a score.
+  const overlay = loadOverlay({
+    settings,
+    sendMessage: async () => ({ success: false, error: 'Rotten Tomatoes unreachable' })
+  });
+
+  await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(overlay.ratingsCache.has('movie:550'), false, 'a reported failure must not be cached');
+});
+
+test('a Seerr request that never answers leaves the title unremembered', async () => {
+  // Rotten Tomatoes can conclusively have no match while Seerr's own endpoints
+  // are unreachable. Seerr answering 404 is a fact; a throw is not, and the
+  // title may well be rated there once the server is reachable again.
+  const overlay = loadOverlay({
+    settings,
+    sendMessage: async () => ({ success: true, data: null }),
+    fetch: async () => { throw new Error('Failed to fetch'); }
+  });
+
+  await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(overlay.ratingsCache.has('movie:550'), false, 'an unreachable server is not a verdict');
+});

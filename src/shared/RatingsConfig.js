@@ -9,9 +9,15 @@ const RatingsConfig = {
   // caches store the confidence their lookup earned, and neither re-runs the
   // matcher on a hit, so a change to normalisation or scoring would otherwise
   // leave every cached title wearing the verdict the old rules reached.
-  // Bump this whenever normalizeTitleForMatch or scoreRtSearchResult changes:
-  // entries stamped with anything else are looked up again.
-  matcherVersion: 2,
+  // Bump this whenever anything changes what a cached entry means — title
+  // normalisation, match scoring, or the rules deciding what is worth storing.
+  // Entries stamped with anything else are looked up again.
+  //
+  // 3: version 2 could record a failed lookup as "nothing knows this title",
+  //    because a worker that could not answer and a worker answering "no match"
+  //    both produced a null bundle. Those absences hide real scores, and there
+  //    is no way to tell them apart after the fact, so they are all discarded.
+  matcherVersion: 3,
 
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {

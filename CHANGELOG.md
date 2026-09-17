@@ -6,7 +6,9 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
-## [3.1.50]
+## [3.1.52]
+
+- Fixed a regression in the previous build: a lookup that could not complete was remembered as “nothing knows this title”, hiding real scores for a week. A worker answering “no match” and a worker that could not answer both produced the same empty result, and Manifest V3 evicts that worker after seconds of idle, so failures mid-burst are ordinary rather than rare. Only an answer is remembered now. Absences written by the previous build are discarded on upgrade, since there is no way to tell which of them were real.
 
 - Fixed “Add to Watchlist”, which never worked. Seerr validates the request with a schema requiring `tmdbId` and `mediaType`; the extension sent `mediaId`, a field that schema has no place for, so every add was rejected. The title is now sent too, as Seerr's own front end does. The test that covered this asserted the broken shape against a body builder written inside the test, so it could never have caught it; it now drives the worker and checks what is actually sent.
 
