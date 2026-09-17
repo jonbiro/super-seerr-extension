@@ -1038,6 +1038,7 @@
     const originalIndex = card => Number(card.getAttribute('data-seerr-card-index')) || 0;
     const score = card => order.startsWith('rt-audience') ? getCardAudienceScore(card)
       : order.startsWith('tmdb') ? getCardTmdbScore(card)
+      : order.startsWith('imdb') ? getCardImdbScore(card)
       : order.startsWith('score') ? getCardAnyScore(card) : getCardScore(card);
     const visible = currentCards.filter(c => c.style.display !== 'none');
     const hidden = currentCards.filter(c => c.style.display === 'none');
@@ -1061,7 +1062,8 @@
   const currentFilters = {
     minCritics: 0,
     minAudience: 0,
-    minTmdb: 0
+    minTmdb: 0,
+    minImdb: 0
   };
 
   function applyScoreFilters(grid, filters = currentFilters) {
@@ -1072,10 +1074,12 @@
       const cs = getCardScore(c);
       const as = getCardAudienceScore(c);
       const ts = getCardTmdbScore(c);
+      const is = getCardImdbScore(c);
       const hidesForCritics = filters.minCritics > 0 && (cs === null || cs < filters.minCritics);
       const hidesForAudience = filters.minAudience > 0 && (as === null || as < filters.minAudience);
       const hidesForTmdb = filters.minTmdb > 0 && (ts === null || ts < filters.minTmdb);
-      c.style.display = (hidesForCritics || hidesForAudience || hidesForTmdb) ? 'none' : '';
+      const hidesForImdb = filters.minImdb > 0 && (is === null || is < filters.minImdb);
+      c.style.display = (hidesForCritics || hidesForAudience || hidesForTmdb || hidesForImdb) ? 'none' : '';
       getCardLayoutItem(c).style.display = c.style.display;
     });
     applyScoreSort(grid);
@@ -1144,6 +1148,8 @@
         <option value="rt-audience-asc">🍿 RT audience: lowest first</option>
         <option value="tmdb-desc">🎬 TMDB ↓</option>
         <option value="tmdb-asc">🎬 TMDB ↑</option>
+        <option value="imdb-desc">⭐ IMDb ↓</option>
+        <option value="imdb-asc">⭐ IMDb ↑</option>
       </select>
       <label>Critics ≥</label>
       <input type="number" class="seerr-min-critics" min="0" max="100" step="5" value="0" style="width:55px">
@@ -1151,6 +1157,8 @@
       <input type="number" class="seerr-min-audience" min="0" max="100" step="5" value="0" style="width:55px">
       <label>TMDB ≥</label>
       <input type="number" class="seerr-min-tmdb" min="0" max="10" step="0.5" value="0" style="width:55px">
+      <label>IMDb ≥</label>
+      <input type="number" class="seerr-min-imdb" min="0" max="10" step="0.5" value="0" style="width:55px">
       <button class="seerr-reset-sort">Reset</button>
       ${FEATURE_FLAGS.bulkActions && apiConfigured ? '<button class="seerr-toggle-select" data-seerr-overlay="true">Select titles</button>' : ''}
     `;
@@ -1199,9 +1207,11 @@
       bar.querySelector('.seerr-min-critics').value = '0';
       bar.querySelector('.seerr-min-audience').value = '0';
       bar.querySelector('.seerr-min-tmdb').value = '0';
+      bar.querySelector('.seerr-min-imdb').value = '0';
       currentFilters.minCritics = 0;
       currentFilters.minAudience = 0;
       currentFilters.minTmdb = 0;
+      currentFilters.minImdb = 0;
       updateCoverage();
     });
 
@@ -1213,6 +1223,7 @@
       currentFilters.minCritics = parseInt(bar.querySelector('.seerr-min-critics').value, 10) || 0;
       currentFilters.minAudience = parseInt(bar.querySelector('.seerr-min-audience').value, 10) || 0;
       currentFilters.minTmdb = parseFloat(bar.querySelector('.seerr-min-tmdb').value) || 0;
+      currentFilters.minImdb = parseFloat(bar.querySelector('.seerr-min-imdb').value) || 0;
       applyScoreFilters(grid);
       updateCoverage();
     }
@@ -1220,6 +1231,7 @@
     bar.querySelector('.seerr-min-critics').addEventListener('input', applyFilters);
     bar.querySelector('.seerr-min-audience').addEventListener('input', applyFilters);
     bar.querySelector('.seerr-min-tmdb').addEventListener('input', applyFilters);
+    bar.querySelector('.seerr-min-imdb').addEventListener('input', applyFilters);
 
     if (retryCount < 5) {
       setTimeout(() => {
@@ -1255,13 +1267,21 @@
     return match ? parseFloat(match[1]) : null;
   }
 
+  // Unlike the others there is no card badge to fall back on, so this reads
+  // the resolved bundle only. Confidence gates RT title matching, not IMDb.
+  function getCardImdbScore(card) {
+    return card.__seerrRatings ? card.__seerrRatings.imdbRating : null;
+  }
+
   function getCardAnyScore(card) {
     const critics = getCardScore(card);
     if (critics !== null) return critics;
     const audience = getCardAudienceScore(card);
     if (audience !== null) return audience;
     const tmdb = getCardTmdbScore(card);
-    return tmdb !== null ? tmdb * 10 : null;
+    if (tmdb !== null) return tmdb * 10;
+    const imdb = getCardImdbScore(card);
+    return imdb !== null ? imdb * 10 : null;
   }
 
   // ──────────────── Bulk List Actions ────────────────
@@ -1518,7 +1538,8 @@
           media: getCardMediaInfo(card),
           critics: getCardScore(card),
           audience: getCardAudienceScore(card),
-          tmdb: getCardTmdbScore(card)
+          tmdb: getCardTmdbScore(card),
+          imdb: getCardImdbScore(card)
         }))
       };
     },

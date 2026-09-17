@@ -75,7 +75,7 @@ Cards without explicit links are matched to unique list titles, never by DOM pos
 
 Card data is retained separately from badges, allowing sorting with badges disabled. Async completion rechecks route generation and element connectivity. Detail callbacks recheck whether a row already exists to prevent concurrent duplication.
 
-Sorting uses score plus original card index, keeps unrated titles last in both directions, and avoids DOM writes when order is already correct. Filters treat unavailable scores as failing a positive minimum. Only loaded cards are affected; this is not server-side sorting or pagination.
+Sorting uses score plus original card index, keeps unrated titles last in both directions, and avoids DOM writes when order is already correct. RT critics, RT audience, TMDB and IMDb each sort and filter independently; the combined “Best Score” falls through RT critics, RT audience, TMDB, then IMDb, with the ten-point scales scaled to match. IMDb is read from the resolved bundle alone because cards render no IMDb badge to parse, and it is not gated on RT match confidence, which applies to title matching rather than to scores Seerr supplies. Filters treat unavailable scores as failing a positive minimum. Only loaded cards are affected; this is not server-side sorting or pagination.
 
 ## Bulk interaction
 
