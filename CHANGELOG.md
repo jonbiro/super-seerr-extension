@@ -6,7 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
-## [3.1.52]
+## [3.1.53]
+
+- A lookup that could not complete is now held for two minutes in memory rather than retried on every pass. Not remembering failures at all, as the previous build did, meant a page re-asked about the same titles each time badges were injected. The hold never reaches storage and never outlives the page, so a server coming back is picked up at once.
+- A 500 from Seerr is no longer treated as “this title has no ratings”. Only a 404 says that; any other failed response means the server did not answer.
 
 - Fixed a regression in the previous build: a lookup that could not complete was remembered as “nothing knows this title”, hiding real scores for a week. A worker answering “no match” and a worker that could not answer both produced the same empty result, and Manifest V3 evicts that worker after seconds of idle, so failures mid-burst are ordinary rather than rare. Only an answer is remembered now. Absences written by the previous build are discarded on upgrade, since there is no way to tell which of them were real.
 

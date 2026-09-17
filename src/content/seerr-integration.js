@@ -136,6 +136,8 @@
         const entries = {};
         for (const [key, value] of ratingsCache) {
           if (key.startsWith('pending:') || !value) continue;
+          // A failed lookup is remembered only for this page, never on disk.
+          if (value.provisional) continue;
           // A null bundle is a remembered "nothing knows this title", and it is
           // kept: that is what stops the same lookups running on every visit.
           // Every one carries the timestamp that lets it expire, because the
@@ -628,6 +630,9 @@
         }
         if (!result.ok) {
           if (result.status === 404 && endpoint.endsWith('/ratingscombined')) ratingsAreAbsent = true;
+          // 404 is Seerr saying it has nothing. A 500 or a 401 is Seerr failing
+          // to say anything, and must not be recorded as "this title is unrated".
+          else if (result.status !== 404) outcome.conclusive = false;
           continue;
         }
         const next = bundleFromRatingObject(result.data, endpoint.includes('ratings') ? 'seerr-ratings-api' : 'seerr-details-api');
@@ -1022,7 +1027,8 @@
     const key = ratingsCacheKey(tmdbId, title, year, mediaType);
     let cached = options.refresh === true ? null : ratingsCache.get(key);
     // A remembered "nothing" expires; a remembered score does not.
-    if (cached && !cached.bundle && Date.now() - (cached.cachedAt ?? 0) >= Config.unratedRetryMs) {
+    const absenceTtl = cached?.provisional ? Config.inconclusiveRetryMs : Config.unratedRetryMs;
+    if (cached && !cached.bundle && Date.now() - (cached.cachedAt ?? 0) >= absenceTtl) {
       ratingsCache.delete(key);
       cached = null;
     }
@@ -1052,19 +1058,19 @@
       const bundle = await promise;
       // Storing the absence is the point: without it every visit asks again.
       const storable = bundle && Model.hasAnyScore(bundle) ? bundle : null;
-      // A lookup that could not complete tells us nothing about the title.
-      if (!storable && outcome.conclusive === false) {
-        log(`Not remembering ${key} as unrated; the lookup did not complete`);
-        return bundle;
-      }
+      // A lookup that could not complete tells us nothing about the title, so
+      // it is held briefly and in memory only: long enough that the page stops
+      // re-asking on every pass, short enough to cost nothing once the server
+      // or the worker is back.
+      const provisional = !storable && outcome.conclusive === false;
       if (ratingsCache.get(pendingKey) === promise) {
         while (resolvedCacheSize() >= Config.overlayCacheMaxEntries) {
           const lru = [...ratingsCache.keys()].find(existingKey => !existingKey.startsWith('pending:'));
           if (lru === undefined) break;
           ratingsCache.delete(lru);
         }
-        ratingsCache.set(key, { bundle: storable, cachedAt: Date.now() });
-        schedulePersistedRatingsFlush();
+        ratingsCache.set(key, { bundle: storable, cachedAt: Date.now(), ...(provisional ? { provisional: true } : {}) });
+        if (!provisional) schedulePersistedRatingsFlush();
       }
       return bundle;
     } finally {

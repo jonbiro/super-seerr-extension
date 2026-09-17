@@ -50,6 +50,12 @@ const RatingsConfig = {
   // that nobody has rated yet is unrated only for now, so this expires.
   unratedRetryMs: 7 * 24 * 60 * 60 * 1000,
 
+  // A lookup that could not complete is not a verdict, so it is not stored the
+  // same way: it is held in memory only, briefly, so the badges on a page do
+  // not re-ask on every injection pass while a server is down or the worker is
+  // restarting. It never reaches storage and never outlives the page.
+  inconclusiveRetryMs: 2 * 60 * 1000,
+
   overlayCacheMaxEntries: 5000,
   // Rotten Tomatoes lookups do expire, so this only bounds a browsing session.
   rtCacheMaxEntries: 5000,

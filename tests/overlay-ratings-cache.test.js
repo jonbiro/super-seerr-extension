@@ -256,9 +256,11 @@ test('a lookup that could not complete is not remembered as unrated', async () =
   assert.equal(bundle.rtCriticsScore, null, 'nothing resolved');
   await overlay.flushPersistedRatings();
 
-  assert.equal(overlay.ratingsCache.has('movie:550'), false, 'the failure must not be cached');
+  // Held briefly so the page stops re-asking on every pass, but marked as the
+  // non-verdict it is: never written to disk, and gone again in minutes.
+  assert.equal(overlay.ratingsCache.get('movie:550').provisional, true, 'held only provisionally');
   const stored = overlay.localStore[CACHE_KEY];
-  assert.ok(!stored?.entries?.['movie:550'], 'nor persisted');
+  assert.ok(!stored?.entries?.['movie:550'], 'a failure is never persisted');
 });
 
 test('a worker that answers "no match" is an answer, and is remembered', async () => {
@@ -279,7 +281,7 @@ test('a worker reporting failure is not an answer either', async () => {
   });
 
   await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
-  assert.equal(overlay.ratingsCache.has('movie:550'), false, 'a reported failure must not be cached');
+  assert.equal(overlay.ratingsCache.get('movie:550').provisional, true, 'a reported failure is not a verdict');
 });
 
 test('a Seerr request that never answers leaves the title unremembered', async () => {
@@ -293,5 +295,36 @@ test('a Seerr request that never answers leaves the title unremembered', async (
   });
 
   await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
-  assert.equal(overlay.ratingsCache.has('movie:550'), false, 'an unreachable server is not a verdict');
+  assert.equal(overlay.ratingsCache.get('movie:550').provisional, true, 'an unreachable server is not a verdict');
+});
+
+test('a failed lookup is retried within minutes, not held for a week', async () => {
+  const overlay = loadOverlay({ settings, sendMessage: async () => ({ success: false }) });
+  await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  const held = overlay.ratingsCache.get('movie:550');
+  assert.equal(held.provisional, true);
+
+  // Just past the short window a real verdict is reachable again, where the
+  // week-long expiry of a genuine absence would still be silencing it.
+  overlay.ratingsCache.set('movie:550', { ...held, cachedAt: Date.now() - Config.inconclusiveRetryMs - 1000 });
+  const resolved = withResolver(overlay, () => ({ rtCriticsScore: 80 }));
+  const bundle = await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+
+  assert.equal(resolved.timesFor(550), 1, 'the title is asked about again');
+  assert.equal(bundle.rtCriticsScore, 80);
+  assert.ok(Config.inconclusiveRetryMs < Config.unratedRetryMs, 'and far sooner than a real absence');
+});
+
+test('a 500 from Seerr is not a verdict on the title, unlike a 404', async () => {
+  // Seerr's own detail requests were returning 500 for particular titles. That
+  // is the server failing to answer, not the server saying it has nothing, and
+  // the two must not be remembered the same way.
+  const answer = { success: true, data: null };
+  const failing = loadOverlay({ settings, sendMessage: async () => answer, fetch: async () => ({ ok: false, status: 500 }) });
+  await failing.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(failing.ratingsCache.get('movie:550').provisional, true, '500 is not an absence');
+
+  const absent = loadOverlay({ settings, sendMessage: async () => answer, fetch: async () => ({ ok: false, status: 404 }) });
+  await absent.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(absent.ratingsCache.get('movie:550').provisional, undefined, '404 is');
 });
