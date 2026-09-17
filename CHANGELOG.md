@@ -6,7 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
-## [3.1.21]
+## [3.1.22]
+
+- `seerr_debug.ratings.diagnose()` now explains why a card has no score rather than only showing that it does not. It reports how many list responses the page-world observer has forwarded and from which paths, and for each unresolved card whether Seerr has withheld its link, whether its poster matched nothing observed, or whether it matched more than one title and so could not be resolved without guessing.
+
 
 - The ratings overlay now works on every Seerr page that shows title cards. Collections, a person's credits, the blocklist and your profile watchlist were unrecognised routes, so they got no badges and no sort or filter controls.
 - The flyout no longer claims everything is Jellyfin. Seerr supports Plex, Jellyfin and Emby and reports which is configured, so the label follows your server, and stays neutral when the type is unconfigured or unrecognised. The watch button is now identified by its class rather than its exact label, which that change would otherwise have broken.

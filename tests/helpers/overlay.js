@@ -94,7 +94,7 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local
     getRatings, resolveRatings, mergeBundles, isBundleComplete, fetchSeerrSessionRatings, buildSummary, injectDetailRatings,
     extractSeerrNativeRatings, cleanupOverlay, ratingsCache, isSeerrPage, isRequestableTitle, detectRoute, isListRoute,
     applyScoreSort, applyScoreFilters,
-    loadPersistedRatings, flushPersistedRatings, forgetRatings, ratingsCacheAge, ratingsCacheKey,
+    loadPersistedRatings, flushPersistedRatings, forgetRatings, ratingsCacheAge, ratingsCacheKey, explainUnresolvedCards,
     setSort: order => { currentSort = order; },
     setResolver: fn => { resolveRatings = fn; }
   }; })();`), context);

@@ -550,6 +550,32 @@
     }
   }
 
+  // Why a given card has no identity yet. Distinguishes "Seerr has not mounted
+  // the link" from "nothing we observed matches this poster" from "the poster
+  // matches more than one title, so resolving it would be a guess".
+  function explainUnresolvedCards(limit = 5) {
+    return getMediaCards()
+      .filter(card => !getCardMediaInfo(card))
+      .slice(0, limit)
+      .map(card => {
+        const posterUrl = (card.querySelector('img')?.getAttribute('src') || '').split('?')[0];
+        const posterMatches = lastListItems.filter(item => {
+          const poster = item?.posterPath || item?.poster_path;
+          return typeof poster === 'string' && poster.length > 1 && posterUrl.endsWith(poster);
+        });
+        return {
+          posterUrl: posterUrl || null,
+          hasMediaLink: Array.from(card.querySelectorAll('a[href]')).some(a => MEDIA_LINK_RE.test(a.getAttribute('href') || '')),
+          posterMatches: posterMatches.length,
+          reason: !posterUrl ? 'no poster image to match on'
+            : lastListItems.length === 0 ? 'nothing observed from the page yet'
+            : posterMatches.length === 0 ? 'no observed title has this poster'
+            : posterMatches.length > 1 ? 'more than one observed title has this poster'
+            : 'resolvable; awaiting the next pass'
+        };
+      });
+  }
+
   function hydrateCardsFromListItems(root = document) {
     if (!lastListItems.length) return;
     const cards = getMediaCards(root);
@@ -578,13 +604,24 @@
   // The page-world observer forwards the title lists Seerr fetches for itself.
   // Seerr keeps a card's link and title unmounted until it is hovered, so
   // without this an un-hovered card offers nothing but its poster image.
+  // Counters so diagnose() can tell "the observer never spoke" apart from
+  // "it spoke but nothing matched".
+  const observedStats = { messages: 0, items: 0, byUrl: new Map(), lastAt: null, rejected: 0 };
+
   function handleObservedApiResponse(event) {
     // Same window, same origin, and our channel: anything else is not ours.
     if (event.source !== window) return;
     if (event.origin !== window.location.origin) return;
     const data = event.data;
-    if (!data || data.channel !== 'super-seerr:api' || !Array.isArray(data.items)) return;
-    if (!isSeerrPage()) return;
+    if (!data || data.channel !== 'super-seerr:api') return;
+    if (!Array.isArray(data.items)) { observedStats.rejected++; return; }
+    if (!isSeerrPage()) { observedStats.rejected++; return; }
+
+    observedStats.messages++;
+    observedStats.items += data.items.length;
+    observedStats.lastAt = Date.now();
+    const path = (() => { try { return new URL(data.url, window.location.href).pathname; } catch (_) { return String(data.url); } })();
+    observedStats.byUrl.set(path, (observedStats.byUrl.get(path) || 0) + data.items.length);
 
     const source = String(data.url || '').includes('/request') ? 'seerr-requests-api' : 'seerr-discover-api';
     const usable = data.items.filter(item => item && typeof item === 'object');
@@ -1696,6 +1733,18 @@
         cardCount: cards.length,
         ratedCount: countCardsWithRatings(cards).rated,
         listEndpoint: getListRatingsEndpoint(route),
+        // The page-world observer cannot be inspected from here, so report
+        // what it has actually delivered instead.
+        observed: {
+          messages: observedStats.messages,
+          items: observedStats.items,
+          rejected: observedStats.rejected,
+          lastAt: observedStats.lastAt,
+          byPath: Object.fromEntries(observedStats.byUrl)
+        },
+        listItems: lastListItems.length,
+        cachedTitles: resolvedCacheSize(),
+        unresolvedCards: explainUnresolvedCards(),
         sampleCards: cards.slice(0, 5).map(card => ({
           media: getCardMediaInfo(card),
           critics: getCardScore(card),

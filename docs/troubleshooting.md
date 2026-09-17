@@ -46,6 +46,24 @@ The site integrations and the Seerr overlay use different permissions. Open Sett
 
 Cached ratings do not expire, so a score that has changed upstream keeps its stored value. The grid controls show when the loaded titles were cached; **Refresh scores** refetches just those. To drop everything, use **Settings → Troubleshooting → Clear ratings cache**, which open Seerr tabs pick up without a reload.
 
+## Cards on a Seerr grid have no scores
+
+Seerr does not put a card's link or title in the page until you hover it, so Super Seerr identifies cards from the title lists Seerr fetches for itself. If that is not reaching it, no badges appear and sorting has nothing to work with.
+
+Open the browser console on a Seerr grid page and run:
+
+```js
+seerr_debug.ratings.diagnose()
+```
+
+`observed.messages` is how many list responses were seen. Read it first:
+
+- **`observed.messages` is 0** — nothing is being forwarded. Check that the page is your configured server, that Settings shows no **Grant access** notice, and reload: the observer installs at document start, so a tab opened before the extension was granted access will not have it.
+- **`observed.messages` is above 0 but cards are unresolved** — read `unresolvedCards`. Each entry says why: `no observed title has this poster` means the list carrying that card was not among the responses seen, `more than one observed title has this poster` means resolving it would be a guess, and `nothing observed from the page yet` means the response has not arrived.
+- **`observed.rejected` is above 0** — messages arrived in a shape that was refused. Worth reporting.
+
+`listItems` is how many titles are known, and `cachedTitles` how many have scores stored.
+
 ## The API key is missing on another device
 
 The server URL and overlay preferences sync across devices; the API key does not, because it is a secret held in device-local storage. Enter it once per device from Seerr Settings → General → API Key. Upgrading from a version that synced the key moves it to local storage on the device where it was saved.
