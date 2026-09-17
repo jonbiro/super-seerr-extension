@@ -67,7 +67,7 @@ Resolution preserves fields from earlier sources while filling missing fields:
 1. Typed embedded media data.
 2. Same-origin Seerr list data.
 3. RT lookup through the worker when an RT field is missing.
-4. Same-origin Seerr ratings/detail endpoints for remaining fields, stopping as soon as a bundle has every score. This step runs once per card, so walking every endpoint regardless would multiply load on the server.
+4. Same-origin Seerr ratings/detail endpoints for remaining fields, stopping as soon as a bundle has every score. Seerr answers `/ratingscombined` with 404 only when it holds neither Rotten Tomatoes nor IMDb data, and `/ratings` with 404 when it holds no Rotten Tomatoes data, so a combined 404 guarantees the next call fails too and it is skipped. This step runs once per card, so walking every endpoint regardless would multiply load on the server.
 5. An empty bundle if no source yields scores.
 
 Embedded and list indexes use media type plus ID to keep movie and TV identities separate. Ambiguous embedded objects may be ignored rather than assigned to the wrong title. Requests are matched on `media.tmdbId` only: Seerr's internal `media.id` is a sequential row id, and comparing it against a TMDB id matches unrelated titles.

@@ -441,10 +441,10 @@
 
     if (!response.ok) {
       log(`Seerr ratings endpoint ${endpoint} returned ${response.status}`);
-      return null;
+      return { ok: false, status: response.status, data: null };
     }
 
-    return response.json();
+    return { ok: true, status: response.status, data: await response.json() };
   }
 
   async function fetchSeerrSessionRatings(tmdbId, mediaType) {
@@ -455,10 +455,23 @@
       : [`/api/v1/movie/${tmdbId}/ratingscombined`, `/api/v1/movie/${tmdbId}/ratings`, `/api/v1/movie/${tmdbId}`];
 
     let bundle = null;
+    let ratingsAreAbsent = false;
     for (const endpoint of endpoints) {
+      // Seerr answers /ratingscombined with 404 only when it has neither RT
+      // nor IMDb, and /ratings with 404 when it has no RT. So once combined
+      // has 404ed, /ratings cannot succeed; asking is a guaranteed second
+      // failure and a second red line in the page console.
+      if (ratingsAreAbsent && endpoint.endsWith('/ratings')) {
+        log(`Skipping ${endpoint}; the combined endpoint already reported no ratings`);
+        continue;
+      }
       try {
-        const data = await fetchJsonFromSeerr(endpoint);
-        const next = bundleFromRatingObject(data, endpoint.includes('ratings') ? 'seerr-ratings-api' : 'seerr-details-api');
+        const result = await fetchJsonFromSeerr(endpoint);
+        if (!result.ok) {
+          if (result.status === 404 && endpoint.endsWith('/ratingscombined')) ratingsAreAbsent = true;
+          continue;
+        }
+        const next = bundleFromRatingObject(result.data, endpoint.includes('ratings') ? 'seerr-ratings-api' : 'seerr-details-api');
         bundle = mergeBundles(bundle, next);
       } catch (error) {
         log(`Seerr ratings fetch failed for ${endpoint}:`, error);
@@ -655,8 +668,9 @@
     const generation = routeGeneration;
     const promise = (async () => {
       try {
-        const data = await fetchJsonFromSeerr(endpoint);
+        const result = await fetchJsonFromSeerr(endpoint);
         if (generation !== routeGeneration) return;
+        const data = result?.ok ? result.data : null;
         const results = Array.isArray(data) ? data : (data?.results || data?.items || data?.titles || []);
         // Append rather than replace: the page-world observer contributes to
         // the same list, and an explicit fetch must not discard its items.

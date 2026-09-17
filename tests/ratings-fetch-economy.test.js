@@ -23,7 +23,7 @@ function overlayWithSeerr(payloads) {
     }
   });
   // The overlay also resolves its own detail route on load; ignore that traffic.
-  return { overlay, callsForTitle: () => paths.filter(path => path.includes(`/movie/${TMDB_ID}`)) };
+  return { overlay, callsForTitle: () => paths.filter(path => path.includes(`/${TMDB_ID}`)) };
 }
 
 const RATINGS_COMBINED = `/api/v1/movie/${TMDB_ID}/ratingscombined`;
@@ -71,4 +71,34 @@ test('completeness requires every score, not merely some', () => {
   for (const field of Object.keys(COMPLETE)) {
     assert.equal(overlay.isBundleComplete({ ...COMPLETE, [field]: null }), false, `${field} missing means incomplete`);
   }
+});
+
+test('a 404 from the combined endpoint stops the cascade', async () => {
+  // Seerr returns 404 from /ratingscombined only when both RT and IMDb are
+  // missing, and from /ratings when RT is missing. So a combined 404
+  // guarantees the next call 404s too: asking is pure console noise.
+  const { overlay, callsForTitle } = overlayWithSeerr({ [DETAILS]: { voteAverage: 7.9 } });
+  const bundle = await overlay.fetchSeerrSessionRatings(TMDB_ID, 'movie');
+
+  const paths = callsForTitle();
+  assert.ok(!paths.includes(RATINGS), `should not ask /ratings after a combined 404, saw ${paths.join(', ')}`);
+  assert.ok(paths.includes(DETAILS), 'the detail endpoint is still worth asking');
+  assert.equal(bundle.tmdbRating, 7.9);
+});
+
+test('a combined response that succeeds still allows the other endpoints', async () => {
+  const { overlay, callsForTitle } = overlayWithSeerr({
+    [RATINGS_COMBINED]: { rtCriticsScore: 88 },
+    [RATINGS]: { rtAudienceScore: 91 },
+    [DETAILS]: { voteAverage: 7.9 }
+  });
+  await overlay.fetchSeerrSessionRatings(TMDB_ID, 'movie');
+  assert.equal(callsForTitle().length, 3, 'a successful combined response does not short-circuit anything');
+});
+
+test('a TV lookup is unaffected, having no combined endpoint', async () => {
+  const { overlay, callsForTitle } = overlayWithSeerr({});
+  await overlay.fetchSeerrSessionRatings(TMDB_ID, 'tv');
+  const paths = callsForTitle();
+  assert.ok(paths.some(path => path.endsWith('/ratings')), 'tv still asks for its ratings');
 });

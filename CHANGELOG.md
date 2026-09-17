@@ -6,7 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
-## [3.1.22]
+## [3.1.23]
+
+- Stopped asking Seerr a question whose answer was already known. For a title with no ratings, the overlay requested `/ratingscombined` and then `/ratings`, but Seerr only returns 404 from the combined endpoint when it has neither Rotten Tomatoes nor IMDb data, which guarantees the second call fails too. That halves both the requests and the 404s the browser logs to the page console.
+
 
 - `seerr_debug.ratings.diagnose()` now explains why a card has no score rather than only showing that it does not. It reports how many list responses the page-world observer has forwarded and from which paths, and for each unresolved card whether Seerr has withheld its link, whether its poster matched nothing observed, or whether it matched more than one title and so could not be resolved without guessing.
 
