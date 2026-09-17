@@ -66,6 +66,10 @@ That works in the console's default context. The same report is available as `se
 
 `listItems` is how many titles are known, and `cachedTitles` how many have scores stored.
 
+## Every title shows Rotten Tomatoes but no IMDb
+
+IMDb ratings come from Seerr's own `/ratingscombined` endpoint, which reaches an external service; Rotten Tomatoes does not, which is why one can work while the other does not. If `combinedRatings.givenUp` is true in `diagnose()`, Seerr answered a long run of those requests with 404 and Super Seerr stopped asking for this session. That is a property of the server, not of the extension: check that Seerr itself shows IMDb ratings on a title page. **Refresh scores** makes it try again.
+
 ## The API key is missing on another device
 
 The server URL and overlay preferences sync across devices; the API key does not, because it is a secret held in device-local storage. Enter it once per device from Seerr Settings → General → API Key. Upgrading from a version that synced the key moves it to local storage on the device where it was saved.

@@ -455,6 +455,13 @@
     detail: ['tmdbRating']
   };
 
+  // A Seerr with no reachable IMDb source 404s /ratingscombined for every
+  // title. Each ask costs a request and a console error for data that will
+  // not arrive, so stop after a sustained run of failures.
+  let combinedRatingsFailures = 0;
+  const combinedRatingsGivenUp = () => combinedRatingsFailures >= Config.combinedRatingsFailureLimit;
+  function resetCombinedRatings() { combinedRatingsFailures = 0; }
+
   function endpointCanHelp(bundle, fields) {
     return !bundle || fields.some(field => bundle[field] === null || bundle[field] === undefined);
   }
@@ -469,6 +476,7 @@
          [`/api/v1/movie/${tmdbId}`, 'detail']];
     const endpoints = all
       .filter(([, kind]) => endpointCanHelp(known, SESSION_ENDPOINT_FIELDS[kind]))
+      .filter(([, kind]) => !(kind === 'ratingscombined' && combinedRatingsGivenUp()))
       .map(([endpoint]) => endpoint);
 
     let bundle = null;
@@ -484,6 +492,15 @@
       }
       try {
         const result = await fetchJsonFromSeerr(endpoint);
+        if (endpoint.endsWith('/ratingscombined')) {
+          if (result.ok) resetCombinedRatings();
+          else if (result.status === 404) {
+            combinedRatingsFailures++;
+            if (combinedRatingsGivenUp()) {
+              log(`Seerr has answered ${combinedRatingsFailures} combined ratings requests with 404; not asking again this session`);
+            }
+          }
+        }
         if (!result.ok) {
           if (result.status === 404 && endpoint.endsWith('/ratingscombined')) ratingsAreAbsent = true;
           continue;
@@ -782,6 +799,9 @@
       pageRatingsByTmdbId.delete(ratingKey(tmdbId, mediaType));
       embeddedRatingsByTmdbId.delete(ratingKey(tmdbId, mediaType));
     }
+    // Refreshing is the user asking us to try again, including endpoints we
+    // had given up on.
+    resetCombinedRatings();
     if (forgotten > 0) schedulePersistedRatingsFlush();
     return forgotten;
   }
@@ -1789,6 +1809,10 @@
           rejected: observedStats.rejected,
           lastAt: observedStats.lastAt,
           byPath: Object.fromEntries(observedStats.byUrl)
+        },
+        combinedRatings: {
+          consecutiveFailures: combinedRatingsFailures,
+          givenUp: combinedRatingsGivenUp()
         },
         listItems: lastListItems.length,
         cachedTitles: resolvedCacheSize(),
