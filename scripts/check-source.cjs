@@ -15,9 +15,9 @@ visit(path.join(root, 'src'));
 // rather than in the manifest. Parse them out so a rename still fails the check.
 function dynamicOverlayFiles() {
   const source = fs.readFileSync(path.join(root, 'src/background/background.js'), 'utf8');
-  const block = source.match(/const OVERLAY_SCRIPT_FILES = \{([\s\S]*?)\n\};/);
-  if (!block) throw new Error('Could not find OVERLAY_SCRIPT_FILES in the background worker');
-  const files = [...block[1].matchAll(/'([^']+\.(?:js|css))'/g)].map(match => match[1]);
+  const blocks = [...source.matchAll(/const \w+_SCRIPT_FILES = \{([\s\S]*?)\n?\};/g)];
+  if (blocks.length === 0) throw new Error('Could not find any *_SCRIPT_FILES in the background worker');
+  const files = blocks.flatMap(block => [...block[1].matchAll(/'([^']+\.(?:js|css))'/g)].map(match => match[1]));
   if (files.length === 0) throw new Error('OVERLAY_SCRIPT_FILES listed no files');
   return files;
 }

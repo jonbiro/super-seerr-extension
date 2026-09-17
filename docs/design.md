@@ -14,6 +14,7 @@ This document describes the implemented system. For installation and controls, s
 | `RatingsConfig.js` | Confidence, summary thresholds, cache limits, and network deadlines |
 | Seven site integrations | Site-specific selectors and themes |
 | `seerr-integration.js` | Seerr routes, ratings resolution, card/detail rendering, sorting, filtering, bulk selection |
+| `seerr-api-observer.js` | Page-world observer forwarding the title lists Seerr fetches for itself |
 | `background.js` | Seerr REST requests, RT search and scorecard parsing, settings migration, toolbar badge |
 | Options and popup | Explicit settings save, temporary connection tests, preferences, status |
 
@@ -42,6 +43,16 @@ Migration reads historical keys only in the worker. It fills active keys only wh
 The seven supported sites are static `content_scripts` matches. Access to the Seerr server is an optional host permission, requested from the options page at the moment a URL is saved, because that origin is arbitrary. `permissions.request` must be the first await after the user gesture or Chrome rejects it.
 
 Declining still saves settings; the options page then shows a standing notice. The worker reconciles registration on startup, on storage changes, and on `permissions.onAdded`/`onRemoved`, so revoking access removes the registration. Match patterns cannot carry a port, so the saved origin is reduced to `protocol//hostname/*`, which matches every port — a server on `:5055` would otherwise produce an invalid pattern.
+
+## Identifying cards before they are hovered
+
+Seerr's title card keeps its link, its title and even its image `alt` inside a `Transition` that unmounts while the card is not hovered. An un-hovered card therefore exposes nothing but its poster image, and a card whose identity is unknown gets no badge and cannot be sorted or filtered. Hovering mounts the link, which is why scores used to appear one at a time under the cursor.
+
+The page already fetches the data that identifies those cards, and its shape is configurable — the home page is up to twelve user-defined sliders — so guessing endpoints is unreliable. Instead `seerr-api-observer.js` runs in the page's own world at `document_start` and forwards what Seerr receives.
+
+It is deliberately narrow. Only same-origin `/api/v1/` list endpoints are observed, and `auth`, `user`, `settings`, `service` and `status` are excluded, so account data is never forwarded. Only a fixed field whitelist is projected, the item count is capped, and messages are posted to the page's own origin. The content script revalidates on receipt: same window, same origin, known channel, array payload. Observing never disturbs the page — the response body is cloned, and every failure path falls through to the page's own result.
+
+Observed items and explicitly fetched lists accumulate into one bounded list, because either source may arrive first.
 
 ## Ratings resolution
 

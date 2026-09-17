@@ -531,6 +531,16 @@
     };
   }
 
+  // Both the observer and explicit list fetches feed this, so it accumulates
+  // and is bounded rather than replaced.
+  function rememberListItems(items) {
+    if (!Array.isArray(items) || items.length === 0) return;
+    lastListItems = lastListItems.concat(items);
+    if (lastListItems.length > Config.overlayCacheMaxEntries) {
+      lastListItems = lastListItems.slice(-Config.overlayCacheMaxEntries);
+    }
+  }
+
   function hydrateCardsFromListItems(root = document) {
     if (!lastListItems.length) return;
     const cards = getMediaCards(root);
@@ -555,6 +565,41 @@
     });
   }
 
+  // ──────────────── Page API observations ────────────────
+  // The page-world observer forwards the title lists Seerr fetches for itself.
+  // Seerr keeps a card's link and title unmounted until it is hovered, so
+  // without this an un-hovered card offers nothing but its poster image.
+  function handleObservedApiResponse(event) {
+    // Same window, same origin, and our channel: anything else is not ours.
+    if (event.source !== window) return;
+    if (event.origin !== window.location.origin) return;
+    const data = event.data;
+    if (!data || data.channel !== 'super-seerr:api' || !Array.isArray(data.items)) return;
+    if (!isSeerrPage()) return;
+
+    const source = String(data.url || '').includes('/request') ? 'seerr-requests-api' : 'seerr-discover-api';
+    const usable = data.items.filter(item => item && typeof item === 'object');
+    if (usable.length === 0) return;
+    usable.forEach(item => indexRatingsResult(item, source));
+    // Poster matching needs the raw items, not just the ratings index.
+    rememberListItems(usable);
+    hydrateCardsFromListItems();
+    scheduleObservedRefresh();
+  }
+
+  let observedRefreshTimer = null;
+  function scheduleObservedRefresh() {
+    if (observedRefreshTimer !== null) return;
+    observedRefreshTimer = setTimeout(() => {
+      observedRefreshTimer = null;
+      if (!isSeerrPage()) return;
+      injectCardBadges();
+      injectSortFilterControls();
+    }, 200);
+  }
+
+  window.addEventListener('message', handleObservedApiResponse);
+
   async function indexCurrentListRatings() {
     const route = detectRoute();
     const endpoint = getListRatingsEndpoint(route);
@@ -567,7 +612,9 @@
         const data = await fetchJsonFromSeerr(endpoint);
         if (generation !== routeGeneration) return;
         const results = Array.isArray(data) ? data : (data?.results || data?.items || data?.titles || []);
-        lastListItems = results;
+        // Append rather than replace: the page-world observer contributes to
+        // the same list, and an explicit fetch must not discard its items.
+        rememberListItems(results);
         results.forEach(item => indexRatingsResult(item, endpoint.includes('/request') ? 'seerr-requests-api' : 'seerr-discover-api'));
         hydrateCardsFromListItems();
       } catch (error) {

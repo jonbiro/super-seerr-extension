@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your Seerr server.
 
-![Version](https://img.shields.io/badge/version-3.1.18-blue)
+![Version](https://img.shields.io/badge/version-3.1.19-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -37,6 +37,8 @@ This has **not been validated against a running Firefox**. The manifest is corre
 The flyout reports request status, supports watchlisting, and links to Jellyfin when a playable URL is supplied by Seerr. Jellyfin is a separate product; its name and links are intentional.
 
 ### Ratings and sorting
+
+Seerr's title cards hide their link and title until you hover them, so Super Seerr reads the title lists Seerr has already fetched to identify the cards on screen. It watches only same-origin `/api/v1/` list responses on your server, never anything about your account, and forwards a fixed set of fields.
 
 On a supported Seerr grid, choose **Sort titles → RT critics: highest first** or an audience, TMDB or IMDb option. Both directions are available. Unrated titles stay last; ties retain their original relative order. **Original order** restores the initial order; **Reset** also clears filters. Sorting updates as ratings arrive.
 

@@ -16,6 +16,12 @@ const OVERLAY_SCRIPT_FILES = {
   css: ['src/content/seerr-overlay.css']
 };
 
+// Seerr unmounts a card's link and title until it is hovered, so an un-hovered
+// card cannot be identified from the DOM. This runs in the page's own world at
+// document_start to observe the API responses the page already receives.
+const OBSERVER_SCRIPT_ID = 'seerr-api-observer';
+const OBSERVER_SCRIPT_FILES = { js: ['src/content/seerr-api-observer.js'] };
+
 // An origin match pattern for the saved server, or null when it is unusable.
 function overlayOriginPattern(seerrUrl) {
   if (!seerrUrl) return null;
@@ -121,7 +127,7 @@ class SeerrAPI {
     const pattern = overlayOriginPattern(this.baseUrl);
     let registered = [];
     try {
-      registered = await chrome.scripting.getRegisteredContentScripts({ ids: [OVERLAY_SCRIPT_ID] });
+      registered = await chrome.scripting.getRegisteredContentScripts({ ids: [OVERLAY_SCRIPT_ID, OBSERVER_SCRIPT_ID] });
     } catch (_) {
       registered = [];
     }
@@ -129,13 +135,21 @@ class SeerrAPI {
     const granted = pattern && await chrome.permissions.contains({ origins: [pattern] }).catch(() => false);
     try {
       if (!granted) {
-        if (registered.length > 0) await chrome.scripting.unregisterContentScripts({ ids: [OVERLAY_SCRIPT_ID] });
+        if (registered.length > 0) await chrome.scripting.unregisterContentScripts({ ids: registered.map(entry => entry.id) });
         this.log('🔌 [Background] Overlay not registered; no permission for', pattern);
         return false;
       }
-      const script = { id: OVERLAY_SCRIPT_ID, matches: [pattern], runAt: 'document_idle', ...OVERLAY_SCRIPT_FILES };
-      if (registered.length > 0) await chrome.scripting.updateContentScripts([script]);
-      else await chrome.scripting.registerContentScripts([script]);
+      const scripts = [
+        { id: OVERLAY_SCRIPT_ID, matches: [pattern], runAt: 'document_idle', ...OVERLAY_SCRIPT_FILES },
+        // MAIN world so it can see the page's own fetch, and document_start so
+        // it is in place before Seerr issues its first request.
+        { id: OBSERVER_SCRIPT_ID, matches: [pattern], runAt: 'document_start', world: 'MAIN', ...OBSERVER_SCRIPT_FILES }
+      ];
+      const known = new Set(registered.map(entry => entry.id));
+      const updates = scripts.filter(script => known.has(script.id));
+      const additions = scripts.filter(script => !known.has(script.id));
+      if (updates.length > 0) await chrome.scripting.updateContentScripts(updates);
+      if (additions.length > 0) await chrome.scripting.registerContentScripts(additions);
       this.log('✅ [Background] Overlay registered for', pattern);
       return true;
     } catch (error) {

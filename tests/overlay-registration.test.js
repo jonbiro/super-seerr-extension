@@ -8,17 +8,32 @@ const { loadWorker } = require('./helpers/worker');
 const SEERR = 'https://seerr.example';
 const PATTERN = 'https://seerr.example/*';
 
+// Two scripts are registered together: the overlay in the isolated world, and
+// the API observer in the page's own world.
+const byId = (worker, id) => worker.registrations.find(script => script.id === id);
+const overlayOf = worker => byId(worker, 'seerr-overlay');
+const observerOf = worker => byId(worker, 'seerr-api-observer');
+
 test('the overlay is registered for the saved origin once permission is granted', async () => {
   const worker = loadWorker({ get: async () => ({ seerrUrl: SEERR }), grantedOrigins: [PATTERN] });
   await worker.ready;
 
-  assert.equal(worker.registrations.length, 1);
-  const [script] = worker.registrations;
-  assert.deepEqual([...script.matches], [PATTERN]);
-  assert.equal(script.id, 'seerr-overlay');
-  assert.equal(script.runAt, 'document_idle');
-  assert.ok(script.js.includes('src/content/seerr-integration.js'));
-  assert.ok(script.css.includes('src/content/seerr-overlay.css'));
+  assert.equal(worker.registrations.length, 2);
+
+  const overlay = overlayOf(worker);
+  assert.deepEqual([...overlay.matches], [PATTERN]);
+  assert.equal(overlay.runAt, 'document_idle');
+  assert.ok(overlay.js.includes('src/content/seerr-integration.js'));
+  assert.ok(overlay.css.includes('src/content/seerr-overlay.css'));
+  assert.ok(!overlay.world, 'the overlay stays in the isolated world');
+
+  // Seerr unmounts a card's link until it is hovered, so the observer must see
+  // the page's own fetch, and must be in place before the first request.
+  const observer = observerOf(worker);
+  assert.deepEqual([...observer.matches], [PATTERN]);
+  assert.equal(observer.world, 'MAIN');
+  assert.equal(observer.runAt, 'document_start');
+  assert.ok(observer.js.includes('src/content/seerr-api-observer.js'));
 });
 
 test('nothing is registered while the host permission is missing', async () => {
@@ -35,26 +50,28 @@ test('the registration follows the server to a new origin instead of accumulatin
     grantedOrigins: [PATTERN, 'https://moved.example/*']
   });
   await worker.ready;
-  assert.deepEqual([...worker.registrations[0].matches], [PATTERN]);
+  assert.deepEqual([...overlayOf(worker).matches], [PATTERN]);
 
   url = 'https://moved.example';
   await worker.api.loadSettings();
   await worker.api.syncOverlayRegistration();
 
-  assert.equal(worker.registrations.length, 1, 'the old registration must be replaced, not duplicated');
-  assert.deepEqual([...worker.registrations[0].matches], ['https://moved.example/*']);
+  assert.equal(worker.registrations.length, 2, 'the old registrations must be replaced, not duplicated');
+  for (const script of worker.registrations) {
+    assert.deepEqual([...script.matches], ['https://moved.example/*'], `${script.id} should follow the server`);
+  }
 });
 
 test('revoking the permission tears the registration back down', async () => {
   const granted = [PATTERN];
   const worker = loadWorker({ get: async () => ({ seerrUrl: SEERR }), grantedOrigins: granted });
   await worker.ready;
-  assert.equal(worker.registrations.length, 1);
+  assert.equal(worker.registrations.length, 2);
 
   granted.length = 0;
   await worker.api.syncOverlayRegistration();
 
-  assert.equal(worker.registrations.length, 0);
+  assert.equal(worker.registrations.length, 0, 'both scripts must be unregistered');
 });
 
 test('an unusable server URL registers nothing even when broad permission exists', async () => {
@@ -70,8 +87,9 @@ test('repeated syncs converge rather than toggling the registration', async () =
   await worker.ready;
   for (let i = 0; i < 3; i++) await worker.api.syncOverlayRegistration();
 
-  assert.equal(worker.registrations.length, 1);
-  assert.deepEqual([...worker.registrations[0].matches], [PATTERN]);
+  assert.equal(worker.registrations.length, 2, 'repeated syncs must not duplicate either script');
+  assert.deepEqual([...overlayOf(worker).matches], [PATTERN]);
+  assert.deepEqual([...observerOf(worker).matches], [PATTERN]);
 });
 
 test('a port in the server URL is stripped, because match patterns cannot carry one', async () => {
@@ -83,9 +101,10 @@ test('a port in the server URL is stripped, because match patterns cannot carry 
   ]) {
     const worker = loadWorker({ get: async () => ({ seerrUrl }), grantedOrigins: [expected] });
     await worker.ready;
-    assert.equal(worker.registrations.length, 1, `${seerrUrl} should register`);
-    assert.deepEqual([...worker.registrations[0].matches], [expected]);
-    assert.ok(!worker.registrations[0].matches[0].includes(':5055'), 'no port may survive into the pattern');
+    assert.equal(worker.registrations.length, 2, `${seerrUrl} should register`);
+    assert.deepEqual([...overlayOf(worker).matches], [expected]);
+    assert.deepEqual([...observerOf(worker).matches], [expected]);
+    assert.ok(!overlayOf(worker).matches[0].includes(':5055'), 'no port may survive into the pattern');
   }
 });
 

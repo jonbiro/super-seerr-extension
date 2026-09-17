@@ -226,3 +226,60 @@ test('an ordinary card lookup does not ask the worker to bypass its cache', asyn
   assert.ok(lookups.length > 0);
   assert.ok(lookups.every(m => m.data.refresh !== true), 'only an explicit refresh may bypass the cache');
 });
+
+test('a card with no link is resolved from observed API traffic, without a hover', async t => {
+  // Seerr's TitleCard keeps its link, title and alt text inside a Transition
+  // that unmounts until hover, so before this the card sat unresolved.
+  const fixture = createOverlay({ posters: true, linkless: true });
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+
+  const doc = fixture.window.document;
+  assert.equal(doc.querySelectorAll('.seerr-card-badge').length, 0, 'nothing identifies these cards yet');
+
+  // What the page-world observer forwards after Seerr fetches its own slider.
+  // Dispatched directly because jsdom's postMessage leaves event.source unset,
+  // and the listener requires it to be this window.
+  observe(fixture, [
+    { id: 11, mediaType: 'movie', title: 'Low', posterPath: '/poster1.jpg' },
+    { id: 22, mediaType: 'movie', title: 'High', posterPath: '/poster2.jpg' }
+  ]);
+  await settle();
+
+  const cards = [...doc.querySelectorAll('#grid > article')];
+  assert.equal(cards[0].__seerrListMediaInfo?.tmdbId, '11', 'the poster identifies the card immediately');
+
+  // Badge injection is coalesced behind a short timer, so wait past it.
+  await new Promise(resolve => setTimeout(resolve, 300));
+  await settle();
+  assert.equal(cards[0].__seerrListMediaInfo?.tmdbId, '11', 'the poster identifies the card');
+  assert.equal(cards[1].__seerrListMediaInfo?.tmdbId, '22');
+  assert.ok(doc.querySelectorAll('.seerr-card-badge').length > 0, 'and a badge appears without any hover');
+});
+
+test('a message from another origin or channel is ignored', async t => {
+  const fixture = createOverlay({ posters: true, linkless: true });
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+
+  const item = { id: 99, mediaType: 'movie', title: 'Injected', posterPath: '/poster1.jpg' };
+  send(fixture, { channel: 'something-else', url: '/api/v1/discover/movies', items: [item] });
+  send(fixture, { channel: 'super-seerr:api', items: 'not-an-array' });
+  send(fixture, { channel: 'super-seerr:api', url: '/api/v1/discover/movies', items: [null, 'bad', 42] });
+  // Right shape, wrong origin.
+  send(fixture, { channel: 'super-seerr:api', url: '/api/v1/discover/movies', items: [item] }, { origin: 'https://evil.example' });
+  await settle();
+
+  const cards = [...fixture.window.document.querySelectorAll('#grid > article')];
+  assert.ok(cards.every(card => card.__seerrListMediaInfo?.tmdbId !== '99'), 'only our own channel and origin may identify cards');
+});
+
+// The page-world observer posts same-origin with source set to the window.
+function send(fixture, data, { origin = 'https://seerr.example' } = {}) {
+  const { window } = fixture;
+  window.dispatchEvent(new window.MessageEvent('message', { data, origin, source: window }));
+}
+
+function observe(fixture, items, url = 'https://seerr.example/api/v1/discover/movies') {
+  send(fixture, { channel: 'super-seerr:api', url, items });
+}
