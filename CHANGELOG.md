@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.29]
+
+- Fixed the grid controls breaking apart when the bar wraps. Each label and its input were separate flex items, so at a narrower window a label could end one line with its own input starting the next — visible as a stranded "TMDB ≥" and a sort control truncated to "Origina". Labels and their controls are now single units, the sort control has room for its longest option, and the cache-age note is weighted as the supplementary text it is.
+
 ## [3.1.25]
 
 - Stopped asking a server that cannot answer. IMDb ratings come only from Seerr's `/ratingscombined`, which reaches an external service; where that is unavailable the endpoint 404s for every title, costing one request and one console error per card for data that never arrives. After a sustained run of 404s the overlay stops asking for the session. Any success resets it, so an intermittent server is not abandoned, and **Refresh scores** makes it try again. `diagnose()` reports the state.

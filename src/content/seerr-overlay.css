@@ -86,6 +86,25 @@
   white-space: nowrap;
 }
 
+/* A label and its input are one unit: the bar wraps, and as separate flex
+   items they could end up on different lines from each other. */
+.seerr-filter-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.seerr-filter-field input[type="number"] {
+  width: 55px;
+}
+
+/* Wide enough to read the selected option rather than truncating it. */
+.seerr-sort-select {
+  min-width: 190px;
+  max-width: 100%;
+}
+
 .seerr-sort-filter-bar label {
   font-size: 11px;
   opacity: 0.55;
@@ -355,6 +374,7 @@
   }
 }
 
-.seerr-cache-age { opacity: 0.7; font-size: 12px; }
+/* Supplementary metadata: match the coverage badge rather than outweighing it. */
+.seerr-cache-age { opacity: 0.55; font-size: 10px; }
 .seerr-refresh-scores { cursor: pointer; }
 .seerr-refresh-scores:disabled { opacity: 0.6; cursor: default; }

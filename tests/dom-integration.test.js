@@ -283,3 +283,38 @@ function send(fixture, data, { origin = 'https://seerr.example' } = {}) {
 function observe(fixture, items, url = 'https://seerr.example/api/v1/discover/movies') {
   send(fixture, { channel: 'super-seerr:api', url, items });
 }
+
+test('every filter label stays attached to its own input', async t => {
+  // The bar wraps, and label and input were separate flex items, so at narrow
+  // widths a label could end one line with its input starting the next.
+  const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+
+  const bar = fixture.window.document.querySelector('#seerr-filter-bar');
+  assert.ok(bar, 'the filter bar should exist');
+
+  const inputs = [...bar.querySelectorAll('input[type="number"]')];
+  assert.equal(inputs.length, 4, 'critics, audience, TMDB and IMDb');
+
+  for (const input of inputs) {
+    const field = input.closest('.seerr-filter-field');
+    assert.ok(field, `${input.className} should sit in a field group`);
+    assert.ok(field.querySelector('label'), `${input.className} should be grouped with its label`);
+    assert.equal(field.querySelectorAll('input').length, 1, 'one input per group, so groups cannot split');
+  }
+});
+
+test('the sort control is not left to collapse to an unreadable width', async t => {
+  const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+
+  const css = require('node:fs').readFileSync('src/content/seerr-overlay.css', 'utf8');
+  const select = fixture.window.document.querySelector('.seerr-sort-select');
+  assert.ok(select, 'the sort control should exist');
+  assert.match(css, /\.seerr-sort-select\s*\{[^}]*min-width/, 'it should carry a minimum width');
+  assert.match(css, /\.seerr-filter-field\s*\{[^}]*white-space:\s*nowrap/, 'field groups should not break internally');
+  // The sort pair wraps like any other, so it is grouped too.
+  const sortField = select.closest('.seerr-filter-field');
+  assert.ok(sortField, 'the sort control should sit in a field group');
+  assert.ok(sortField.querySelector('label'), 'grouped with its own label');
+});

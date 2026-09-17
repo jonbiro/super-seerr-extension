@@ -1380,7 +1380,7 @@
     bar.innerHTML = `
       <span class="seerr-score-coverage">${rated}/${total} scored</span>
       <span class="seerr-cache-age" title="Cached scores never expire; refresh to refetch the titles on this page"></span>
-      <label for="seerr-sort-order">Sort titles</label>
+      <span class="seerr-filter-field"><label for="seerr-sort-order">Sort titles</label>
       <select id="seerr-sort-order" class="seerr-sort-select">
         <option value="default">Original order</option>
         <option value="score-desc">Best Score ↓</option>
@@ -1393,15 +1393,15 @@
         <option value="tmdb-asc">🎬 TMDB ↑</option>
         <option value="imdb-desc">⭐ IMDb ↓</option>
         <option value="imdb-asc">⭐ IMDb ↑</option>
-      </select>
-      <label>Critics ≥</label>
-      <input type="number" class="seerr-min-critics" min="0" max="100" step="5" value="0" style="width:55px">
-      <label>Audience ≥</label>
-      <input type="number" class="seerr-min-audience" min="0" max="100" step="5" value="0" style="width:55px">
-      <label>TMDB ≥</label>
-      <input type="number" class="seerr-min-tmdb" min="0" max="10" step="0.5" value="0" style="width:55px">
-      <label>IMDb ≥</label>
-      <input type="number" class="seerr-min-imdb" min="0" max="10" step="0.5" value="0" style="width:55px">
+      </select></span>
+      <span class="seerr-filter-field"><label>Critics ≥</label>
+        <input type="number" class="seerr-min-critics" min="0" max="100" step="5" value="0"></span>
+      <span class="seerr-filter-field"><label>Audience ≥</label>
+        <input type="number" class="seerr-min-audience" min="0" max="100" step="5" value="0"></span>
+      <span class="seerr-filter-field"><label>TMDB ≥</label>
+        <input type="number" class="seerr-min-tmdb" min="0" max="10" step="0.5" value="0"></span>
+      <span class="seerr-filter-field"><label>IMDb ≥</label>
+        <input type="number" class="seerr-min-imdb" min="0" max="10" step="0.5" value="0"></span>
       <button class="seerr-reset-sort">Reset</button>
       <button class="seerr-refresh-scores" title="Refetch scores for the titles loaded on this page">Refresh scores</button>
       ${FEATURE_FLAGS.bulkActions && apiConfigured ? '<button class="seerr-toggle-select" data-seerr-overlay="true">Select titles</button>' : ''}
