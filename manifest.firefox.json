@@ -4,7 +4,7 @@
       "strict_min_version": "142.0"
     },
     "gecko": {
-      "id": "seerr-request-button@example.com",
+      "id": "super-seerr@jonbiro.github.io",
       "strict_min_version": "140.0",
       "data_collection_permissions": {
         "required": [
@@ -14,6 +14,7 @@
     }
   },
   "background": {
-    "service_worker": "src/background/background.js"
+    "service_worker": "src/background/background.js",
+    "type": "module"
   }
 }

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "Seerr Request Button",
-  "version": "3.1.0",
+  "name": "Super Seerr",
+  "version": "3.1.4",
   "description": "Add movies and TV shows to Seerr directly from IMDB, Rotten Tomatoes, TheMovieDB, Letterboxd, Metacritic, Trakt and Filmweb.pl",
   "permissions": [
     "storage",
@@ -153,7 +153,6 @@
       "js": [
         "src/shared/RatingsModel.js",
         "src/shared/RatingsConfig.js",
-        "src/shared/UIComponents.js",
         "src/content/seerr-integration.js"
       ],
       "css": [
@@ -164,7 +163,7 @@
   ],
   "action": {
     "default_popup": "src/popup/popup.html",
-    "default_title": "Seerr Request Button"
+    "default_title": "Super Seerr"
   },
   "options_page": "src/options/options.html",
   "icons": {
@@ -172,5 +171,6 @@
     "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
-  }
+  },
+  "homepage_url": "https://github.com/jonbiro/super-seerr-extension"
 }

@@ -1,105 +1,180 @@
 /* Seerr Pre-Request Ratings Overlay CSS */
 /* Injected on Seerr pages via content_scripts css array. */
-/* Matches Seerr's visual density and supports dark/light themes. */
+
+/* ─── Card Badges ─── */
 
 .seerr-card-badge {
   position: absolute;
   top: 6px;
   right: 6px;
-  background: rgba(0, 0, 0, 0.72);
-  color: white;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 6px;
-  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 5px;
+  border-radius: 3px;
   pointer-events: none;
-  z-index: 10;
+  z-index: 5;
+  line-height: 1.4;
+  letter-spacing: 0.2px;
+  opacity: 0.92;
 }
+
+/* ─── Detail Page Ratings Row ─── */
 
 .seerr-ratings-row {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 8px 0;
-  font-size: 14px;
+  gap: 14px;
+  padding: 6px 0;
+  margin-top: 4px;
+  font-size: 13px;
   font-family: inherit;
   flex-wrap: wrap;
+  opacity: 0.88;
 }
 
 .seerr-rating-item {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .seerr-rating-item strong {
   font-weight: 700;
+  font-size: inherit;
 }
 
 .seerr-rating-item small {
-  font-size: 11px;
-  opacity: 0.7;
+  font-size: 10px;
+  opacity: 0.65;
 }
 
 .seerr-quality-summary {
-  font-size: 13px;
-  opacity: 0.85;
-  padding: 4px 0;
+  font-size: 12px;
+  opacity: 0.7;
+  padding: 2px 0;
   font-style: italic;
 }
+
+/* ─── Sort & Filter Bar ─── */
 
 .seerr-sort-filter-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 8px 0;
-  margin-bottom: 8px;
-  font-size: 13px;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 12px;
+  margin: 0 0 12px;
+  font-size: 12px;
   font-family: inherit;
   flex-wrap: wrap;
+  background: rgba(128, 128, 128, 0.06);
+  border: 1px solid rgba(128, 128, 128, 0.12);
+  border-radius: 8px;
+  box-sizing: border-box;
+}
+
+.seerr-score-coverage {
+  font-size: 10px;
+  opacity: 0.55;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: rgba(128, 128, 128, 0.08);
+  white-space: nowrap;
 }
 
 .seerr-sort-filter-bar label {
-  font-size: 12px;
-  opacity: 0.8;
-  margin-right: 2px;
+  font-size: 11px;
+  opacity: 0.55;
+  margin-right: 0;
 }
 
 .seerr-sort-filter-bar select,
 .seerr-sort-filter-bar input[type="number"] {
-  padding: 4px 8px;
+  padding: 3px 6px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(128, 128, 128, 0.18);
+  background: rgba(128, 128, 128, 0.06);
   color: inherit;
-  font-size: 12px;
+  font-size: 11px;
+  font-family: inherit;
+  outline: none;
+}
+
+.seerr-sort-filter-bar select:focus,
+.seerr-sort-filter-bar input[type="number"]:focus {
+  border-color: rgba(139, 92, 246, 0.5);
+  background: rgba(139, 92, 246, 0.06);
 }
 
 .seerr-sort-filter-bar button {
-  padding: 4px 12px;
+  padding: 3px 10px;
   border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(128, 128, 128, 0.18);
+  background: rgba(128, 128, 128, 0.06);
   color: inherit;
-  font-size: 12px;
+  font-size: 11px;
+  font-family: inherit;
   cursor: pointer;
+  transition: background 0.15s;
 }
 
 .seerr-sort-filter-bar button:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(128, 128, 128, 0.14);
 }
+
+/* ─── Filter Toggle Button ─── */
+
+.seerr-filter-toggle {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 9998;
+  padding: 7px 12px;
+  border-radius: 20px;
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  background: rgba(31, 41, 55, 0.88);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #d1d5db;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s;
+  outline: none;
+}
+
+.seerr-filter-toggle:hover {
+  background: rgba(55, 65, 81, 0.92);
+  color: #f9fafb;
+}
+
+/* ─── Bulk Selection ─── */
 
 .seerr-select-checkbox {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 20px;
-  height: 20px;
+  top: 6px;
+  left: 6px;
+  width: 18px;
+  height: 18px;
   border-radius: 4px;
-  border: 2px solid white;
-  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
   cursor: pointer;
-  z-index: 20;
+  z-index: 15;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.seerr-select-checkbox:hover {
+  border-color: rgba(255, 255, 255, 0.9);
+  background: rgba(0, 0, 0, 0.55);
 }
 
 .seerr-select-checkbox.checked {
@@ -107,77 +182,99 @@
   border-color: #8b5cf6;
 }
 
+/* ─── Bulk Action Bar ─── */
+
 .seerr-bulk-action-bar {
   position: fixed;
   bottom: 24px;
   left: 50%;
   transform: translateX(-50%);
-  background: #1f2937;
-  border: 1px solid #374151;
-  border-radius: 12px;
-  padding: 12px 24px;
+  background: rgba(31, 41, 55, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 14px;
+  padding: 10px 20px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 14px;
   z-index: 9999;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
   font-family: inherit;
-  color: white;
+  color: #f9fafb;
+  font-size: 13px;
 }
 
 .seerr-bulk-action-bar button {
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
   border: none;
-  background: #8b5cf6;
-  color: white;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 12px;
   cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s;
 }
 
-.seerr-bulk-action-bar button:hover {
+.seerr-bulk-action-bar .seerr-bulk-review {
+  background: #8b5cf6;
+  color: white;
+}
+.seerr-bulk-action-bar .seerr-bulk-review:hover {
   background: #7c3aed;
 }
+
+.seerr-bulk-action-bar .seerr-bulk-cancel {
+  background: rgba(255, 255, 255, 0.08);
+  color: #d1d5db;
+}
+.seerr-bulk-action-bar .seerr-bulk-cancel:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ─── Confirmation Modal ─── */
 
 .seerr-confirmation-modal {
   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: #1f2937;
-  border: 1px solid #374151;
-  border-radius: 12px;
-  padding: 24px;
+  background: rgba(31, 41, 55, 0.98);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 14px;
+  padding: 22px;
   z-index: 10000;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  max-width: 500px;
-  width: 90%;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+  max-width: 480px;
+  width: 92%;
   font-family: inherit;
-  color: white;
+  color: #f9fafb;
 }
 
 .seerr-confirmation-modal h3 {
-  margin: 0 0 16px 0;
-  font-size: 18px;
+  margin: 0 0 14px 0;
+  font-size: 16px;
+  font-weight: 600;
 }
 
 .seerr-confirmation-modal ul {
   list-style: none;
   padding: 0;
-  margin: 0 0 16px 0;
-  max-height: 300px;
+  margin: 0 0 14px 0;
+  max-height: 260px;
   overflow-y: auto;
 }
 
 .seerr-confirmation-modal li {
-  padding: 6px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 14px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 13px;
 }
 
 .seerr-confirmation-modal .excluded {
-  opacity: 0.5;
+  opacity: 0.45;
   text-decoration: line-through;
 }
 
@@ -188,17 +285,18 @@
 }
 
 .seerr-confirmation-modal button {
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: 7px 14px;
+  border-radius: 8px;
   border: none;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
+  font-family: inherit;
 }
 
 .seerr-confirmation-modal .cancel-btn {
-  background: rgba(255, 255, 255, 0.1);
-  color: white;
+  background: rgba(255, 255, 255, 0.08);
+  color: #d1d5db;
 }
 
 .seerr-confirmation-modal .confirm-btn {
@@ -206,50 +304,52 @@
   color: white;
 }
 
-.seerr-card-audience-badge {
-  /* Positioned via inline style (top: 28px) to stack below critics badge.
-     This class exists as a query selector target in seerr-integration.js */
-}
+/* ─── Notifications ─── */
 
-/* Summary notification (used by bulk request result) */
 .seerr-notification {
   position: fixed;
-  top: 1.25rem;
-  right: 1.25rem;
-  background: #1f2937;
-  border: 1px solid #374151;
-  border-radius: 0.5rem;
-  padding: 1rem;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+  top: 1rem;
+  right: 1rem;
+  background: rgba(31, 41, 55, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(128, 128, 128, 0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
   z-index: 10000;
-  min-width: 300px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  min-width: 280px;
+  max-width: 400px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color: #f9fafb;
 }
 
-.seerr-notification.success { border-left: 4px solid #10b981; }
-.seerr-notification.error { border-left: 4px solid #ef4444; }
-.seerr-notification.warning { border-left: 4px solid #f59e0b; }
-.seerr-notification.info { border-left: 4px solid #3b82f6; }
+.seerr-notification.success { border-left: 3px solid #10b981; }
+.seerr-notification.error   { border-left: 3px solid #ef4444; }
+.seerr-notification.warning { border-left: 3px solid #f59e0b; }
+.seerr-notification.info    { border-left: 3px solid #3b82f6; }
 
 .seerr-notification-title {
   font-weight: 600;
-  margin-bottom: 0.5rem;
-  font-size: 0.875rem;
+  margin-bottom: 4px;
+  font-size: 13px;
 }
 
 .seerr-notification-message {
-  font-size: 0.8rem;
-  color: #d1d5db;
+  font-size: 12px;
+  color: #9ca3af;
   line-height: 1.4;
 }
 
-/* Respect reduced motion preference */
+/* ─── Reduced Motion ─── */
+
 @media (prefers-reduced-motion: reduce) {
   .seerr-flyout *,
   .seerr-card-badge,
   .seerr-bulk-action-bar,
-  .seerr-confirmation-modal {
+  .seerr-confirmation-modal,
+  .seerr-filter-toggle,
+  .seerr-select-checkbox {
     transition: none !important;
     animation: none !important;
   }

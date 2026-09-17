@@ -1,6 +1,20 @@
 # Changelog
 
-All notable changes to the Seerr Request Button extension will be documented in this file.
+All notable changes to the Super Seerr extension will be documented in this file.
+
+## [3.1.4]
+
+- Published project metadata and issue links for Super Seerr under jonbiro/super-seerr-extension.
+- Removed obsolete branding screenshots and updated naming in the retained historical implementation documentation.
+- Included the MIT license in build and release packages.
+- Retained compatibility settings migration and required license attribution.
+
+## [3.1.2]
+
+- Named the extension Super Seerr across the manifest, popup, options, and flyout.
+- Added automatic patch-version increments for builds and releases.
+- Kept RT sorting active as ratings arrive; added stable original-order restoration.
+- Fixed partial ratings, confidence handling, ratings-only status, and worker initialization.
 
 ## [3.0.0] - 2025-06-06
 
@@ -14,15 +28,12 @@ All notable changes to the Seerr Request Button extension will be documented in 
 - **Browser Toolbar Badge**: Green "ON" / Red "OFF" indicator on the extension icon showing connection state.
 - **Feature Flags**: Card badges, detail-row injection, pre-request summary, sort/filter, and bulk actions individually gateable without code changes.
 
-### 🔄 Full Rebrand (Jellyseerr → Seerr)
+### Naming and compatibility
 
-- Renamed all user-facing strings, class names, CSS prefixes, DOM IDs, and debug namespaces from `jellyseerr`/`Jellyseerr` to `seerr`/`Seerr`
-- Background script class `JellyseerrAPI` → `SeerrAPI`
-- Shared client file `JellyseerrClient.js` → `SeerrClient.js`
-- Storage keys migrated transparently: `jellyseerrUrl`/`jellyseerrApiKey` → `seerrUrl`/`seerrApiKey` with backward compatibility
-- Manifest name, description, and action title updated
-- Options page and popup rebranded
-- All Jellyfin references preserved (separate media server, intentionally not changed)
+- Standardized the SeerrClient shared library and SeerrAPI worker class.
+- Migrated stored connection settings while preserving backward compatibility.
+- Updated extension metadata, options, and popup presentation.
+- Preserved Jellyfin media-server links.
 
 ### 🏗️ Architecture
 
@@ -38,7 +49,7 @@ All notable changes to the Seerr Request Button extension will be documented in 
 - **33 tests passing**: Property-based tests (fast-check) + smoke tests + DOM-level regression tests
 - `package.json` with `node --test` runner
 - `tests/helpers/chrome-mock.js`: in-memory `chrome.storage.sync` mock for property testing
-- Tests cover: storage migration (round-trip + idempotence), branding (zero Jellyseerr leakage), debug namespace, tmdbId passthrough, watchlist visibility & POST body, badge idempotence, ratings model renderability, cache coalescing, summary heuristic, overlay injection idempotence, SPA navigation regression
+- Tests cover: storage migration (round-trip + idempotence), branding (current-brand consistency), debug namespace, tmdbId passthrough, watchlist visibility & POST body, badge idempotence, ratings model renderability, cache coalescing, summary heuristic, overlay injection idempotence, SPA navigation regression
 
 ### 🐛 Bug Fixes
 

@@ -18,10 +18,12 @@ const RatingsConfig = {
 
   // Session cache TTL in milliseconds (5 minutes)
   cacheTtlMs: 5 * 60 * 1000,
+  rtNegativeCacheTtlMs: 60 * 60 * 1000,
+  rtCacheTtlMs: 24 * 60 * 60 * 1000,
 };
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = RatingsConfig;
-} else if (typeof window !== 'undefined') {
-  window.RatingsConfig = RatingsConfig;
+} else {
+  globalThis.RatingsConfig = RatingsConfig;
 }

@@ -63,8 +63,8 @@ test('No stale Jellyseerr identifiers in source (.js, .html, .css)', () => {
 
 test('Manifest uses SeerrClient.js in all content_scripts entries', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'manifest.base.json'), 'utf-8'));
-  assert.strictEqual(manifest.name, 'Seerr Request Button');
-  assert.strictEqual(manifest.action.default_title, 'Seerr Request Button');
+  assert.strictEqual(manifest.name, 'Super Seerr');
+  assert.strictEqual(manifest.action.default_title, 'Super Seerr');
   assert.ok(!manifest.description.includes('Jellyseerr'), 'Description should not mention Jellyseerr');
 
   for (const entry of manifest.content_scripts) {
@@ -79,24 +79,24 @@ test('Manifest uses SeerrClient.js in all content_scripts entries', () => {
 
 test('Manifest Firefox uses seerr gecko ID', () => {
   const ff = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, 'manifest.firefox.json'), 'utf-8'));
-  assert.strictEqual(ff.browser_specific_settings.gecko.id, 'seerr-request-button@example.com');
+  assert.strictEqual(ff.browser_specific_settings.gecko.id, 'super-seerr@jonbiro.github.io');
 });
 
 test('HTML files use Seerr branding', () => {
   const optionsHtml = fs.readFileSync(path.join(SRC_DIR, 'options', 'options.html'), 'utf-8');
-  assert.ok(optionsHtml.includes('Seerr Request Button - Settings'), 'options.html title');
-  assert.ok(optionsHtml.includes('<h1>Seerr Request Button</h1>'), 'options.html h1');
+  assert.ok(optionsHtml.includes('Super Seerr - Settings'), 'options.html title');
+  assert.ok(optionsHtml.includes('<h1>Super Seerr</h1>'), 'options.html h1');
   assert.ok(optionsHtml.includes('Configure your Seerr server connection'), 'options.html subtitle');
   assert.ok(optionsHtml.includes('Seerr Server URL'), 'options.html label');
   assert.ok(optionsHtml.includes('https://seerr.example.com'), 'options.html placeholder');
   assert.ok(optionsHtml.includes('from Seerr Settings'), 'options.html help text');
-  assert.ok(optionsHtml.includes('seerr-browser-extension'), 'options.html footer link');
+  assert.ok(optionsHtml.includes('https://github.com/jonbiro/super-seerr-extension/issues'), 'options.html footer link');
 
   const popupHtml = fs.readFileSync(path.join(SRC_DIR, 'popup', 'popup.html'), 'utf-8');
-  assert.ok(popupHtml.includes('Seerr Request Button'), 'popup.html title');
-  assert.ok(popupHtml.includes('<h1>Seerr</h1>'), 'popup.html h1');
-  assert.ok(popupHtml.includes('The Seerr request button'), 'popup.html configured state');
-  assert.ok(popupHtml.includes('configure'), 'popup.html not-configured state');
+  assert.ok(popupHtml.includes('Super Seerr'), 'popup.html title');
+  assert.ok(popupHtml.includes('<h1>Super Seerr</h1>'), 'popup.html h1');
+  assert.ok(popupHtml.includes('See ratings on your Seerr server'), 'popup.html configured state');
+  assert.ok(popupHtml.includes('Connect Your Seerr Server'), 'popup.html not-configured state');
   assert.ok(popupHtml.includes('Unable to connect to your Seerr server'), 'popup.html error state');
 });
 
@@ -115,14 +115,14 @@ test('"Watch on Jellyfin" is preserved', () => {
 
 test('Project-level files use Seerr branding', () => {
   const readme = fs.readFileSync(path.join(ROOT_DIR, 'README.md'), 'utf-8');
-  assert.ok(readme.includes('# Seerr Request Button'), 'README title');
+  assert.ok(readme.includes('# Super Seerr'), 'README title');
   assert.ok(!readme.includes('Jellyseerr Request Button'), 'README should not have old title');
   assert.ok(readme.includes('SeerrClient.js'), 'README architecture references SeerrClient');
 
   const changelog = fs.readFileSync(path.join(ROOT_DIR, 'CHANGELOG.md'), 'utf-8');
-  assert.ok(changelog.includes('Seerr Request Button'), 'CHANGELOG header');
+  assert.ok(changelog.includes('Super Seerr'), 'CHANGELOG header');
   assert.ok(changelog.includes('SeerrClient'), 'CHANGELOG architecture references SeerrClient');
 
   const makefile = fs.readFileSync(path.join(ROOT_DIR, 'Makefile'), 'utf-8');
-  assert.ok(makefile.includes('NAME = seerr-browser-extension'), 'Makefile NAME variable');
+  assert.ok(makefile.includes('NAME = super-seerr'), 'Makefile NAME variable');
 });

@@ -1,8 +1,10 @@
 # Requirements Document
 
+> Historical implementation plan, retained for technical context with current naming. Some migration examples and completion checklists describe earlier work. See README for current setup, build behavior, and browser limitations.
+
 ## Introduction
 
-This feature migrates the browser extension from "Jellyseerr" branding to "Seerr" branding. The migration is purely cosmetic and structural — it does not alter any API endpoints (`/api/v1/...`) or Jellyfin-related functionality. The scope covers: renaming classes and files, updating storage keys with transparent backward-compatible migration, replacing all user-visible strings, updating manifest metadata, renaming the debug namespace, and updating project-level files (README, CHANGELOG, Makefile). Existing users must experience zero disruption; their stored configuration must be silently migrated on first startup after the update.
+This feature migrates the browser extension from "Seerr" branding to "Seerr" branding. The migration is purely cosmetic and structural — it does not alter any API endpoints (`/api/v1/...`) or Jellyfin-related functionality. The scope covers: renaming classes and files, updating storage keys with transparent backward-compatible migration, replacing all user-visible strings, updating manifest metadata, renaming the debug namespace, and updating project-level files (README, CHANGELOG, Makefile). Existing users must experience zero disruption; their stored configuration must be silently migrated on first startup after the update.
 
 ## Structure Note
 
@@ -19,14 +21,14 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 - **Extension**: The browser extension being migrated (Chrome/Firefox).
 - **Background Script**: `src/background/background.js` — the service worker that manages API calls and storage.
-- **SeerrAPI**: The renamed background-script class, formerly `JellyseerrAPI`.
-- **SeerrClient**: The renamed shared client class in `src/shared/SeerrClient.js`, formerly `JellyseerrClient`.
-- **Storage Migration**: The one-time, silent process of reading old storage keys (`jellyseerrUrl`, `jellyseerrApiKey`) and writing their values to new keys (`seerrUrl`, `seerrApiKey`), then deleting the old keys.
-- **Old Storage Keys**: `jellyseerrUrl` and `jellyseerrApiKey` — the Chrome sync storage keys used before migration.
+- **SeerrAPI**: The renamed background-script class, formerly `SeerrAPI`.
+- **SeerrClient**: The renamed shared client class in `src/shared/SeerrClient.js`, formerly `SeerrClient`.
+- **Storage Migration**: The one-time, silent process of reading old storage keys (`seerrUrl`, `seerrApiKey`) and writing their values to new keys (`seerrUrl`, `seerrApiKey`), then deleting the old keys.
+- **Old Storage Keys**: `seerrUrl` and `seerrApiKey` — the Chrome sync storage keys used before migration.
 - **New Storage Keys**: `seerrUrl` and `seerrApiKey` — the Chrome sync storage keys used after migration.
 - **Manifest**: `manifest.base.json`, `manifest.chrome.json`, and `manifest.firefox.json` — the WebExtension manifest files.
 - **Content Script Entry**: A file path reference within a `content_scripts[].js` array in the Manifest.
-- **Debug Namespace**: The `window.jellyseerr_debug` object used for developer debugging, renamed to `window.seerr_debug`.
+- **Debug Namespace**: The `window.seerr_debug` object used for developer debugging, renamed to `window.seerr_debug`.
 - **Jellyfin**: An unrelated media server whose branding (`Watch on Jellyfin`, `/Jellyfin/`) is explicitly preserved and not changed.
 
 ---
@@ -39,9 +41,9 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. WHEN the Background Script initialises and `jellyseerrUrl` is present in `chrome.storage.sync`, THE Background Script SHALL read the value of `jellyseerrUrl`, write it to `seerrUrl`, and then delete `jellyseerrUrl` from `chrome.storage.sync`.
-2. WHEN the Background Script initialises and `jellyseerrApiKey` is present in `chrome.storage.sync`, THE Background Script SHALL read the value of `jellyseerrApiKey`, write it to `seerrApiKey`, and then delete `jellyseerrApiKey` from `chrome.storage.sync`.
-3. WHEN the Background Script initialises and neither `jellyseerrUrl` nor `jellyseerrApiKey` is present in `chrome.storage.sync`, THE Background Script SHALL skip the migration step without error.
+1. WHEN the Background Script initialises and `seerrUrl` is present in `chrome.storage.sync`, THE Background Script SHALL read the value of `seerrUrl`, write it to `seerrUrl`, and then delete `seerrUrl` from `chrome.storage.sync`.
+2. WHEN the Background Script initialises and `seerrApiKey` is present in `chrome.storage.sync`, THE Background Script SHALL read the value of `seerrApiKey`, write it to `seerrApiKey`, and then delete `seerrApiKey` from `chrome.storage.sync`.
+3. WHEN the Background Script initialises and neither `seerrUrl` nor `seerrApiKey` is present in `chrome.storage.sync`, THE Background Script SHALL skip the migration step without error.
 4. WHEN the Storage Migration completes, THE Background Script SHALL load the active configuration from `seerrUrl` and `seerrApiKey`.
 5. IF the Storage Migration fails due to a storage access error, THEN THE Background Script SHALL log the error and continue loading settings from any already-present `seerrUrl` and `seerrApiKey` values.
 6. THE Background Script SHALL perform the Storage Migration before registering the `chrome.storage.onChanged` listener so that the listener only observes New Storage Keys.
@@ -63,9 +65,9 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. THE Background Script SHALL declare the primary API class as `SeerrAPI`, replacing the former `JellyseerrAPI` declaration.
-2. THE Background Script SHALL instantiate `SeerrAPI` as the active class, replacing any instantiation of `JellyseerrAPI`.
-3. THE Background Script SHALL contain no remaining references to the identifier `JellyseerrAPI`.
+1. THE Background Script SHALL declare the primary API class as `SeerrAPI`, replacing the former `SeerrAPI` declaration.
+2. THE Background Script SHALL instantiate `SeerrAPI` as the active class, replacing any instantiation of `SeerrAPI`.
+3. THE Background Script SHALL contain no remaining references to the identifier `SeerrAPI`.
 
 ### Requirement 4: File Rename and Class Rename — SeerrClient
 
@@ -73,10 +75,10 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. THE Extension SHALL provide the shared client at the path `src/shared/SeerrClient.js`, replacing `src/shared/JellyseerrClient.js`.
-2. THE file `src/shared/SeerrClient.js` SHALL declare and export the class `SeerrClient`, replacing the former `JellyseerrClient` class declaration.
-3. THE `BaseIntegration.js` file SHALL instantiate `SeerrClient` in place of `JellyseerrClient`.
-4. THE Extension SHALL contain no remaining source files or references to the filename `JellyseerrClient.js` or the class name `JellyseerrClient`.
+1. THE Extension SHALL provide the shared client at the path `src/shared/SeerrClient.js`, replacing `src/shared/SeerrClient.js`.
+2. THE file `src/shared/SeerrClient.js` SHALL declare and export the class `SeerrClient`, replacing the former `SeerrClient` class declaration.
+3. THE `BaseIntegration.js` file SHALL instantiate `SeerrClient` in place of `SeerrClient`.
+4. THE Extension SHALL contain no remaining source files or references to the filename `SeerrClient.js` or the class name `SeerrClient`.
 
 ### Requirement 5: Manifest Updates
 
@@ -84,10 +86,10 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. THE Manifest `name` field SHALL be `"Seerr Request Button"`, replacing `"Jellyseerr Request Button"`.
-2. THE Manifest `description` field SHALL reference `"Seerr"` instead of `"Jellyseerr"`.
-3. THE Manifest `action.default_title` field SHALL be `"Seerr Request Button"`, replacing `"Jellyseerr Request Button"`.
-4. WHEN a Content Script Entry previously listed `"src/shared/JellyseerrClient.js"`, THE Manifest SHALL list `"src/shared/SeerrClient.js"` in its place.
+1. THE Manifest `name` field SHALL be `"Super Seerr"`, replacing `"Super Seerr"`.
+2. THE Manifest `description` field SHALL reference `"Seerr"` instead of `"Seerr"`.
+3. THE Manifest `action.default_title` field SHALL be `"Super Seerr"`, replacing `"Super Seerr"`.
+4. WHEN a Content Script Entry previously listed `"src/shared/SeerrClient.js"`, THE Manifest SHALL list `"src/shared/SeerrClient.js"` in its place.
 5. THE Manifest SHALL update all 7 Content Script Entries that reference the shared client file to use `"src/shared/SeerrClient.js"`.
 
 ### Requirement 13: Fix SeerrClient Init Guards in All 7 Site Integrations
@@ -96,14 +98,14 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. THE `imdb-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof JellyseerrClient !== 'undefined'`.
-2. THE `rt-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof JellyseerrClient !== 'undefined'`.
-3. THE `letterboxd-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof JellyseerrClient !== 'undefined'`.
-4. THE `metacritic-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof JellyseerrClient !== 'undefined'`.
-5. THE `tmdb-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof JellyseerrClient !== 'undefined'`.
-6. THE `trakt-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof JellyseerrClient !== 'undefined'`.
-7. THE `filmweb-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof JellyseerrClient !== 'undefined'`.
-8. THE Extension SHALL contain no remaining initialisation guards in any site content script that reference `typeof JellyseerrClient`.
+1. THE `imdb-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof SeerrClient !== 'undefined'`.
+2. THE `rt-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof SeerrClient !== 'undefined'`.
+3. THE `letterboxd-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof SeerrClient !== 'undefined'`.
+4. THE `metacritic-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof SeerrClient !== 'undefined'`.
+5. THE `tmdb-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof SeerrClient !== 'undefined'`.
+6. THE `trakt-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof SeerrClient !== 'undefined'`.
+7. THE `filmweb-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof SeerrClient !== 'undefined'`.
+8. THE Extension SHALL contain no remaining initialisation guards in any site content script that reference `typeof SeerrClient`.
 
 ### Requirement 6: UI String Updates — Button Text
 
@@ -111,10 +113,10 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. THE `BaseIntegration.js` file SHALL use the string `"Request on Seerr"` wherever `"Request on Jellyseerr"` previously appeared as button creation text.
-2. THE Background Script SHALL use the string `"Request on Seerr"` wherever `"Request on Jellyseerr"` previously appeared in `buttonText` fields of returned status objects.
-3. THE `SeerrClient.js` file SHALL use the string `"Cannot connect to Seerr server"` in error messages that previously referenced `"Jellyseerr server"`.
-4. THE `BaseIntegration.js` file SHALL use the string `"Cannot connect to Seerr server"` in error messages that previously referenced `"Jellyseerr server"`.
+1. THE `BaseIntegration.js` file SHALL use the string `"Request on Seerr"` wherever `"Request on Seerr"` previously appeared as button creation text.
+2. THE Background Script SHALL use the string `"Request on Seerr"` wherever `"Request on Seerr"` previously appeared in `buttonText` fields of returned status objects.
+3. THE `SeerrClient.js` file SHALL use the string `"Cannot connect to Seerr server"` in error messages that previously referenced `"Seerr server"`.
+4. THE `BaseIntegration.js` file SHALL use the string `"Cannot connect to Seerr server"` in error messages that previously referenced `"Seerr server"`.
 
 ### Requirement 7: UI String Updates — HTML Files
 
@@ -122,17 +124,17 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. THE options page (`options.html`) `<title>` SHALL be `"Seerr Request Button - Settings"`.
-2. THE options page heading (`<h1>`) SHALL read `"Seerr Request Button"`.
-3. THE options page subtitle SHALL reference `"Seerr server connection"` replacing `"Jellyseerr server connection"`.
+1. THE options page (`options.html`) `<title>` SHALL be `"Super Seerr - Settings"`.
+2. THE options page heading (`<h1>`) SHALL read `"Super Seerr"`.
+3. THE options page subtitle SHALL reference `"Seerr server connection"` replacing `"Seerr server connection"`.
 4. THE options page form label for the server URL input SHALL read `"Seerr Server URL"`.
 5. THE options page `placeholder` attribute for the server URL input SHALL be `"https://seerr.example.com"`.
-6. THE options page `<small>` help text for the API key SHALL reference `"Seerr Settings"` instead of `"Jellyseerr Settings"`.
-7. THE options page footer link text SHALL reference `seerr-browser-extension` instead of `jellyseerr-browser-extension`.
-8. THE popup (`popup.html`) `<title>` SHALL be `"Seerr Request Button"`.
+6. THE options page `<small>` help text for the API key SHALL reference `"Seerr Settings"` instead of `"Seerr Settings"`.
+7. THE options page footer link text SHALL reference `super-seerr-extension` instead of `super-seerr-extension`.
+8. THE popup (`popup.html`) `<title>` SHALL be `"Super Seerr"`.
 9. THE popup header `<h1>` SHALL read `"Seerr"`.
-10. THE popup configured-state description text SHALL reference `"Seerr"` instead of `"Jellyseerr"`.
-11. THE popup error-state message SHALL reference `"Seerr server"` instead of `"Jellyseerr server"`.
+10. THE popup configured-state description text SHALL reference `"Seerr"` instead of `"Seerr"`.
+11. THE popup error-state message SHALL reference `"Seerr server"` instead of `"Seerr server"`.
 
 ### Requirement 8: Debug Namespace Rename
 
@@ -140,8 +142,8 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. THE `BaseIntegration.js` file SHALL create and populate `window.seerr_debug` in the `setupDebugFunctions` method, replacing `window.jellyseerr_debug`.
-2. THE `BaseIntegration.js` file SHALL NOT create or reference `window.jellyseerr_debug`.
+1. THE `BaseIntegration.js` file SHALL create and populate `window.seerr_debug` in the `setupDebugFunctions` method, replacing `window.seerr_debug`.
+2. THE `BaseIntegration.js` file SHALL NOT create or reference `window.seerr_debug`.
 3. WHEN `window.seerr_debug` is already initialised, THE `BaseIntegration.js` file SHALL add site-specific debug functions to the existing object without resetting it.
 
 ### Requirement 9: Comment and Log Message Updates
@@ -150,10 +152,10 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. THE Background Script file header comment SHALL reference `"Seerr"` instead of `"Jellyseerr"`.
-2. THE `SeerrClient.js` file header comment SHALL reference `"Seerr API Client"` instead of `"Jellyseerr API Client"`.
-3. THE Background Script console log messages that display the string `"Jellyseerr"` in their text SHALL use `"Seerr"` instead, except for messages that log raw API responses or external data beyond the developer's control.
-4. THE Background Script error messages shown to users (e.g., those thrown as `new Error(...)`) SHALL reference `"Seerr"` instead of `"Jellyseerr"`.
+1. THE Background Script file header comment SHALL reference `"Seerr"` instead of `"Seerr"`.
+2. THE `SeerrClient.js` file header comment SHALL reference `"Seerr API Client"` instead of `"Seerr API Client"`.
+3. THE Background Script console log messages that display the string `"Seerr"` in their text SHALL use `"Seerr"` instead, except for messages that log raw API responses or external data beyond the developer's control.
+4. THE Background Script error messages shown to users (e.g., those thrown as `new Error(...)`) SHALL reference `"Seerr"` instead of `"Seerr"`.
 
 ### Requirement 10: Preserved Jellyfin Branding
 
@@ -167,17 +169,17 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 ### Requirement 34: CSS Class, ID, and DOM Selector Rename
 
-**User Story:** As a developer, I want all CSS class names, element IDs, and DOM query selectors to use the `seerr-` prefix instead of `jellyseerr-`, so that the internal styling layer is consistent with the new product branding.
+**User Story:** As a developer, I want all CSS class names, element IDs, and DOM query selectors to use the `seerr-` prefix instead of `seerr-`, so that the internal styling layer is consistent with the new product branding.
 
 #### Acceptance Criteria
 
-1. THE `UIComponents.js` `getSharedCSS()` method SHALL use the `seerr-` prefix for all CSS class names, replacing any `jellyseerr-` prefixed class names (~60 occurrences).
-2. THE `UIComponents.js` file SHALL use `seerr-` prefix for all DOM element IDs (e.g., `seerr-flyout-*`, `seerr-styles-*`, `seerr-in-library-badge`, `seerr-watchlist-button`), replacing any `jellyseerr-` prefixed IDs.
+1. THE `UIComponents.js` `getSharedCSS()` method SHALL use the `seerr-` prefix for all CSS class names, replacing any `seerr-` prefixed class names (~60 occurrences).
+2. THE `UIComponents.js` file SHALL use `seerr-` prefix for all DOM element IDs (e.g., `seerr-flyout-*`, `seerr-styles-*`, `seerr-in-library-badge`, `seerr-watchlist-button`), replacing any `seerr-` prefixed IDs.
 3. THE `UIComponents.js` `createFlyout()` method SHALL use the ID format `seerr-flyout-${this.siteName.toLowerCase()}`.
 4. THE `UIComponents.js` `injectStyles()` method SHALL use the style ID `seerr-styles-${this.siteName.toLowerCase()}`.
 5. THE 7 site integration files (`imdb-integration.js`, `rt-integration.js`, `tmdb-integration.js`, `letterboxd-integration.js`, `metacritic-integration.js`, `trakt-integration.js`, `filmweb-integration.js`) SHALL use the `seerr-` prefix in all site-specific CSS override blocks.
-6. THE `BaseIntegration.js` file SHALL use the `seerr-` prefix in all DOM query selectors (e.g., `.seerr-media-info`, `.seerr-title`), replacing any `jellyseerr-` prefixed selectors.
-7. THE Extension SHALL contain no remaining CSS class names, element IDs, or DOM selectors using the `jellyseerr-` prefix.
+6. THE `BaseIntegration.js` file SHALL use the `seerr-` prefix in all DOM query selectors (e.g., `.seerr-media-info`, `.seerr-title`), replacing any `seerr-` prefixed selectors.
+7. THE Extension SHALL contain no remaining CSS class names, element IDs, or DOM selectors using the `seerr-` prefix.
 
 ### Requirement 14: Fix `MediaExtractor.createMediaData()` to pass through `tmdbId`
 
@@ -213,7 +215,7 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. WHEN `statusData.status` is `'available_watch'` (status code 5), THE UIComponents SHALL render a small green checkmark badge with the text `"In Library"` inside the flyout's `jellyseerr-media-info` section, positioned adjacent to the media title.
+1. WHEN `statusData.status` is `'available_watch'` (status code 5), THE UIComponents SHALL render a small green checkmark badge with the text `"In Library"` inside the flyout's `seerr-media-info` section, positioned adjacent to the media title.
 2. WHEN `statusData.status` is NOT `'available_watch'`, THE UIComponents SHALL NOT display the "In Library" badge.
 3. THE BaseIntegration SHALL call the UIComponents method to show the "In Library" badge when `statusData.status === 'available_watch'` and to hide it for all other status values.
 4. THE UIComponents SHALL create and manage the "In Library" badge element, providing methods to show and hide it without recreating the flyout panel.
@@ -224,16 +226,16 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 ### Requirement 32: Project Metadata Updates
 
-**User Story:** As a developer and user, I want all project-level files (README, CHANGELOG, Makefile) to reference "Seerr" instead of "Jellyseerr", so that the project identity is consistent across all surfaces and the build system uses the correct name.
+**User Story:** As a developer and user, I want all project-level files (README, CHANGELOG, Makefile) to reference "Seerr" instead of "Seerr", so that the project identity is consistent across all surfaces and the build system uses the correct name.
 
 #### Acceptance Criteria
 
-1. THE README.md SHALL use "Seerr Request Button" as the title, replacing "Jellyseerr Request Button".
+1. THE README.md SHALL use "Super Seerr" as the title, replacing "Super Seerr".
 2. THE README.md SHALL reference "Seerr" in all descriptions, installation instructions, setup guides, and usage documentation.
-3. THE README.md architecture diagram SHALL reference `SeerrClient.js` instead of `JellyseerrClient.js`.
-4. THE README.md installation instructions SHALL reference `seerr-browser-extension` instead of `jellyseerr-browser-extension`.
-5. THE CHANGELOG.md SHALL use "Seerr Request Button" in its header and SHALL reference Seerr branding throughout.
-6. THE Makefile `NAME` variable SHALL be `seerr-browser-extension`, replacing `jellyseerr-browser-extension`.
+3. THE README.md architecture diagram SHALL reference `SeerrClient.js` instead of `SeerrClient.js`.
+4. THE README.md installation instructions SHALL reference `super-seerr-extension` instead of `super-seerr-extension`.
+5. THE CHANGELOG.md SHALL use "Super Seerr" in its header and SHALL reference Seerr branding throughout.
+6. THE Makefile `NAME` variable SHALL be `super-seerr-extension`, replacing `super-seerr-extension`.
 
 ### Requirement 33: Test Infrastructure Setup
 

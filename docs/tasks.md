@@ -1,8 +1,10 @@
 # Implementation Plan: Seerr Extension Migration
 
+> Historical implementation plan, retained for technical context with current naming. Some migration examples and completion checklists describe earlier work. See README for current setup, build behavior, and browser limitations.
+
 ## Overview
 
-Migrate the browser extension from "Jellyseerr" branding to "Seerr" branding through a series of targeted file edits. The migration covers: creating the renamed client file, updating the background script (class rename + storage migration), updating all storage key references across JS files, updating manifest metadata and content script paths, fixing init guards in all 7 site integrations, fixing MediaExtractor tmdbId passthrough, updating all HTML branding strings, renaming the debug namespace, updating project-level files (README, CHANGELOG, Makefile), setting up test infrastructure, and deleting the old client file. No API endpoints or Jellyfin references are changed.
+Migrate the browser extension from "Seerr" branding to "Seerr" branding through a series of targeted file edits. The migration covers: creating the renamed client file, updating the background script (class rename + storage migration), updating all storage key references across JS files, updating manifest metadata and content script paths, fixing init guards in all 7 site integrations, fixing MediaExtractor tmdbId passthrough, updating all HTML branding strings, renaming the debug namespace, updating project-level files (README, CHANGELOG, Makefile), setting up test infrastructure, and deleting the old client file. No API endpoints or Jellyfin references are changed.
 
 ## Tasks
 
@@ -13,46 +15,46 @@ Migrate the browser extension from "Jellyseerr" branding to "Seerr" branding thr
   - [ ] 0.2 Create `LICENSE` file
     - MIT License; referenced by `README.md`
 
-- [ ] 1. Create `src/shared/SeerrClient.js` from `JellyseerrClient.js`
+- [ ] 1. Create `src/shared/SeerrClient.js` from `SeerrClient.js`
   - [ ] 1.1 Create `src/shared/SeerrClient.js` with all class and export renames applied
-    - Copy `JellyseerrClient.js` to `SeerrClient.js`
-    - Rename `class JellyseerrClient` → `class SeerrClient`
-    - Update `window.JellyseerrClient = JellyseerrClient` → `window.SeerrClient = SeerrClient`
-    - Update `module.exports = JellyseerrClient` → `module.exports = SeerrClient`
+    - Copy `SeerrClient.js` to `SeerrClient.js`
+    - Rename `class SeerrClient` → `class SeerrClient`
+    - Update `window.SeerrClient = SeerrClient` → `window.SeerrClient = SeerrClient`
+    - Update `module.exports = SeerrClient` → `module.exports = SeerrClient`
     - Update file header comment to `// Shared Seerr API Client`
     - Update the error string in `getMediaStatus` to `'Cannot connect to Seerr server. Please check your server URL and API key in extension settings.'`
     - _Requirements: 4.1, 4.2, 6.3, 9.2_
 
   - [ ]* 1.2 Write property test for `SeerrClient` error message branding
     - **Property 4 (partial): Status response button text references new brand**
-    - Verify the connection-failure error message in `SeerrClient` contains `"Seerr"` and does not contain `"Jellyseerr"`
+    - Verify the connection-failure error message in `SeerrClient` contains `"Seerr"` and does not contain `"Seerr"`
     - **Validates: Requirements 6.3**
 
 - [ ] 2. Update `src/shared/BaseIntegration.js`
   - [ ] 2.1 Update `BaseIntegration.js` client instantiation, button text, error messages, and debug namespace
-    - Change `new JellyseerrClient(...)` → `new SeerrClient(...)` in the constructor
-    - Change button creation text from `'Request on Jellyseerr'` → `'Request on Seerr'` in `setupButtonUI()`
-    - Change error message in `getErrorStatus()` from `'Cannot connect to Jellyseerr server'` → `'Cannot connect to Seerr server'`
-    - Change success notification body in `handleRequestButtonClick()` from `'...Jellyseerr requests'` → `'...Seerr requests'`
-    - Change `setupDebugFunctions()` to initialise `window.seerr_debug` instead of `window.jellyseerr_debug`, guarding with `if (!window.seerr_debug)`
+    - Change `new SeerrClient(...)` → `new SeerrClient(...)` in the constructor
+    - Change button creation text from `'Request on Seerr'` → `'Request on Seerr'` in `setupButtonUI()`
+    - Change error message in `getErrorStatus()` from `'Cannot connect to Seerr server'` → `'Cannot connect to Seerr server'`
+    - Change success notification body in `handleRequestButtonClick()` from `'...Seerr requests'` → `'...Seerr requests'`
+    - Change `setupDebugFunctions()` to initialise `window.seerr_debug` instead of `window.seerr_debug`, guarding with `if (!window.seerr_debug)`
     - Update the `this.log(...)` line at the end of `setupDebugFunctions()` to reference `window.seerr_debug`
     - Leave the `'Watch on Jellyfin'` check in `handleRequest()` unchanged
     - _Requirements: 4.3, 6.1, 6.4, 8.1, 8.2, 8.3_
 
   - [ ]* 2.2 Write property test for button text branding (Property 3)
     - **Property 3: Button text never references old brand**
-    - Generate varied `mediaData` objects; call the button creation path; assert the button text contains `"Request on Seerr"` and does NOT contain `"Request on Jellyseerr"`
+    - Generate varied `mediaData` objects; call the button creation path; assert the button text contains `"Request on Seerr"` and does NOT contain `"Request on Seerr"`
     - **Validates: Requirements 6.1**
 
   - [ ]* 2.3 Write property test for debug namespace (Properties 6 & 7)
     - **Property 6: Debug namespace does not pollute old key**
     - **Property 7: Debug namespace accumulates without reset**
-    - Generate site name strings and pre-existing `window.seerr_debug` objects; call `setupDebugFunctions()`; assert `window.seerr_debug[siteName]` is set, `window.jellyseerr_debug` is never created, and prior entries remain intact
+    - Generate site name strings and pre-existing `window.seerr_debug` objects; call `setupDebugFunctions()`; assert `window.seerr_debug[siteName]` is set, `window.seerr_debug` is never created, and prior entries remain intact
     - **Validates: Requirements 8.1, 8.2, 8.3**
 
 - [ ] 3. Update `src/background/background.js`
   - [ ] 3.1 Add `migrateStorage()` method and update `init()` sequence in `background.js`
-    - Add the `migrateStorage()` method as specified in the design: reads `jellyseerrUrl`/`jellyseerrApiKey`, writes to `seerrUrl`/`seerrApiKey`, removes old keys; logs success or catches and logs errors without throwing
+    - Add the `migrateStorage()` method as specified in the design: reads `seerrUrl`/`seerrApiKey`, writes to `seerrUrl`/`seerrApiKey`, removes old keys; logs success or catches and logs errors without throwing
     - Update `init()` to call `await this.migrateStorage()` as the first step, before `loadSettings()` and before registering the `chrome.storage.onChanged` listener
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6_
 
@@ -62,100 +64,100 @@ Migrate the browser extension from "Jellyseerr" branding to "Seerr" branding thr
     - Mock `chrome.storage.sync` with an in-memory object; generate `{ url: string, apiKey: string }` pairs (including empty strings); assert round-trip correctness (values end up in new keys, old keys absent) and idempotence (no-op when only new keys present)
     - **Validates: Requirements 1.1, 1.2, 1.3, 1.4**
 
-  - [ ] 3.3 Rename class `JellyseerrAPI` → `SeerrAPI` and update all storage key references in `background.js`
-    - Rename `class JellyseerrAPI` → `class SeerrAPI`
-    - Update instantiation `new JellyseerrAPI()` → `new SeerrAPI()`
+  - [ ] 3.3 Rename class `SeerrAPI` → `SeerrAPI` and update all storage key references in `background.js`
+    - Rename `class SeerrAPI` → `class SeerrAPI`
+    - Update instantiation `new SeerrAPI()` → `new SeerrAPI()`
     - Update `loadSettings()` to use `['seerrUrl', 'seerrApiKey']` and `this.baseUrl = settings.seerrUrl` / `this.apiKey = settings.seerrApiKey`
     - Update the `chrome.storage.onChanged` listener to check `changes.seerrUrl || changes.seerrApiKey`
-    - Update all error strings thrown via `new Error(...)` that reference `"Jellyseerr server URL and API key"` to reference `"Seerr server URL and API key"`
+    - Update all error strings thrown via `new Error(...)` that reference `"Seerr server URL and API key"` to reference `"Seerr server URL and API key"`
     - Update file header comment to `// Background service worker for Seerr integration`
-    - Update all `console.log` messages that display the literal string `"Jellyseerr"` to use `"Seerr"` instead (excluding any that log raw external API responses)
+    - Update all `console.log` messages that display the literal string `"Seerr"` to use `"Seerr"` instead (excluding any that log raw external API responses)
     - _Requirements: 2.1, 2.2, 3.1, 3.2, 3.3, 9.1, 9.3, 9.4_
 
   - [ ] 3.4 Update `buttonText` fields in `formatMediaStatus()` in `background.js`
-    - Replace every `'Request on Jellyseerr'` string in `buttonText` fields within `formatMediaStatus()` with `'Request on Seerr'`
+    - Replace every `'Request on Seerr'` string in `buttonText` fields within `formatMediaStatus()` with `'Request on Seerr'`
     - Leave all `'Watch on Jellyfin'` strings untouched
     - _Requirements: 6.2, 10.1, 10.2_
 
   - [ ]* 3.5 Write property test for status response button text branding (Property 4 & 5)
     - **Property 4: Status response button text references new brand**
     - **Property 5: "Watch on Jellyfin" is preserved**
-    - Generate `mediaDetails` objects with status codes 1, 2, 3, and absent → assert `buttonText` contains `"Seerr"` and not `"Jellyseerr"`
+    - Generate `mediaDetails` objects with status codes 1, 2, 3, and absent → assert `buttonText` contains `"Seerr"` and not `"Seerr"`
     - Generate `mediaDetails` with `status === 5` and random non-empty `mediaUrl` strings → assert `buttonText === "Watch on Jellyfin"`
     - **Validates: Requirements 6.2, 10.1, 10.2**
 
 - [ ] 4. Checkpoint — Ensure all tests pass
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4a. Rename all `jellyseerr-` CSS class/id/selector prefixes to `seerr-`
+- [ ] 4a. Rename all `seerr-` CSS class/id/selector prefixes to `seerr-`
   - [ ] 4a.1 Rename CSS classes, IDs, and text in `src/shared/UIComponents.js`
-    - Rename all ~60 `.jellyseerr-*` CSS class names in `getSharedCSS()` to `.seerr-*`
-    - Rename DOM element IDs: `jellyseerr-flyout-*` → `seerr-flyout-*`, `jellyseerr-styles-*` → `seerr-styles-*`
-    - Rename visible text strings: `'Jellyseerr'` → `'Seerr'`, `'Connecting to Jellyseerr...'` → `'Connecting to Seerr...'`
-    - Rename `.jellyseerr-watchlist-button` references to `.seerr-watchlist-button`
+    - Rename all ~60 `.seerr-*` CSS class names in `getSharedCSS()` to `.seerr-*`
+    - Rename DOM element IDs: `seerr-flyout-*` → `seerr-flyout-*`, `seerr-styles-*` → `seerr-styles-*`
+    - Rename visible text strings: `'Seerr'` → `'Seerr'`, `'Connecting to Seerr...'` → `'Connecting to Seerr...'`
+    - Rename `.seerr-watchlist-button` references to `.seerr-watchlist-button`
     - _Requirements: 34.1, 34.2, 34.3, 34.4_
 
   - [ ] 4a.2 Rename CSS classes in `src/content/imdb-integration.js` site-specific CSS block
-    - Replace all `.jellyseerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
+    - Replace all `.seerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
     - _Requirements: 34.5_
 
   - [ ] 4a.3 Rename CSS classes in `src/content/rt-integration.js` site-specific CSS block
-    - Replace all `.jellyseerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
+    - Replace all `.seerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
     - _Requirements: 34.5_
 
   - [ ] 4a.4 Rename CSS classes in `src/content/tmdb-integration.js` site-specific CSS block
-    - Replace all `.jellyseerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
+    - Replace all `.seerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
     - _Requirements: 34.5_
 
   - [ ] 4a.5 Rename CSS classes in `src/content/letterboxd-integration.js` site-specific CSS block
-    - Replace all `.jellyseerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
+    - Replace all `.seerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
     - _Requirements: 34.5_
 
   - [ ] 4a.6 Rename CSS classes in `src/content/metacritic-integration.js` site-specific CSS block
-    - Replace all `.jellyseerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
+    - Replace all `.seerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
     - _Requirements: 34.5_
 
   - [ ] 4a.7 Rename CSS classes in `src/content/trakt-integration.js` site-specific CSS block
-    - Replace all `.jellyseerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
+    - Replace all `.seerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
     - _Requirements: 34.5_
 
   - [ ] 4a.8 Rename CSS classes in `src/content/filmweb-integration.js` site-specific CSS block
-    - Replace all `.jellyseerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
+    - Replace all `.seerr-*` class names in `getSiteSpecificCSS()` with `.seerr-*`
     - _Requirements: 34.5_
 
   - [ ] 4a.9 Rename DOM query selectors in `src/shared/BaseIntegration.js`
-    - Replace `.jellyseerr-media-info` → `.seerr-media-info` in `updateStatus()` badge logic
-    - Replace `.jellyseerr-title` → `.seerr-title` in `showInLibraryBadge()` lookups
-    - Replace `.jellyseerr-watchlist-button` → `.seerr-watchlist-button` in click handler setup
+    - Replace `.seerr-media-info` → `.seerr-media-info` in `updateStatus()` badge logic
+    - Replace `.seerr-title` → `.seerr-title` in `showInLibraryBadge()` lookups
+    - Replace `.seerr-watchlist-button` → `.seerr-watchlist-button` in click handler setup
     - _Requirements: 34.6, 34.7_
 
 - [ ] 5. Fix SeerrClient init guards in all 7 site integrations
   - [ ] 5.1 Fix init guard in `src/content/imdb-integration.js`
-    - Replace `typeof JellyseerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
+    - Replace `typeof SeerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
     - _Requirements: 13.1, 13.8_
 
   - [ ] 5.2 Fix init guard in `src/content/rt-integration.js`
-    - Replace `typeof JellyseerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
+    - Replace `typeof SeerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
     - _Requirements: 13.2, 13.8_
 
   - [ ] 5.3 Fix init guard in `src/content/letterboxd-integration.js`
-    - Replace `typeof JellyseerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
+    - Replace `typeof SeerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
     - _Requirements: 13.3, 13.8_
 
   - [ ] 5.4 Fix init guard in `src/content/metacritic-integration.js`
-    - Replace `typeof JellyseerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
+    - Replace `typeof SeerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
     - _Requirements: 13.4, 13.8_
 
   - [ ] 5.5 Fix init guard in `src/content/tmdb-integration.js`
-    - Replace `typeof JellyseerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
+    - Replace `typeof SeerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
     - _Requirements: 13.5, 13.8_
 
   - [ ] 5.6 Fix init guard in `src/content/trakt-integration.js`
-    - Replace `typeof JellyseerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
+    - Replace `typeof SeerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
     - _Requirements: 13.6, 13.8_
 
   - [ ] 5.7 Fix init guard in `src/content/filmweb-integration.js`
-    - Replace `typeof JellyseerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
+    - Replace `typeof SeerrClient !== 'undefined'` with `typeof SeerrClient !== 'undefined'`
     - _Requirements: 13.7, 13.8_
 
 - [ ] 6. Fix `MediaExtractor.createMediaData()` tmdbId passthrough
@@ -169,63 +171,63 @@ Migrate the browser extension from "Jellyseerr" branding to "Seerr" branding thr
 
 - [ ] 7. Update `src/options/options.js` and `src/popup/popup.js` storage keys
   - [ ] 7.1 Update storage key names in `options.js`
-    - Change `chrome.storage.sync.get(['jellyseerrUrl', 'jellyseerrApiKey'])` → `get(['seerrUrl', 'seerrApiKey'])` in `loadSettings()`
-    - Change `chrome.storage.sync.set({ jellyseerrUrl: ..., jellyseerrApiKey: ... })` → `set({ seerrUrl: ..., seerrApiKey: ... })` in `saveSettings()` and `testConnection()`
-    - Update the status message in `testConnection()` from `'Testing connection to Jellyseerr server...'` → `'Testing connection to Seerr server...'`
+    - Change `chrome.storage.sync.get(['seerrUrl', 'seerrApiKey'])` → `get(['seerrUrl', 'seerrApiKey'])` in `loadSettings()`
+    - Change `chrome.storage.sync.set({ seerrUrl: ..., seerrApiKey: ... })` → `set({ seerrUrl: ..., seerrApiKey: ... })` in `saveSettings()` and `testConnection()`
+    - Update the status message in `testConnection()` from `'Testing connection to Seerr server...'` → `'Testing connection to Seerr server...'`
     - _Requirements: 2.3_
 
   - [ ] 7.2 Update storage key names in `popup.js`
-    - Change `chrome.storage.sync.get(['jellyseerrUrl', 'jellyseerrApiKey'])` → `get(['seerrUrl', 'seerrApiKey'])` in `checkStatus()`
-    - Update display reference `settings.jellyseerrUrl` → `settings.seerrUrl`
-    - Update the null-check `!settings.jellyseerrUrl || !settings.jellyseerrApiKey` → `!settings.seerrUrl || !settings.seerrApiKey`
+    - Change `chrome.storage.sync.get(['seerrUrl', 'seerrApiKey'])` → `get(['seerrUrl', 'seerrApiKey'])` in `checkStatus()`
+    - Update display reference `settings.seerrUrl` → `settings.seerrUrl`
+    - Update the null-check `!settings.seerrUrl || !settings.seerrApiKey` → `!settings.seerrUrl || !settings.seerrApiKey`
     - _Requirements: 2.4_
 
 - [ ] 8. Update manifest files
   - [ ] 8.1 Update `manifest.base.json` branding fields and all 7 content script paths
-    - Change `"name"` from `"Jellyseerr Request Button"` → `"Seerr Request Button"`
-    - Change `"description"` to reference `"Seerr"` instead of `"Jellyseerr"`
-    - Change `"action.default_title"` from `"Jellyseerr Request Button"` → `"Seerr Request Button"`
-    - Replace all 7 occurrences of `"src/shared/JellyseerrClient.js"` → `"src/shared/SeerrClient.js"` in `content_scripts[].js` arrays
+    - Change `"name"` from `"Super Seerr"` → `"Super Seerr"`
+    - Change `"description"` to reference `"Seerr"` instead of `"Seerr"`
+    - Change `"action.default_title"` from `"Super Seerr"` → `"Super Seerr"`
+    - Replace all 7 occurrences of `"src/shared/SeerrClient.js"` → `"src/shared/SeerrClient.js"` in `content_scripts[].js` arrays
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
   - [ ] 8.2 Update `manifest.firefox.json` extension ID
-    - Change `"browser_specific_settings.gecko.id"` from `"jellyseerr-request-button@example.com"` → `"seerr-request-button@example.com"`
+    - Change `"browser_specific_settings.gecko.id"` from `"super-seerr@jonbiro.github.io"` → `"super-seerr@jonbiro.github.io"`
     - _Requirements: 5.1 (Firefox-specific)_
 
 - [ ] 9. Update HTML branding strings
-  - [ ] 9.1 Update all Jellyseerr branding strings in `src/options/options.html`
-    - Change `<title>` to `"Seerr Request Button - Settings"`
-    - Change `<h1>` to `"Seerr Request Button"`
+  - [ ] 9.1 Update all Seerr branding strings in `src/options/options.html`
+    - Change `<title>` to `"Super Seerr - Settings"`
+    - Change `<h1>` to `"Super Seerr"`
     - Change `<p class="subtitle">` to `"Configure your Seerr server connection"`
     - Change `<label for="serverUrl">` to `"Seerr Server URL"`
     - Change `placeholder` on the server URL input to `"https://seerr.example.com"`
-    - Change the `<small>` API key help text from `"from Jellyseerr Settings"` → `"from Seerr Settings"`
-    - Change the footer `<a>` `href` from `jellyseerr-browser-extension` → `seerr-browser-extension` and update link text accordingly
+    - Change the `<small>` API key help text from `"from Seerr Settings"` → `"from Seerr Settings"`
+    - Change the footer `<a>` `href` from `super-seerr-extension` → `super-seerr-extension` and update link text accordingly
     - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5, 7.6, 7.7_
 
-  - [ ] 9.2 Update all Jellyseerr branding strings in `src/popup/popup.html`
-    - Change `<title>` to `"Seerr Request Button"`
-    - Change the header `<h1>` from `"Jellyseerr"` → `"Seerr"`
-    - Change the `configuredState` `<p>` text from `"The Jellyseerr request button"` → `"The Seerr request button"`
-    - Change the `notConfiguredState` `<p>` text from `"Configure your Jellyseerr server URL"` → `"Configure your Seerr server URL"`
-    - Change the `errorState` default `<p>` text from `"Unable to connect to your Jellyseerr server."` → `"Unable to connect to your Seerr server."`
+  - [ ] 9.2 Update all Seerr branding strings in `src/popup/popup.html`
+    - Change `<title>` to `"Super Seerr"`
+    - Change the header `<h1>` from `"Seerr"` → `"Seerr"`
+    - Change the `configuredState` `<p>` text from `"The Seerr request button"` → `"The Seerr request button"`
+    - Change the `notConfiguredState` `<p>` text from `"Configure your Seerr server URL"` → `"Configure your Seerr server URL"`
+    - Change the `errorState` default `<p>` text from `"Unable to connect to your Seerr server."` → `"Unable to connect to your Seerr server."`
     - _Requirements: 7.8, 7.9, 7.10, 7.11_
 
 - [ ] 10. Update project-level files
   - [ ] 10.1 Update `README.md` with Seerr branding
-    - Replace title from `Jellyseerr Request Button` → `Seerr Request Button`
-    - Replace all user-visible `"Jellyseerr"` references with `"Seerr"`
-    - Update architecture diagram: `JellyseerrClient.js` → `SeerrClient.js`
-    - Update installation instructions: `jellyseerr-browser-extension` → `seerr-browser-extension`
+    - Replace title from `Super Seerr` → `Super Seerr`
+    - Replace all user-visible `"Seerr"` references with `"Seerr"`
+    - Update architecture diagram: `SeerrClient.js` → `SeerrClient.js`
+    - Update installation instructions: `super-seerr-extension` → `super-seerr-extension`
     - _Requirements: 32.1, 32.2, 32.3, 32.4_
 
   - [ ] 10.2 Update `CHANGELOG.md` with Seerr branding
-    - Replace `Jellyseerr Request Button` → `Seerr Request Button` in header
-    - Update `JellyseerrClient` → `SeerrClient` in architecture section
+    - Replace `Super Seerr` → `Super Seerr` in header
+    - Update `SeerrClient` → `SeerrClient` in architecture section
     - _Requirements: 32.5_
 
   - [ ] 10.3 Update `Makefile` NAME variable
-    - Change `NAME = jellyseerr-browser-extension` → `NAME = seerr-browser-extension`
+    - Change `NAME = super-seerr-extension` → `NAME = super-seerr-extension`
     - _Requirements: 32.6_
 
 - [ ] 11. Set up test infrastructure
@@ -238,18 +240,18 @@ Migrate the browser extension from "Jellyseerr" branding to "Seerr" branding thr
   - [ ] 11.3 Create test stub files under `tests/` for smoke tests
     - _Requirements: 33.4, 33.5_
 
-- [ ] 12. Delete `src/shared/JellyseerrClient.js` and verify no stale references
-  - [ ] 12.1 Delete `src/shared/JellyseerrClient.js`
+- [ ] 12. Delete `src/shared/SeerrClient.js` and verify no stale references
+  - [ ] 12.1 Delete `src/shared/SeerrClient.js`
     - Remove the file from the repository
     - _Requirements: 4.1, 4.4_
 
-  - [ ]* 12.2 Write smoke/grep tests to verify no stale Jellyseerr identifiers remain
-    - Assert no source file contains `JellyseerrClient`, `JellyseerrAPI`, `jellyseerrUrl`, `jellyseerrApiKey`, `window.jellyseerr_debug`, or the user-visible string `"Jellyseerr"` (excluding occurrences of `"Jellyfin"`)
+  - [ ]* 12.2 Write smoke/grep tests to verify no stale Seerr identifiers remain
+    - Assert no source file contains `SeerrClient`, `SeerrAPI`, `seerrUrl`, `seerrApiKey`, `window.seerr_debug`, or the user-visible string `"Seerr"` (excluding occurrences of `"Jellyfin"`)
     - Assert `src/shared/SeerrClient.js` exists
-    - Assert `src/shared/JellyseerrClient.js` does NOT exist
+    - Assert `src/shared/SeerrClient.js` does NOT exist
     - Parse and assert `manifest.base.json` fields: `name`, `description`, `action.default_title`, and all 7 content script paths point to `SeerrClient.js`
     - Parse `options.html` and `popup.html` and assert the specific text values per Requirements 7.1–7.11
-    - Assert README.md, CHANGELOG.md, and Makefile contain no stale Jellyseerr-branded text (excluding `"Jellyfin"`)
+    - Assert README.md, CHANGELOG.md, and Makefile contain no stale Seerr-branded text (excluding `"Jellyfin"`)
     - _Requirements: 3.3, 4.4, 5.1–5.5, 7.1–7.11, 10.1, 10.2, 32.1–32.6_
 
 - [ ] 13. Final checkpoint — Ensure all tests pass

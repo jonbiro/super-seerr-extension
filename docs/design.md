@@ -1,8 +1,10 @@
 # Design Document
 
+> Historical implementation plan, retained for technical context with current naming. Some migration examples and completion checklists describe earlier work. See README for current setup, build behavior, and browser limitations.
+
 ## Overview
 
-This document describes the architecture and implementation plan for migrating the Seerr browser extension from "Jellyseerr" branding to "Seerr" branding. The migration is purely cosmetic and structural — no API endpoints, Jellyfin references, or functional logic change. The work is divided into six areas: storage key migration, class/file renaming, manifest updates, UI string updates, debug namespace rename, and comment/log cleanup.
+This document describes the architecture and implementation plan for migrating the Seerr browser extension from "Seerr" branding to "Seerr" branding. The migration is purely cosmetic and structural — no API endpoints, Jellyfin references, or functional logic change. The work is divided into six areas: storage key migration, class/file renaming, manifest updates, UI string updates, debug namespace rename, and comment/log cleanup.
 
 The extension uses no build system. All files are plain JavaScript loaded directly by the browser via `content_scripts` entries in the manifest. This means every rename is a direct file/string edit with no transpilation step.
 
@@ -25,7 +27,7 @@ The extension has the following layers:
                      │ extends
         ┌────────────▼─────────────┐
         │  src/shared/             │
-        │  ├── SeerrClient.js      │  ← renamed from JellyseerrClient.js
+        │  ├── SeerrClient.js      │  ← renamed from SeerrClient.js
         │  ├── BaseIntegration.js  │
         │  ├── MediaExtractor.js   │
         │  └── UIComponents.js     │
@@ -33,7 +35,7 @@ The extension has the following layers:
                      │ chrome.runtime.sendMessage
         ┌────────────▼─────────────┐
         │  src/background/         │
-        │  └── background.js       │  ← class SeerrAPI (was JellyseerrAPI)
+        │  └── background.js       │  ← class SeerrAPI (was SeerrAPI)
         └──────────────────────────┘
         
         ┌──────────────────────────┐
@@ -42,7 +44,7 @@ The extension has the following layers:
         └──────────────────────────┘
 ```
 
-No file other than `JellyseerrClient.js` is renamed. All other changes are string replacements within existing files.
+No file other than `SeerrClient.js` is renamed. All other changes are string replacements within existing files.
 
 ---
 
@@ -50,7 +52,7 @@ No file other than `JellyseerrClient.js` is renamed. All other changes are strin
 
 ### 1. Storage Migration — `background.js`
 
-The current `init()` method in `JellyseerrAPI` (→ `SeerrAPI`) calls `loadSettings()` then registers `chrome.storage.onChanged`. The migration step is inserted between those two actions so the listener only ever fires for new keys.
+The current `init()` method in `SeerrAPI` (→ `SeerrAPI`) calls `loadSettings()` then registers `chrome.storage.onChanged`. The migration step is inserted between those two actions so the listener only ever fires for new keys.
 
 New `init()` sequence:
 
@@ -81,17 +83,17 @@ async init() {
 ```javascript
 async migrateStorage() {
   try {
-    const old = await chrome.storage.sync.get(['jellyseerrUrl', 'jellyseerrApiKey']);
+    const old = await chrome.storage.sync.get(['seerrUrl', 'seerrApiKey']);
     const updates = {};
     const removals = [];
 
-    if (old.jellyseerrUrl) {
-      updates.seerrUrl = old.jellyseerrUrl;
-      removals.push('jellyseerrUrl');
+    if (old.seerrUrl) {
+      updates.seerrUrl = old.seerrUrl;
+      removals.push('seerrUrl');
     }
-    if (old.jellyseerrApiKey) {
-      updates.seerrApiKey = old.jellyseerrApiKey;
-      removals.push('jellyseerrApiKey');
+    if (old.seerrApiKey) {
+      updates.seerrApiKey = old.seerrApiKey;
+      removals.push('seerrApiKey');
     }
 
     if (removals.length > 0) {
@@ -122,21 +124,21 @@ async loadSettings() {
 
 ### 2. Class Rename — `background.js`
 
-- `class JellyseerrAPI` → `class SeerrAPI`
-- `new JellyseerrAPI()` → `new SeerrAPI()`
+- `class SeerrAPI` → `class SeerrAPI`
+- `new SeerrAPI()` → `new SeerrAPI()`
 - File header comment: `// Background service worker for Seerr integration`
 
-All `buttonText` fields that returned `'Request on Jellyseerr'` are updated to `'Request on Seerr'`. The `'Watch on Jellyfin'` string is left unchanged in all `switch` cases.
+All `buttonText` fields that returned `'Request on Seerr'` are updated to `'Request on Seerr'`. The `'Watch on Jellyfin'` string is left unchanged in all `switch` cases.
 
 ### 3. File Rename and Class Rename — `SeerrClient.js`
 
-A new file `src/shared/SeerrClient.js` is created. The old file `src/shared/JellyseerrClient.js` is deleted.
+A new file `src/shared/SeerrClient.js` is created. The old file `src/shared/SeerrClient.js` is deleted.
 
 Changes inside the file:
 
-- `class JellyseerrClient` → `class SeerrClient`
-- `window.JellyseerrClient = JellyseerrClient` → `window.SeerrClient = SeerrClient`
-- `module.exports = JellyseerrClient` → `module.exports = SeerrClient`
+- `class SeerrClient` → `class SeerrClient`
+- `window.SeerrClient = SeerrClient` → `window.SeerrClient = SeerrClient`
+- `module.exports = SeerrClient` → `module.exports = SeerrClient`
 - File header: `// Shared Seerr API Client`
 - Error message: `'Cannot connect to Seerr server. Please check your server URL and API key in extension settings.'`
 
@@ -158,20 +160,20 @@ All three manifest files are updated. `manifest.base.json` carries the user-faci
 
 | Field | Old value | New value |
 |---|---|---|
-| `name` | `"Jellyseerr Request Button"` | `"Seerr Request Button"` |
-| `description` | `"Add movies ... to Jellyseerr ..."` | `"Add movies ... to Seerr ..."` |
-| `action.default_title` | `"Jellyseerr Request Button"` | `"Seerr Request Button"` |
-| Every `content_scripts[].js` entry with `"src/shared/JellyseerrClient.js"` | as above | `"src/shared/SeerrClient.js"` |
+| `name` | `"Super Seerr"` | `"Super Seerr"` |
+| `description` | `"Add movies ... to Seerr ..."` | `"Add movies ... to Seerr ..."` |
+| `action.default_title` | `"Super Seerr"` | `"Super Seerr"` |
+| Every `content_scripts[].js` entry with `"src/shared/SeerrClient.js"` | as above | `"src/shared/SeerrClient.js"` |
 
-There are 7 content script entries, each listing `JellyseerrClient.js` as the first shared script. All 7 are updated to `SeerrClient.js`.
+There are 7 content script entries, each listing `SeerrClient.js` as the first shared script. All 7 are updated to `SeerrClient.js`.
 
 **`manifest.firefox.json` changes:**
 
 | Field | Old value | New value |
 |---|---|---|
-| `browser_specific_settings.gecko.id` | `"jellyseerr-request-button@example.com"` | `"seerr-request-button@example.com"` |
+| `browser_specific_settings.gecko.id` | `"super-seerr@jonbiro.github.io"` | `"super-seerr@jonbiro.github.io"` |
 
-**`manifest.chrome.json`** — no Jellyseerr-specific strings; no changes needed.
+**`manifest.chrome.json`** — no Seerr-specific strings; no changes needed.
 
 ### 5. UI String Updates — `BaseIntegration.js`
 
@@ -204,12 +206,12 @@ const isWatchButton = buttonText === 'Watch on Jellyfin' || currentButton?.class
 ### 6. UI String Updates — `options.js` and `popup.js`
 
 **`options.js`** — storage key names only:
-- `chrome.storage.sync.get(['jellyseerrUrl', 'jellyseerrApiKey'])` → `get(['seerrUrl', 'seerrApiKey'])`
-- `chrome.storage.sync.set({ jellyseerrUrl: ..., jellyseerrApiKey: ... })` → `set({ seerrUrl: ..., seerrApiKey: ... })`
+- `chrome.storage.sync.get(['seerrUrl', 'seerrApiKey'])` → `get(['seerrUrl', 'seerrApiKey'])`
+- `chrome.storage.sync.set({ seerrUrl: ..., seerrApiKey: ... })` → `set({ seerrUrl: ..., seerrApiKey: ... })`
 - Status message: `'Testing connection to Seerr server...'`
 
 **`popup.js`** — storage key names only:
-- `chrome.storage.sync.get(['jellyseerrUrl', 'jellyseerrApiKey'])` → `get(['seerrUrl', 'seerrApiKey'])`
+- `chrome.storage.sync.get(['seerrUrl', 'seerrApiKey'])` → `get(['seerrUrl', 'seerrApiKey'])`
 
 ### 7. UI String Updates — HTML Files
 
@@ -217,27 +219,27 @@ const isWatchButton = buttonText === 'Watch on Jellyfin' || currentButton?.class
 
 | Element | Old text | New text |
 |---|---|---|
-| `<title>` | `Jellyseerr Request Button - Settings` | `Seerr Request Button - Settings` |
-| `<h1>` | `Jellyseerr Request Button` | `Seerr Request Button` |
-| `<p class="subtitle">` | `Configure your Jellyseerr server connection` | `Configure your Seerr server connection` |
-| `<label for="serverUrl">` | `Jellyseerr Server URL` | `Seerr Server URL` |
-| `placeholder` on server URL | `https://jellyseerr.example.com` | `https://seerr.example.com` |
-| `<small>` under API key | `from Jellyseerr Settings` | `from Seerr Settings` |
-| Footer `<a>` text / href | `jellyseerr-browser-extension` | `seerr-browser-extension` |
+| `<title>` | `Super Seerr - Settings` | `Super Seerr - Settings` |
+| `<h1>` | `Super Seerr` | `Super Seerr` |
+| `<p class="subtitle">` | `Configure your Seerr server connection` | `Configure your Seerr server connection` |
+| `<label for="serverUrl">` | `Seerr Server URL` | `Seerr Server URL` |
+| `placeholder` on server URL | `https://seerr.example.com` | `https://seerr.example.com` |
+| `<small>` under API key | `from Seerr Settings` | `from Seerr Settings` |
+| Footer `<a>` text / href | `super-seerr-extension` | `super-seerr-extension` |
 
 **`popup.html`** targeted replacements:
 
 | Element | Old text | New text |
 |---|---|---|
-| `<title>` | `Jellyseerr Request Button` | `Seerr Request Button` |
-| `<h1>` | `Jellyseerr` | `Seerr` |
-| `configuredState` `<p>` | `The Jellyseerr request button` | `The Seerr request button` |
-| `notConfiguredState` `<p>` | `Configure your Jellyseerr server URL` | `Configure your Seerr server URL` |
-| `errorState` `<p>` (default text) | `Unable to connect to your Jellyseerr server.` | `Unable to connect to your Seerr server.` |
+| `<title>` | `Super Seerr` | `Super Seerr` |
+| `<h1>` | `Seerr` | `Seerr` |
+| `configuredState` `<p>` | `The Seerr request button` | `The Seerr request button` |
+| `notConfiguredState` `<p>` | `Configure your Seerr server URL` | `Configure your Seerr server URL` |
+| `errorState` `<p>` (default text) | `Unable to connect to your Seerr server.` | `Unable to connect to your Seerr server.` |
 
 ### 8. Debug Namespace Rename — `BaseIntegration.js`
 
-`setupDebugFunctions()` currently initialises `window.jellyseerr_debug`. The new version:
+`setupDebugFunctions()` currently initialises `window.seerr_debug`. The new version:
 
 ```javascript
 setupDebugFunctions() {
@@ -255,48 +257,48 @@ setupDebugFunctions() {
 }
 ```
 
-`window.jellyseerr_debug` is never created or referenced anywhere.
+`window.seerr_debug` is never created or referenced anywhere.
 
 ### 8.1 CSS Class, ID, and Selector Rename — Requirement 34
 
-All CSS classes, element IDs, and DOM query selectors using the `jellyseerr-` prefix are renamed to `seerr-`. This is a global find-and-replace across 9 files:
+All CSS classes, element IDs, and DOM query selectors using the `seerr-` prefix are renamed to `seerr-`. This is a global find-and-replace across 9 files:
 
 **`UIComponents.js`** — Two change categories:
 
 1. **`getSharedCSS()` method** — All ~60 CSS class names in the stylesheet string:
-   - `.jellyseerr-request-button` → `.seerr-request-button`
-   - `.jellyseerr-button-icon` → `.seerr-button-icon`
-   - `.jellyseerr-notification` → `.seerr-notification`
-   - `.jellyseerr-flyout` → `.seerr-flyout`
-   - `.jellyseerr-tab` → `.seerr-tab`
-   - `.jellyseerr-panel` → `.seerr-panel`
-   - `.jellyseerr-title` → `.seerr-title`
-   - `.jellyseerr-year` → `.seerr-year`
-   - `.jellyseerr-status-section` → `.seerr-status-section`
-   - `.jellyseerr-media-info` → `.seerr-media-info`
-   - `.jellyseerr-status-indicator` → `.seerr-status-indicator`
-   - `.jellyseerr-status-icon` → `.seerr-status-icon`
-   - `.jellyseerr-status-text` → `.seerr-status-text`
-   - `.jellyseerr-action-button` → `.seerr-action-button`
-   - `.jellyseerr-connection-status` → `.seerr-connection-status`
-   - `.jellyseerr-tab-icon` → `.seerr-tab-icon`
-   - `.jellyseerr-tab-text` → `.seerr-tab-text`
-   - `.jellyseerr-icon-path` → `.seerr-icon-path`
-   - And all sub-classes (`.jellyseerr-notification-close`, `.jellyseerr-notification-title`, `.jellyseerr-notification-message`, etc.)
+   - `.seerr-request-button` → `.seerr-request-button`
+   - `.seerr-button-icon` → `.seerr-button-icon`
+   - `.seerr-notification` → `.seerr-notification`
+   - `.seerr-flyout` → `.seerr-flyout`
+   - `.seerr-tab` → `.seerr-tab`
+   - `.seerr-panel` → `.seerr-panel`
+   - `.seerr-title` → `.seerr-title`
+   - `.seerr-year` → `.seerr-year`
+   - `.seerr-status-section` → `.seerr-status-section`
+   - `.seerr-media-info` → `.seerr-media-info`
+   - `.seerr-status-indicator` → `.seerr-status-indicator`
+   - `.seerr-status-icon` → `.seerr-status-icon`
+   - `.seerr-status-text` → `.seerr-status-text`
+   - `.seerr-action-button` → `.seerr-action-button`
+   - `.seerr-connection-status` → `.seerr-connection-status`
+   - `.seerr-tab-icon` → `.seerr-tab-icon`
+   - `.seerr-tab-text` → `.seerr-tab-text`
+   - `.seerr-icon-path` → `.seerr-icon-path`
+   - And all sub-classes (`.seerr-notification-close`, `.seerr-notification-title`, `.seerr-notification-message`, etc.)
 
 2. **DOM element IDs and class references in JS**:
-   - Flyout ID: `jellyseerr-flyout-${siteName}` → `seerr-flyout-${siteName}`
-   - Style ID: `jellyseerr-styles-${siteName}` → `seerr-styles-${siteName}`
+   - Flyout ID: `seerr-flyout-${siteName}` → `seerr-flyout-${siteName}`
+   - Style ID: `seerr-styles-${siteName}` → `seerr-styles-${siteName}`
    - Badge ID: `seerr-in-library-badge` (already named for Seerr in the design)
-   - Watchlist button class: `jellyseerr-watchlist-button` → `seerr-watchlist-button`
-   - Visible text strings: `'Jellyseerr'` (tab text) → `'Seerr'`, `'Connecting to Jellyseerr...'` → `'Connecting to Seerr...'`
+   - Watchlist button class: `seerr-watchlist-button` → `seerr-watchlist-button`
+   - Visible text strings: `'Seerr'` (tab text) → `'Seerr'`, `'Connecting to Seerr...'` → `'Connecting to Seerr...'`
 
-**7 Site Integration Files** — Each file's site-specific CSS override block uses `.jellyseerr-*` class names inherited from the shared stylesheet. These are renamed following the same pattern. The overrides typically modify properties like `background`, `color`, `border-color` for the `.jellyseerr-tab`, `.jellyseerr-action-button`, `.jellyseerr-request-button` classes. All are updated to `seerr-`.
+**7 Site Integration Files** — Each file's site-specific CSS override block uses `.seerr-*` class names inherited from the shared stylesheet. These are renamed following the same pattern. The overrides typically modify properties like `background`, `color`, `border-color` for the `.seerr-tab`, `.seerr-action-button`, `.seerr-request-button` classes. All are updated to `seerr-`.
 
 **`BaseIntegration.js`** — DOM query selectors that reference CSS classes:
-  - `.jellyseerr-media-info` → `.seerr-media-info`
-  - `.jellyseerr-title` → `.seerr-title`
-  - `.jellyseerr-watchlist-button` → `.seerr-watchlist-button`
+  - `.seerr-media-info` → `.seerr-media-info`
+  - `.seerr-title` → `.seerr-title`
+  - `.seerr-watchlist-button` → `.seerr-watchlist-button`
 
 The rename is a mechanical find-and-replace with no logic changes. No CSS variables or theme colors change; only the prefix.
 
@@ -308,7 +310,7 @@ No data model changes. The storage schema changes key names only:
 
 ```
 Before migration:
-  chrome.storage.sync: { jellyseerrUrl: string, jellyseerrApiKey: string }
+  chrome.storage.sync: { seerrUrl: string, seerrApiKey: string }
 
 After migration:
   chrome.storage.sync: { seerrUrl: string, seerrApiKey: string }
@@ -339,20 +341,20 @@ The `SeerrAPI` instance shape in `background.js` remains:
 
 ### 9. README, CHANGELOG, and Makefile Updates — Requirement 32
 
-**README.md** — Full pass replacing Jellyseerr with Seerr:
-- Title: `# Seerr Request Button`
-- All descriptions: replace `"Jellyseerr"` with `"Seerr"`
-- Architecture diagram: `JellyseerrClient.js` → `SeerrClient.js`
-- Installation instructions: `jellyseerr-browser-extension` → `seerr-browser-extension`
-- Setup instructions: replace `"Jellyseerr server"` with `"Seerr server"`
-- Usage instructions: replace `"Jellyseerr"` with `"Seerr"` in all user-visible text
+**README.md** — Full pass replacing Seerr with Seerr:
+- Title: `# Super Seerr`
+- All descriptions: replace `"Seerr"` with `"Seerr"`
+- Architecture diagram: `SeerrClient.js` → `SeerrClient.js`
+- Installation instructions: `super-seerr-extension` → `super-seerr-extension`
+- Setup instructions: replace `"Seerr server"` with `"Seerr server"`
+- Usage instructions: replace `"Seerr"` with `"Seerr"` in all user-visible text
 
 **CHANGELOG.md** — Header line change:
-- `Jellyseerr Request Button` → `Seerr Request Button`
-- Architecture section references: `JellyseerrClient` → `SeerrClient`
+- `Super Seerr` → `Super Seerr`
+- Architecture section references: `SeerrClient` → `SeerrClient`
 
 **Makefile** — Single variable change:
-- `NAME = jellyseerr-browser-extension` → `NAME = seerr-browser-extension`
+- `NAME = super-seerr-extension` → `NAME = super-seerr-extension`
 
 No functional build logic changes.
 
@@ -363,7 +365,7 @@ A minimal test infrastructure is set up at the project root:
 **`package.json`:**
 ```json
 {
-  "name": "seerr-browser-extension",
+  "name": "super-seerr-extension",
   "version": "2.0.0",
   "private": true,
   "scripts": {
@@ -443,7 +445,7 @@ The recommended execution order minimises the time the extension is in a broken 
 12. Update `CHANGELOG.md` — header line
 13. Update `Makefile` — NAME variable
 14. Set up test infrastructure — `package.json`, `tests/` directory
-15. Delete `src/shared/JellyseerrClient.js`
+15. Delete `src/shared/SeerrClient.js`
 16. Verify no remaining references to old identifiers
 
 ---
@@ -454,7 +456,7 @@ The recommended execution order minimises the time the extension is in a broken 
 
 ### Property 1: Storage migration is a round trip
 
-*For any* pair of values `(url, apiKey)` stored under the old keys `jellyseerrUrl` / `jellyseerrApiKey`, running `migrateStorage()` followed by `loadSettings()` SHALL result in `this.baseUrl === url` and `this.apiKey === apiKey`, and the old keys SHALL be absent from `chrome.storage.sync`.
+*For any* pair of values `(url, apiKey)` stored under the old keys `seerrUrl` / `seerrApiKey`, running `migrateStorage()` followed by `loadSettings()` SHALL result in `this.baseUrl === url` and `this.apiKey === apiKey`, and the old keys SHALL be absent from `chrome.storage.sync`.
 
 **Validates: Requirements 1.1, 1.2, 1.4**
 
@@ -466,13 +468,13 @@ The recommended execution order minimises the time the extension is in a broken 
 
 ### Property 3: Button text never references old brand
 
-*For any* media data object passed to the button creation path in `BaseIntegration`, the resulting button element's text content SHALL contain `"Request on Seerr"` and SHALL NOT contain `"Request on Jellyseerr"`.
+*For any* media data object passed to the button creation path in `BaseIntegration`, the resulting button element's text content SHALL contain `"Request on Seerr"` and SHALL NOT contain `"Request on Seerr"`.
 
 **Validates: Requirements 6.1**
 
 ### Property 4: Status response button text references new brand
 
-*For any* media details object passed to `formatMediaStatus()` in `SeerrAPI` where the media is not available for watching (status codes 1, 2, 3, or absent), the returned `buttonText` field SHALL contain `"Seerr"` and SHALL NOT contain `"Jellyseerr"`.
+*For any* media details object passed to `formatMediaStatus()` in `SeerrAPI` where the media is not available for watching (status codes 1, 2, 3, or absent), the returned `buttonText` field SHALL contain `"Seerr"` and SHALL NOT contain `"Seerr"`.
 
 **Validates: Requirements 6.2**
 
@@ -484,7 +486,7 @@ The recommended execution order minimises the time the extension is in a broken 
 
 ### Property 6: Debug namespace does not pollute old key
 
-*For any* `siteName` string, calling `setupDebugFunctions()` SHALL add an entry to `window.seerr_debug[siteName]` and SHALL NOT create or modify `window.jellyseerr_debug`.
+*For any* `siteName` string, calling `setupDebugFunctions()` SHALL add an entry to `window.seerr_debug[siteName]` and SHALL NOT create or modify `window.seerr_debug`.
 
 **Validates: Requirements 8.1, 8.2**
 
@@ -512,10 +514,10 @@ Each property above maps to a property test using a framework like fast-check (J
 
 ### Smoke / Example-Based Tests
 
-- Grep-based checks: no remaining references to `JellyseerrClient`, `JellyseerrAPI`, `jellyseerrUrl`, `jellyseerrApiKey`, `window.jellyseerr_debug`, `"Jellyseerr"` in user-visible strings (excluding `"Jellyfin"` occurrences).
+- Grep-based checks: no remaining references to `SeerrClient`, `SeerrAPI`, `seerrUrl`, `seerrApiKey`, `window.seerr_debug`, `"Seerr"` in user-visible strings (excluding `"Jellyfin"` occurrences).
 - JSON parse `manifest.base.json` and assert `name`, `description`, `action.default_title`, and all content script paths.
 - Parse `options.html` and `popup.html` and assert specific text values per Requirements 7.1–7.11.
-- Assert `src/shared/SeerrClient.js` exists and `src/shared/JellyseerrClient.js` does not exist.
+- Assert `src/shared/SeerrClient.js` exists and `src/shared/SeerrClient.js` does not exist.
 
 ---
 
@@ -582,7 +584,7 @@ async addToWatchlist(data) {
 
 ```javascript
 const watchlistButton = this.el('button', {
-  className: 'jellyseerr-watchlist-button',
+  className: 'seerr-watchlist-button',
   style: 'display:none'
 }, [
   this.svg('M17 12h-5v5h-2v-5H5v-2h5V5h2v5h5v2z', { size: 18 }),
@@ -605,7 +607,7 @@ if (elements.watchlistButton) {
 CSS for the watchlist button is appended to the shared stylesheet (or the site-specific override):
 
 ```css
-.jellyseerr-watchlist-button {
+.seerr-watchlist-button {
   width: 100%;
   padding: 10px 20px;
   background: transparent;
@@ -623,7 +625,7 @@ CSS for the watchlist button is appended to the shared stylesheet (or the site-s
   outline: none;
 }
 
-.jellyseerr-watchlist-button:hover:not(:disabled) {
+.seerr-watchlist-button:hover:not(:disabled) {
   background: rgba(139, 92, 246, 0.1);
   transform: translateY(-1px);
 }
@@ -666,7 +668,7 @@ async handleWatchlistClick() {
 
 ### Overview
 
-A small green pill badge reading "In Library" is injected adjacent to the media title inside the flyout's `jellyseerr-media-info` section whenever `statusData.status === 'available_watch'`. The badge is managed by two new `UIComponents` methods that use a stable element ID to guarantee idempotence.
+A small green pill badge reading "In Library" is injected adjacent to the media title inside the flyout's `seerr-media-info` section whenever `statusData.status === 'available_watch'`. The badge is managed by two new `UIComponents` methods that use a stable element ID to guarantee idempotence.
 
 ### UIComponents — `showInLibraryBadge` / `hideInLibraryBadge`
 
@@ -685,7 +687,7 @@ showInLibraryBadge(mediaInfoElement) {
     this.el('span', { textContent: 'In Library' })
   ]);
 
-  const titleEl = mediaInfoElement.querySelector('.jellyseerr-title');
+  const titleEl = mediaInfoElement.querySelector('.seerr-title');
   if (titleEl) {
     titleEl.appendChild(badge);
   } else {
@@ -725,7 +727,7 @@ Inside `updateStatus()`, after the status data is received and before the flyout
 
 ```javascript
 if (this.uiTheme === 'flyout' && this.uiElements.panel) {
-  const mediaInfoEl = this.uiElements.panel.querySelector('.jellyseerr-media-info');
+  const mediaInfoEl = this.uiElements.panel.querySelector('.seerr-media-info');
   if (mediaInfoEl) {
     if (statusData.status === 'available_watch') {
       this.ui.showInLibraryBadge(mediaInfoEl);
@@ -744,7 +746,7 @@ The same `mediaInfoEl` lookup is used in the error-path branch so the badge is a
 
 ### Overview
 
-Each of the 7 site content scripts has an initialisation guard that checks whether the shared client class is defined before calling the site-specific `initialize*` function. After the class rename from `JellyseerrClient` to `SeerrClient`, these guards must reference the new name or the flyout will silently never initialise.
+Each of the 7 site content scripts has an initialisation guard that checks whether the shared client class is defined before calling the site-specific `initialize*` function. After the class rename from `SeerrClient` to `SeerrClient`, these guards must reference the new name or the flyout will silently never initialise.
 
 ### Pattern
 
@@ -752,7 +754,7 @@ In each file the guard at the bottom follows this structure:
 
 ```javascript
 // BEFORE (broken after rename):
-if (typeof JellyseerrClient !== 'undefined') {
+if (typeof SeerrClient !== 'undefined') {
   initializeIMDBIntegration();  // or equivalent per-site function
 }
 
@@ -774,7 +776,7 @@ if (typeof SeerrClient !== 'undefined') {
 | `src/content/trakt-integration.js` | `initializeTraktIntegration` |
 | `src/content/filmweb-integration.js` | `initializeFilmwebIntegration` |
 
-All 7 files receive a single-string replacement: `typeof JellyseerrClient` → `typeof SeerrClient`. No other logic changes.
+All 7 files receive a single-string replacement: `typeof SeerrClient` → `typeof SeerrClient`. No other logic changes.
 
 ---
 
@@ -794,7 +796,7 @@ All 7 files receive a single-string replacement: `typeof JellyseerrClient` → `
 
 ### Property 10: In-Library badge is shown iff status is available_watch, and is never duplicated
 
-*For any* sequence of `updateStatus()` calls producing an arbitrary mix of status values, the `jellyseerr-media-info` section SHALL contain exactly one `seerr-in-library-badge` element when the most recent status is `'available_watch'`, and zero badge elements for all other status values. Calling `showInLibraryBadge()` multiple times without an intervening `hideInLibraryBadge()` SHALL result in exactly one badge element in the DOM (idempotent insertion).
+*For any* sequence of `updateStatus()` calls producing an arbitrary mix of status values, the `seerr-media-info` section SHALL contain exactly one `seerr-in-library-badge` element when the most recent status is `'available_watch'`, and zero badge elements for all other status values. Calling `showInLibraryBadge()` multiple times without an intervening `hideInLibraryBadge()` SHALL result in exactly one badge element in the DOM (idempotent insertion).
 
 **Validates: Requirements 12.1, 12.2, 12.4**
 

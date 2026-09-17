@@ -1,6 +1,6 @@
 {
-  "name": "seerr-browser-extension",
-  "version": "3.1.0",
+  "name": "super-seerr",
+  "version": "3.1.4",
   "private": true,
   "scripts": {
     "test": "node --test tests/**/*.test.js",
@@ -8,5 +8,14 @@
   },
   "devDependencies": {
     "fast-check": "^3.15.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jonbiro/super-seerr-extension.git"
+  },
+  "homepage": "https://github.com/jonbiro/super-seerr-extension",
+  "bugs": {
+    "url": "https://github.com/jonbiro/super-seerr-extension/issues"
+  },
+  "license": "MIT"
 }

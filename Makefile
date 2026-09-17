@@ -1,4 +1,4 @@
-NAME = seerr-browser-extension
+NAME = super-seerr
 VERSION = $(shell grep '"version":' manifest.base.json | cut -d'"' -f4)
 RELEASE_FILE_CHROME = $(NAME)-v$(VERSION)-chrome.zip
 RELEASE_FILE_FIREFOX = $(NAME)-v$(VERSION)-firefox.xpi
@@ -8,23 +8,27 @@ CHROME_DIST = $(DIST_DIR)/chrome
 FIREFOX_DIST = $(DIST_DIR)/firefox
 
 # Files to include in the extension
-COMMON_FILES = src icons README.md CHANGELOG.md
+COMMON_FILES = src icons README.md CHANGELOG.md LICENSE
 
 # Exclude macOS hidden files and development/git folders for zip
 EXCLUDES = -x "*.DS_Store" -x "__MACOSX" -x "*.git*" -x ".idea*" -x "screenshots/*" -x ".github*"
 
-.PHONY: all clean build-chrome build-firefox release-chrome release-firefox release
+.PHONY: build build-version clean clean-chrome clean-firefox build-chrome build-firefox release-chrome release-firefox release dev-chrome dev-firefox
 
 build: build-chrome build-firefox
 
-build-chrome: clean-chrome
+# Shared prerequisite runs once, even for parallel multi-browser builds.
+build-version:
+	@node scripts/bump-version.cjs
+
+build-chrome: build-version clean-chrome
 	@echo "Building Chrome extension (unpacked)..."
 	@mkdir -p $(CHROME_DIST)
 	@cp -R $(COMMON_FILES) $(CHROME_DIST)/
 	@node -e "const base = require('./manifest.base.json'); const chrome = require('./manifest.chrome.json'); const merged = {...base, ...chrome}; if (chrome.background) merged.background = chrome.background; console.log(JSON.stringify(merged, null, 2));" > $(CHROME_DIST)/manifest.json
 	@echo "Chrome build completed in $(CHROME_DIST)"
 
-build-firefox: clean-firefox
+build-firefox: build-version clean-firefox
 	@echo "Building Firefox extension (unpacked)..."
 	@mkdir -p $(FIREFOX_DIST)
 	@cp -R $(COMMON_FILES) $(FIREFOX_DIST)/

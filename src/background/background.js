@@ -1,23 +1,26 @@
 // Background service worker for Seerr integration
+import '../shared/RatingsConfig.js';
+const RatingsConfig = globalThis.RatingsConfig;
 
 class SeerrAPI {
   constructor() {
     this.baseUrl = null;
     this.apiKey = null;
+    this.rtCache = new Map();
   }
 
   async migrateStorage() {
     try {
-      const old = await chrome.storage.sync.get(['jellyseerrUrl', 'jellyseerrApiKey']);
+      const old = await chrome.storage.sync.get(['jellyseerrUrl', 'jellyseerrApiKey', 'seerrUrl', 'seerrApiKey']);
       const updates = {};
       const removals = [];
 
       if (old.jellyseerrUrl) {
-        updates.seerrUrl = old.jellyseerrUrl;
+        if (old.seerrUrl === undefined) updates.seerrUrl = old.jellyseerrUrl;
         removals.push('jellyseerrUrl');
       }
       if (old.jellyseerrApiKey) {
-        updates.seerrApiKey = old.jellyseerrApiKey;
+        if (old.seerrApiKey === undefined) updates.seerrApiKey = old.jellyseerrApiKey;
         removals.push('jellyseerrApiKey');
       }
 
@@ -100,6 +103,11 @@ class SeerrAPI {
         case 'addToWatchlist':
           const watchlistResult = await this.addToWatchlist(request.data);
           sendResponse({ success: true, data: watchlistResult });
+          break;
+
+        case 'getRottenTomatoesRatings':
+          const rtResult = await this.getRottenTomatoesRatings(request.data || {});
+          sendResponse({ success: true, data: rtResult });
           break;
 
         default:
@@ -765,6 +773,170 @@ class SeerrAPI {
     return null;
   }
 
+  normalizeTitleForMatch(title = '') {
+    return String(title)
+      .toLowerCase()
+      .replace(/&amp;/g, '&')
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\b(the|a|an)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  decodeHtml(text = '') {
+    return String(text)
+      .replace(/&amp;/g, '&')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
+  }
+
+  parseRtSearchResults(html, mediaType) {
+    const rows = [];
+    const rowRe = /<search-page-media-row\b([\s\S]*?)<\/search-page-media-row>/gi;
+    let match;
+
+    while ((match = rowRe.exec(html))) {
+      const row = match[0];
+      const attrs = match[1] || '';
+      const hrefMatch = row.match(/<a[^>]+data-qa="info-name"[^>]+href="([^"]+)"/i) ||
+        row.match(/<a[^>]+href="([^"]+)"[^>]+data-qa="info-name"/i);
+      const titleMatch = row.match(/<a[^>]+data-qa="info-name"[^>]*>([\s\S]*?)<\/a>/i);
+      const yearMatch = attrs.match(/(?:release-year|start-year)="(\d{4})"/i);
+      const criticsMatch = attrs.match(/tomatometer-score="(\d{1,3})"/i);
+
+      if (!hrefMatch || !titleMatch) continue;
+
+      const href = this.decodeHtml(hrefMatch[1]);
+      const resultType = href.includes('/tv/') ? 'tv' : 'movie';
+      if (mediaType && resultType !== mediaType) continue;
+
+      rows.push({
+        href,
+        title: this.decodeHtml(titleMatch[1].replace(/<[^>]*>/g, '')).trim(),
+        year: yearMatch ? parseInt(yearMatch[1], 10) : null,
+        mediaType: resultType,
+        rtCriticsScore: criticsMatch ? this.parseRtPercent(criticsMatch[1]) : null
+      });
+    }
+
+    return rows;
+  }
+
+  scoreRtSearchResult(result, requested) {
+    const requestedTitle = this.normalizeTitleForMatch(requested.title);
+    const resultTitle = this.normalizeTitleForMatch(result.title);
+    if (!requestedTitle || !resultTitle) return 0;
+
+    let score = 0;
+    if (requestedTitle === resultTitle) {
+      score = 0.82;
+    } else if (requestedTitle.includes(resultTitle) || resultTitle.includes(requestedTitle)) {
+      score = 0.68;
+    } else {
+      const requestedWords = new Set(requestedTitle.split(' ').filter(Boolean));
+      const resultWords = new Set(resultTitle.split(' ').filter(Boolean));
+      const overlap = [...requestedWords].filter(word => resultWords.has(word)).length;
+      score = overlap / Math.max(requestedWords.size, resultWords.size) * 0.7;
+    }
+
+    if (requested.year && result.year) {
+      const delta = Math.abs(requested.year - result.year);
+      if (delta === 0) score += 0.15;
+      else if (delta <= 1) score += 0.08;
+      else if (delta >= 3) score -= 0.25;
+    }
+
+    return Math.max(0, Math.min(1, score));
+  }
+
+  parseRtScorecard(html) {
+    const scriptMatch = html.match(/<script[^>]+id="media-scorecard-json"[^>]*>([\s\S]*?)<\/script>/i);
+    if (!scriptMatch) return {};
+
+    try {
+      const data = JSON.parse(scriptMatch[1].trim());
+      return {
+        rtCriticsScore: this.parseRtPercent(data.criticsScore?.score),
+        rtAudienceScore: this.parseRtPercent(data.audienceScore?.score)
+      };
+    } catch (error) {
+      console.warn('Could not parse Rotten Tomatoes scorecard:', error);
+      return {};
+    }
+  }
+
+  parseRtPercent(value) {
+    if (value === null || value === undefined || String(value).trim() === '') return null;
+    const score = Number(String(value).replace(/%$/, ''));
+    return Number.isFinite(score) && score >= 0 && score <= 100 ? Math.round(score) : null;
+  }
+
+  async fetchRtHtml(url) {
+    const target = new URL(url, 'https://www.rottentomatoes.com');
+    if (target.origin !== 'https://www.rottentomatoes.com' || target.username || target.password) {
+      throw new Error('Rotten Tomatoes URL is outside the allowed origin');
+    }
+    const response = await fetch(target.href, {
+      redirect: 'error',
+      credentials: 'omit',
+      headers: {
+        Accept: 'text/html,application/xhtml+xml'
+      }
+    });
+    if (!response.ok) {
+      throw new Error(`Rotten Tomatoes returned HTTP ${response.status}`);
+    }
+    return response.text();
+  }
+
+  async getRottenTomatoesRatings({ title, year = null, mediaType = 'movie' }) {
+    if (!title) return null;
+
+    const cacheKey = `${mediaType}:${title}:${year || ''}`;
+    const cached = this.rtCache.get(cacheKey);
+    if (cached && Date.now() < cached.expiresAt) return cached.value;
+
+    const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`;
+    const searchHtml = await this.fetchRtHtml(searchUrl);
+    const candidates = this.parseRtSearchResults(searchHtml, mediaType)
+      .map(result => ({
+        ...result,
+        confidence: this.scoreRtSearchResult(result, { title, year })
+      }))
+      .sort((a, b) => b.confidence - a.confidence);
+
+    const best = candidates[0];
+    if (!best || best.confidence < RatingsConfig.confidenceThreshold) {
+      const empty = null;
+      this.rtCache.set(cacheKey, { value: empty, expiresAt: Date.now() + RatingsConfig.rtNegativeCacheTtlMs });
+      return empty;
+    }
+
+    let detailScores = {};
+    try {
+      detailScores = this.parseRtScorecard(await this.fetchRtHtml(best.href));
+    } catch (error) {
+      console.warn('Could not fetch Rotten Tomatoes detail page:', error);
+    }
+
+    const result = {
+      rtCriticsScore: detailScores.rtCriticsScore ?? best.rtCriticsScore ?? null,
+      rtAudienceScore: detailScores.rtAudienceScore ?? null,
+      confidence: best.confidence,
+      source: 'rotten-tomatoes',
+      url: best.href,
+      matchedTitle: best.title,
+      matchedYear: best.year
+    };
+
+    this.rtCache.set(cacheKey, { value: result, expiresAt: Date.now() + RatingsConfig.rtCacheTtlMs });
+    return result;
+  }
+
   async debugAPI(tmdbId, mediaType) {
     console.log(`🛠️ [Background] Debugging API endpoints for TMDB ID ${tmdbId} (${mediaType})`);
     const results = {};
@@ -894,7 +1066,8 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  seerrAPI.handleMessage(request, sender, sendResponse);
+  settingsReady.then(() => seerrAPI.handleMessage(request, sender, sendResponse))
+    .catch(error => sendResponse({ success: false, error: error.message }));
   return true; // Keep message channel open for async responses
 });
 
@@ -905,7 +1078,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 });
 
 // Async init — runs migration and loads settings after listeners are registered
-(async () => {
+const settingsReady = (async () => {
   await seerrAPI.loadSettings();
   await seerrAPI.migrateStorage();
   await seerrAPI.loadSettings();

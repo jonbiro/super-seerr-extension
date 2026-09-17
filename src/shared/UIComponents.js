@@ -136,7 +136,7 @@ class UIComponents {
         className: 'seerr-tab-icon seerr-connection-status checking',
         pathClass: 'seerr-icon-path'
       }),
-      this.el('span', { className: 'seerr-tab-text', textContent: 'Seerr' })
+      this.el('span', { className: 'seerr-tab-text', textContent: 'Super Seerr' })
     ]);
 
     const panel = this.el('div', { className: 'seerr-panel' });

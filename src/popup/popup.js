@@ -28,13 +28,19 @@ class PopupManager {
       // Load settings from storage
       const settings = await chrome.storage.sync.get(['seerrUrl', 'seerrApiKey']);
       
-      if (!settings.seerrUrl || !settings.seerrApiKey) {
+      if (!settings.seerrUrl) {
         this.showNotConfiguredState();
         return;
       }
 
       // Update server URL display
       this.serverUrlSpan.textContent = this.formatServerUrl(settings.seerrUrl);
+      if (!settings.seerrApiKey) {
+        this.showConfiguredState();
+        this.testConnectionButton.classList.add('hidden');
+        this.setStatus('connected', 'Ratings-only mode');
+        return;
+      }
       
       // Test connection
       this.setStatus('loading', 'Checking connection...');
@@ -70,7 +76,7 @@ class PopupManager {
   showNotConfiguredState() {
     this.hideAllStates();
     this.notConfiguredState.classList.remove('hidden');
-    this.setStatus('connected', 'Ratings overlay active');
+    this.setStatus('warning', 'Set your Seerr server URL');
   }
 
   showErrorState(message) {

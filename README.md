@@ -1,11 +1,11 @@
-# Seerr Request Button
+# Super Seerr
 
 A browser extension that seamlessly integrates with popular movie and TV sites, allowing you to request content directly to your Seerr server. Adds Rotten Tomatoes context on Seerr browse cards and detail pages so you can evaluate titles without leaving Seerr.
 
-![Version](https://img.shields.io/badge/version-3.0.0-blue)
+![Version](https://img.shields.io/badge/version-3.1.4-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Chrome](https://img.shields.io/badge/Chrome-Compatible-brightgreen)
-![Firefox](https://img.shields.io/badge/Firefox-Compatible-brightgreen)
+![Firefox](https://img.shields.io/badge/Firefox-Runtime_validation_pending-orange)
 
 ## Supported Sites
 
@@ -43,10 +43,12 @@ A browser extension that seamlessly integrates with popular movie and TV sites, 
 2. **Extract** the downloaded ZIP file to a folder on your computer
 3. Open Chrome and navigate to `chrome://extensions/`
 4. Enable "Developer mode" in the top right corner
-5. Click "Load unpacked" and select the extracted `seerr-browser-extension` folder
+5. Click "Load unpacked" and select the extracted extension folder
 6. The extension will be installed and ready to configure
 
 ### Firefox
+The current Firefox manifest retains the requested `background.service_worker` configuration. Mozilla currently documents that Firefox does not support this entry; the generated package is not a verified working Firefox add-on. Firefox needs a Manifest V3 background module script configuration before runtime validation. See [Mozilla's background documentation](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background).
+
 1. **Download** the latest release from the repository
 2. **Extract** the downloaded ZIP file to a folder on your computer
 3. Open Firefox and navigate to `about:debugging`
@@ -59,9 +61,11 @@ A browser extension that seamlessly integrates with popular movie and TV sites, 
 1. Click the extension icon in your browser toolbar
 2. Click "Settings" to open the options page
 3. Enter your Seerr server URL (e.g., `https://seerr.yourdomain.com`)
-4. Enter your Seerr API key (found in Settings → General → API Key)
-5. Click "Test Connection" to verify your settings
+4. Optionally enter your Seerr API key (found in Settings → General → API Key) to enable requests and watchlist actions
+5. If you supplied an API key, click "Test Connection" to verify your settings
 6. Click "Save Settings"
+
+With only a server URL, the extension runs in ratings-only mode and shows a purple **RT** toolbar badge. With a URL and API key, it shows a green **ON** badge. Ratings use Rotten Tomatoes lookups and your logged-in Seerr page session. The overlay only activates on the configured server. Missing ratings never prevent bulk requests for titles with a valid media identity.
 
 ## Usage
 
@@ -125,11 +129,13 @@ make release        # Create .zip / .xpi for distribution
 
 The build process merges `manifest.base.json` with platform-specific overrides (`manifest.chrome.json` / `manifest.firefox.json`) to produce the final manifest for each browser.
 
+Every build invocation automatically increments the patch version in `manifest.base.json` and `package.json`, and updates the README version badge and local package lock when present. A combined build or release increments once and uses the same version for Chrome and Firefox, including parallel builds. Single-browser and development builds also increment; tests and cleanup do not. Release files use `super-seerr-v<version>-chrome.zip` and `super-seerr-v<version>-firefox.xpi`. A failed build may consume a version number.
+
 ### Test
 
 ```bash
 npm install         # Install test dependencies (fast-check)
-npm test            # Run all 33 tests
+npm test            # Run the complete test suite
 npm run test:watch  # Watch mode
 ```
 
@@ -160,7 +166,9 @@ make build-chrome
 
 ## Support
 
-For issues or feature requests, please open an issue on the repository.
+For issues or feature requests, [open an issue](https://github.com/jonbiro/super-seerr-extension/issues).
+
+Source: [jonbiro/super-seerr-extension](https://github.com/jonbiro/super-seerr-extension).
 
 ## License
 
