@@ -354,3 +354,7 @@
     animation: none !important;
   }
 }
+
+.seerr-cache-age { opacity: 0.7; font-size: 12px; }
+.seerr-refresh-scores { cursor: pointer; }
+.seerr-refresh-scores:disabled { opacity: 0.6; cursor: default; }

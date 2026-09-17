@@ -87,10 +87,16 @@
         // Entries belong to the server they were read from.
         if (stored.server !== configuredServer?.href) return;
         if (!stored.entries || typeof stored.entries !== 'object') return;
-        for (const [key, bundle] of Object.entries(stored.entries)) {
+        for (const [key, entry] of Object.entries(stored.entries)) {
           // A live entry from this session is fresher than anything stored.
-          if (ratingsCache.has(key) || !bundle || typeof bundle !== 'object') continue;
-          ratingsCache.set(key, { bundle: Model.createRatingsBundle(bundle) });
+          if (ratingsCache.has(key) || !entry || typeof entry !== 'object') continue;
+          // Older builds persisted the bare bundle with no wrapper.
+          const bundle = entry.bundle ?? entry;
+          if (!bundle || typeof bundle !== 'object') continue;
+          ratingsCache.set(key, {
+            bundle: Model.createRatingsBundle(bundle),
+            cachedAt: typeof entry.cachedAt === 'number' ? entry.cachedAt : null
+          });
         }
       } catch (error) {
         log('Could not read the stored ratings cache:', error);
@@ -118,7 +124,7 @@
           // Storing "found nothing" without an expiry would mean never looking
           // again, so only bundles carrying a score are kept.
           if (!Model.hasAnyScore(value.bundle)) continue;
-          entries[key] = value.bundle;
+          entries[key] = { bundle: value.bundle, cachedAt: value.cachedAt ?? null };
         }
         await chrome.storage.local.set({ [PERSISTED_RATINGS_KEY]: { server: configuredServer.href, entries } });
       } catch (error) {
@@ -573,13 +579,15 @@
     return promise;
   }
 
-  async function fetchRottenTomatoesRatings(title, year, mediaType) {
+  async function fetchRottenTomatoesRatings(title, year, mediaType, refresh = false) {
     if (!title) return null;
 
     try {
       const response = await chrome.runtime.sendMessage({
         action: 'getRottenTomatoesRatings',
-        data: { title, year, mediaType }
+        // The worker holds RT for 24 hours, and RT is the score most likely to
+        // have moved, so a refresh has to reach past that cache too.
+        data: { title, year, mediaType, refresh }
       });
       if (!response?.success || !response.data) return null;
 
@@ -596,7 +604,7 @@
     }
   }
 
-  async function resolveRatings(tmdbId, title, year, mediaType = null) {
+  async function resolveRatings(tmdbId, title, year, mediaType = null, options = {}) {
     log(`Resolving ratings for TMDB ${tmdbId}`);
     const native = extractSeerrNativeRatings(tmdbId, mediaType);
     await indexCurrentListRatings();
@@ -607,7 +615,7 @@
     let bundle = mergeBundles(native, pageBundle);
 
     if (!bundle || bundle.rtCriticsScore === null || bundle.rtAudienceScore === null) {
-      const rtBundle = await fetchRottenTomatoesRatings(lookupTitle, lookupYear, mediaType);
+      const rtBundle = await fetchRottenTomatoesRatings(lookupTitle, lookupYear, mediaType, options.refresh === true);
       if (rtBundle && rtBundle.confidence >= Config.confidenceThreshold) {
         bundle = mergeBundles(bundle, rtBundle);
       }
@@ -619,11 +627,84 @@
     return bundle || Model.createRatingsBundle({ lastUpdated: Date.now() });
   }
 
-  async function getRatings(tmdbId, title, year, mediaType = null) {
+  function ratingsCacheKey(tmdbId, title = '', year = null, mediaType = null) {
+    return `${mediaType || 'unknown'}:${tmdbId || `${title}:${year || ''}`}`;
+  }
+
+  // Drop the given titles so the next lookup resolves them again. Scoped to
+  // what the caller names, so refreshing a grid leaves the rest cached.
+  function forgetRatings(titles) {
+    let forgotten = 0;
+    for (const { tmdbId, title = '', year = null, mediaType = null } of titles) {
+      if (ratingsCache.delete(ratingsCacheKey(tmdbId, title, year, mediaType))) forgotten++;
+      // The page-level index would otherwise re-seed the same stale scores.
+      pageRatingsByTmdbId.delete(ratingKey(tmdbId, mediaType));
+      embeddedRatingsByTmdbId.delete(ratingKey(tmdbId, mediaType));
+    }
+    if (forgotten > 0) schedulePersistedRatingsFlush();
+    return forgotten;
+  }
+
+  // When the oldest of these titles was resolved, or null if none is recorded.
+  function ratingsCacheAge(titles) {
+    let oldest = null;
+    for (const { tmdbId, title = '', year = null, mediaType = null } of titles) {
+      const entry = ratingsCache.get(ratingsCacheKey(tmdbId, title, year, mediaType));
+      if (!entry || typeof entry.cachedAt !== 'number') continue;
+      if (oldest === null || entry.cachedAt < oldest) oldest = entry.cachedAt;
+    }
+    return oldest;
+  }
+
+  // The titles currently on screen, which is what a refresh acts on.
+  function loadedTitles(grid) {
+    return getMediaCards(grid)
+      .map(card => getCardMediaInfo(card))
+      .filter(info => info && info.tmdbId);
+  }
+
+  function describeCacheAge(cachedAt) {
+    if (cachedAt === null) return '';
+    const days = Math.floor((Date.now() - cachedAt) / 86400000);
+    if (days < 1) return 'cached today';
+    if (days === 1) return 'cached yesterday';
+    return `cached ${days} days ago`;
+  }
+
+  // Forget the loaded titles and resolve them again, reaching past the
+  // worker's Rotten Tomatoes cache as well.
+  async function refreshLoadedScores(grid) {
+    const titles = loadedTitles(grid);
+    if (titles.length === 0) return 0;
+
+    forgetRatings(titles);
+    // The page-level fetch is memoised per endpoint; drop it so the list
+    // ratings are re-read rather than replayed from this page load.
+    pageRatingsFetches.clear();
+
+    const cards = getMediaCards(grid);
+    cards.forEach(card => {
+      card.querySelectorAll('[data-seerr-overlay="true"][class*="card-badge"]').forEach(badge => badge.remove());
+      delete card.__seerrRatings;
+      card.__seerrBadgesResolving = false;
+      card.__seerrBadgesCleared = false;
+    });
+
+    const generation = routeGeneration;
+    await Promise.all(titles.map(info =>
+      getRatings(info.tmdbId, info.title, null, info.mediaType, { refresh: true }).catch(() => null)
+    ));
+    if (generation !== routeGeneration) return 0;
+
+    injectCardBadges();
+    return titles.length;
+  }
+
+  async function getRatings(tmdbId, title, year, mediaType = null, options = {}) {
     await loadPersistedRatings();
 
-    const key = `${mediaType || 'unknown'}:${tmdbId || `${title}:${year || ''}`}`;
-    const cached = ratingsCache.get(key);
+    const key = ratingsCacheKey(tmdbId, title, year, mediaType);
+    const cached = options.refresh === true ? null : ratingsCache.get(key);
     if (cached) {
       log(`Cache hit for ${key}`);
       // Re-insert to mark it most recently used, so the cap evicts by use
@@ -640,7 +721,7 @@
       return ratingsCache.get(pendingKey);
     }
 
-    const promise = resolveRatings(tmdbId, title, year, mediaType);
+    const promise = resolveRatings(tmdbId, title, year, mediaType, options);
     ratingsCache.set(pendingKey, promise);
 
     try {
@@ -651,7 +732,7 @@
           if (lru === undefined) break;
           ratingsCache.delete(lru);
         }
-        ratingsCache.set(key, { bundle });
+        ratingsCache.set(key, { bundle, cachedAt: Date.now() });
         schedulePersistedRatingsFlush();
       }
       return bundle;
@@ -1137,6 +1218,7 @@
 
     bar.innerHTML = `
       <span class="seerr-score-coverage">${rated}/${total} scored</span>
+      <span class="seerr-cache-age" title="Cached scores never expire; refresh to refetch the titles on this page"></span>
       <label for="seerr-sort-order">Sort titles</label>
       <select id="seerr-sort-order" class="seerr-sort-select">
         <option value="default">Original order</option>
@@ -1160,6 +1242,7 @@
       <label>IMDb ≥</label>
       <input type="number" class="seerr-min-imdb" min="0" max="10" step="0.5" value="0" style="width:55px">
       <button class="seerr-reset-sort">Reset</button>
+      <button class="seerr-refresh-scores" title="Refetch scores for the titles loaded on this page">Refresh scores</button>
       ${FEATURE_FLAGS.bulkActions && apiConfigured ? '<button class="seerr-toggle-select" data-seerr-overlay="true">Select titles</button>' : ''}
     `;
 
@@ -1171,6 +1254,13 @@
       if (!coverageEl) return;
       const current = countCardsWithRatings(getMediaCards(grid));
       coverageEl.textContent = `${current.rated}/${current.total} scored`;
+      updateCacheAge();
+    }
+
+    function updateCacheAge() {
+      const ageEl = bar.querySelector('.seerr-cache-age');
+      if (!ageEl) return;
+      ageEl.textContent = describeCacheAge(ratingsCacheAge(loadedTitles(grid)));
     }
 
     // Wire toggle button immediately (BUG 5 fix)
@@ -1217,6 +1307,22 @@
 
     // Store original index on each card
     ensureCardIndexes(cards);
+
+    // ── Refresh ──
+    bar.querySelector('.seerr-refresh-scores').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      if (button.disabled) return;
+      const label = button.textContent;
+      button.disabled = true;
+      button.textContent = 'Refreshing...';
+      try {
+        await refreshLoadedScores(grid);
+      } finally {
+        button.disabled = false;
+        button.textContent = label;
+        updateCoverage();
+      }
+    });
 
     // ── Filter logic ──
     function applyFilters() {

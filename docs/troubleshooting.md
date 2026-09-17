@@ -44,7 +44,7 @@ The site integrations and the Seerr overlay use different permissions. Open Sett
 
 ## A rating looks wrong or out of date
 
-Cached ratings do not expire, so a score that has changed upstream keeps its stored value. Use **Settings → Troubleshooting → Clear ratings cache**; open Seerr tabs pick this up without a reload.
+Cached ratings do not expire, so a score that has changed upstream keeps its stored value. The grid controls show when the loaded titles were cached; **Refresh scores** refetches just those. To drop everything, use **Settings → Troubleshooting → Clear ratings cache**, which open Seerr tabs pick up without a reload.
 
 ## The API key is missing on another device
 

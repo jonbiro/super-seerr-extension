@@ -1083,8 +1083,11 @@ class SeerrAPI {
   async getRottenTomatoesRatings(data) {
     const title = typeof data?.title === 'string' ? data.title.trim() : '';
     if (!title) return null;
-    const normalized = { ...data, title, mediaType: data.mediaType || 'movie' };
-    const key = `${normalized.mediaType}:${title}:${normalized.year || ''}`;
+    const refresh = data?.refresh === true;
+    const normalized = { ...data, title, mediaType: data.mediaType || 'movie', refresh };
+    // A refresh coalesces with other refreshes but must not join an ordinary
+    // lookup already in flight, which would hand back the stale value.
+    const key = `${refresh ? 'refresh:' : ''}${normalized.mediaType}:${title}:${normalized.year || ''}`;
     if (this.rtPending.has(key)) return this.rtPending.get(key);
     const pending = this.resolveRottenTomatoesRatings(normalized);
     this.rtPending.set(key, pending);
@@ -1092,12 +1095,15 @@ class SeerrAPI {
     finally { this.rtPending.delete(key); }
   }
 
-  async resolveRottenTomatoesRatings({ title, year = null, mediaType = 'movie' }) {
+  async resolveRottenTomatoesRatings({ title, year = null, mediaType = 'movie', refresh = false }) {
     if (!title) return null;
 
     await this.loadRtCache();
 
     const cacheKey = `${mediaType}:${title}:${year || ''}`;
+    // Scores move as reviews arrive, so a refresh discards what we hold and
+    // refetches; the new value then becomes the cached one.
+    if (refresh) this.rtCache.delete(cacheKey);
     const cached = this.rtCache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) return cached.value;
 

@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your Seerr server.
 
-![Version](https://img.shields.io/badge/version-3.1.17-blue)
+![Version](https://img.shields.io/badge/version-3.1.18-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -42,7 +42,7 @@ On a supported Seerr grid, choose **Sort titles → RT critics: highest first** 
 
 Sorting and filtering apply to loaded cards in the grid associated with the controls, not to the entire server catalogue or pages that have not loaded. Separate carousels may not share one control bar. DOM layout changes in Seerr can affect card detection.
 
-Ratings you have already seen are cached on your device, so returning to Seerr does not look them up again. They do not expire: **Settings → Troubleshooting → Clear ratings cache** forces a fresh lookup, and takes effect in open Seerr tabs without a reload. Changing your server URL discards them automatically.
+Ratings you have already seen are cached on your device, so returning to Seerr does not look them up again. They do not expire. Scores move as reviews arrive, so the grid controls show when the loaded titles were cached and offer **Refresh scores**, which refetches just those titles. For everything at once, **Settings → Troubleshooting → Clear ratings cache** forces a fresh lookup, and takes effect in open Seerr tabs without a reload. Changing your server URL discards them automatically.
 
 Scores are partial data: missing values stay absent. RT matches below the confidence threshold are hidden; approximate accepted matches have a `~` prefix. Summary labels are heuristics, not official RT certification. External title matching can still be wrong, especially for remakes or missing years.
 

@@ -199,3 +199,30 @@ test('poster-only Seerr cards resolve by exact poster identity instead of API or
   assert.equal(doc.querySelector('#grid > li > article').dataset.id, '2');
   assert.equal(doc.querySelector('[data-id="3"] .seerr-card-badge'), null);
 });
+
+test('the refresh button refetches the loaded titles and reports cache age', async t => {
+  const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  const doc = fixture.window.document;
+
+  const before = fixture.messages.filter(m => m.action === 'getRottenTomatoesRatings').length;
+  assert.ok(before > 0, 'the page should have resolved its cards on load');
+
+  const button = doc.querySelector('.seerr-refresh-scores');
+  assert.ok(button, 'the filter bar should offer a refresh');
+  button.click();
+  await settle();
+
+  const refreshes = fixture.messages.filter(m => m.action === 'getRottenTomatoesRatings' && m.data.refresh === true);
+  assert.ok(refreshes.length > 0, 'refreshing must ask the worker to bypass its own cache');
+  assert.ok(doc.querySelectorAll('.seerr-card-badge').length > 0, 'badges should be rebuilt, not left removed');
+  assert.ok(doc.querySelector('.seerr-cache-age'), 'the bar should carry a cache-age label');
+});
+
+test('an ordinary card lookup does not ask the worker to bypass its cache', async t => {
+  const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  const lookups = fixture.messages.filter(m => m.action === 'getRottenTomatoesRatings');
+  assert.ok(lookups.length > 0);
+  assert.ok(lookups.every(m => m.data.refresh !== true), 'only an explicit refresh may bypass the cache');
+});

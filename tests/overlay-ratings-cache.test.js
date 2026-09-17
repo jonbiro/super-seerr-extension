@@ -35,7 +35,9 @@ test('a resolved bundle is written to local storage', async () => {
   const stored = overlay.localStore[CACHE_KEY];
   assert.ok(stored, 'the cache should be persisted');
   assert.equal(stored.server, SERVER, 'entries record which server they came from');
-  assert.equal(stored.entries['movie:550'].rtCriticsScore, 80);
+  // Entries wrap the bundle so they can record when it was resolved.
+  assert.equal(stored.entries['movie:550'].bundle.rtCriticsScore, 80);
+  assert.equal(typeof stored.entries['movie:550'].cachedAt, 'number');
 });
 
 test('a reloaded page serves the stored rating without resolving again', async () => {
@@ -82,7 +84,7 @@ test('a partial bundle is still persisted', async () => {
   await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
   await overlay.flushPersistedRatings();
 
-  assert.equal(overlay.localStore[CACHE_KEY].entries['movie:550'].rtCriticsScore, 80);
+  assert.equal(overlay.localStore[CACHE_KEY].entries['movie:550'].bundle.rtCriticsScore, 80);
 });
 
 test('the cache stays within its entry cap', async () => {
@@ -151,7 +153,7 @@ test('a corrupt stored cache degrades to a cold start', async () => {
 });
 
 test('a live in-memory entry wins over a stored one', async () => {
-  const stored = { [CACHE_KEY]: { server: SERVER, entries: { 'movie:550': { ...scored(550), rtCriticsScore: 11 } } } };
+  const stored = { [CACHE_KEY]: { server: SERVER, entries: { 'movie:550': { bundle: { ...scored(550), rtCriticsScore: 11 }, cachedAt: Date.now() } } } };
   const overlay = loadOverlay({ settings, local: stored });
   withResolver(overlay, scored);
 
@@ -175,5 +177,5 @@ test('storing a bundle schedules the write on its own', async () => {
   await new Promise(resolve => setImmediate(resolve));
 
   assert.ok(overlay.localStore[CACHE_KEY], 'the debounced write must fire without being called by hand');
-  assert.equal(overlay.localStore[CACHE_KEY].entries['movie:550'].rtCriticsScore, 80);
+  assert.equal(overlay.localStore[CACHE_KEY].entries['movie:550'].bundle.rtCriticsScore, 80);
 });
