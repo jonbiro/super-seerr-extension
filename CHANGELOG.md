@@ -6,7 +6,9 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
-## [3.1.49]
+## [3.1.50]
+
+- Fixed “Add to Watchlist”, which never worked. Seerr validates the request with a schema requiring `tmdbId` and `mediaType`; the extension sent `mediaId`, a field that schema has no place for, so every add was rejected. The title is now sent too, as Seerr's own front end does. The test that covered this asserted the broken shape against a body builder written inside the test, so it could never have caught it; it now drives the worker and checks what is actually sent.
 
 - Titles that nothing has rated are now remembered as such for a week. The overlay stored only scores, so every visit to the same page re-ran the same lookups for the same unrated titles and drew the same 404s from Seerr's ratings endpoints. The absence expires, because a film nobody has reviewed yet is unrated only for now, and “Refresh scores” forgets it at once.
 

@@ -1,6 +1,7 @@
 // Property tests 8 & 9: Watchlist button visibility and POST body construction
 const { test } = require('node:test');
 const assert = require('node:assert');
+const { loadWorker } = require('./helpers/worker');
 const fc = require('fast-check');
 
 test('Property 8: Watchlist button visible iff requestable', () => {
@@ -52,28 +53,40 @@ test('Property 8: Watchlist button visible iff requestable', () => {
   );
 });
 
-test('Property 9: Watchlist POST body maps tmdbId -> mediaId', () => {
-  // Verify the body construction logic:
-  // POST to /api/v1/watchlist with { mediaType: data.mediaType, mediaId: data.tmdbId }
-  function buildWatchlistBody(data) {
-    return {
-      mediaType: data.mediaType,
-      mediaId: data.tmdbId
-    };
-  }
+test('the watchlist body is the one Seerr will accept', async () => {
+  // Seerr parses this body with zod: { tmdbId: coerce.number(), mediaType,
+  // ratingKey?, title? } (server/interfaces/api/watchlistCreate.ts). We sent
+  // mediaId, a field that schema does not have, so every add was rejected —
+  // and the test that used to stand here asserted the broken shape, against a
+  // body builder written inside the test rather than the worker's own.
+  const calls = [];
+  const worker = loadWorker({
+    get: async () => ({ seerrUrl: 'https://seerr.example', seerrApiKey: 'k' }),
+    fetch: async (url, options) => {
+      calls.push({ url, body: JSON.parse(options.body) });
+      return { ok: true, status: 201, json: async () => ({ id: 1 }) };
+    }
+  });
+  await worker.ready;
 
-  fc.assert(
-    fc.property(
-      fc.record({
-        mediaType: fc.oneof(fc.constant('movie'), fc.constant('tv')),
-        tmdbId: fc.integer({ min: 1 })
-      }),
-      (data) => {
-        const body = buildWatchlistBody(data);
-        assert.strictEqual(body.mediaType, data.mediaType, 'mediaType should match');
-        assert.strictEqual(body.mediaId, data.tmdbId, 'mediaId should equal tmdbId');
-        assert.ok(!('tmdbId' in body), 'Body should use mediaId key, not tmdbId');
-      }
-    )
-  );
+  await worker.api.addToWatchlist({ tmdbId: '1241982', mediaType: 'movie', title: 'Moana 2' });
+
+  assert.equal(calls[0].url, 'https://seerr.example/api/v1/watchlist');
+  assert.equal(calls[0].body.tmdbId, 1241982, 'a number, as the schema coerces to');
+  assert.equal(calls[0].body.mediaType, 'movie');
+  assert.equal(calls[0].body.title, 'Moana 2');
+  assert.ok(!('mediaId' in calls[0].body), 'mediaId is not a field Seerr knows');
+});
+
+test('a title with no usable TMDB id is refused rather than posted', async () => {
+  const calls = [];
+  const worker = loadWorker({
+    get: async () => ({ seerrUrl: 'https://seerr.example', seerrApiKey: 'k' }),
+    // The worker reads settings on startup, so count only the call under test.
+    fetch: async url => { calls.push(String(url)); return { ok: true, json: async () => ({}) }; }
+  });
+  await worker.ready;
+
+  await assert.rejects(() => worker.api.addToWatchlist({ mediaType: 'movie' }));
+  assert.equal(calls.filter(url => url.includes('/watchlist')).length, 0, 'nothing should reach the watchlist endpoint');
 });

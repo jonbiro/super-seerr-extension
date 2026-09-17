@@ -1397,9 +1397,16 @@ class SeerrAPI {
     if (!this.baseUrl || !this.apiKey) {
       throw new Error('Seerr server URL and API key are required');
     }
+    // Seerr validates this body with a zod schema that requires tmdbId and
+    // mediaType; see server/interfaces/api/watchlistCreate.ts. We were sending
+    // mediaId, which that schema has no field for, so every add was rejected.
+    // title is optional and is what Seerr's own front end sends.
+    const tmdbId = Number(data.tmdbId);
+    if (!Number.isFinite(tmdbId)) throw new Error('A TMDB id is required to add to the watchlist');
     const response = await this.makeAPIRequest('POST', '/api/v1/watchlist', {
+      tmdbId,
       mediaType: data.mediaType,
-      mediaId: data.tmdbId
+      ...(data.title ? { title: String(data.title) } : {})
     });
     return response;
   }
