@@ -382,6 +382,15 @@
     return obj.title || obj.name || obj.originalTitle || obj.originalName || obj.mediaInfo?.title || obj.mediaInfo?.name || obj.media?.title || obj.media?.name || '';
   }
 
+  // Rotten Tomatoes lists most films under their English title, so the
+  // original is worth keeping when Seerr shows a localised one.
+  function objectOriginalTitle(obj) {
+    if (!obj || typeof obj !== 'object') return '';
+    return obj.originalTitle || obj.originalName
+      || obj.mediaInfo?.originalTitle || obj.mediaInfo?.originalName
+      || obj.media?.originalTitle || obj.media?.originalName || '';
+  }
+
   function objectYear(obj) {
     if (!obj || typeof obj !== 'object') return null;
     const date = obj.releaseDate || obj.firstAirDate || obj.mediaInfo?.releaseDate || obj.mediaInfo?.firstAirDate || obj.media?.releaseDate || obj.media?.firstAirDate || '';
@@ -579,11 +588,14 @@
       if (tmdbId !== null && tmdbId !== undefined) {
         const key = ratingKey(tmdbId, mediaTypeOf(candidate, fallbackType));
         const title = objectTitle(candidate);
+        const originalTitle = objectOriginalTitle(candidate);
         const year = objectYear(candidate);
-        if (title || year) {
+        if (title || originalTitle || year) {
+          const held = pageMetadataByTmdbId.get(key);
           pageMetadataByTmdbId.set(key, {
-            title: title || pageMetadataByTmdbId.get(key)?.title || '',
-            year: year || pageMetadataByTmdbId.get(key)?.year || null
+            title: title || held?.title || '',
+            originalTitle: originalTitle || held?.originalTitle || '',
+            year: year || held?.year || null
           });
         }
       }
@@ -762,7 +774,7 @@
     return promise;
   }
 
-  async function fetchRottenTomatoesRatings(title, year, mediaType, refresh = false) {
+  async function fetchRottenTomatoesRatings(title, year, mediaType, refresh = false, originalTitle = null) {
     if (!title) return null;
 
     try {
@@ -770,7 +782,7 @@
         action: 'getRottenTomatoesRatings',
         // The worker holds RT for 24 hours, and RT is the score most likely to
         // have moved, so a refresh has to reach past that cache too.
-        data: { title, year, mediaType, refresh }
+        data: { title, originalTitle, year, mediaType, refresh }
       });
       if (!response?.success || !response.data) return null;
 
@@ -798,7 +810,8 @@
     let bundle = mergeBundles(native, pageBundle);
 
     if (!bundle || bundle.rtCriticsScore === null || bundle.rtAudienceScore === null) {
-      const rtBundle = await fetchRottenTomatoesRatings(lookupTitle, lookupYear, mediaType, options.refresh === true);
+      const rtBundle = await fetchRottenTomatoesRatings(
+        lookupTitle, lookupYear, mediaType, options.refresh === true, pageMeta?.originalTitle || null);
       if (rtBundle && rtBundle.confidence >= Config.confidenceThreshold) {
         bundle = mergeBundles(bundle, rtBundle);
       }

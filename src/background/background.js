@@ -1222,7 +1222,8 @@ class SeerrAPI {
     const title = typeof data?.title === 'string' ? data.title.trim() : '';
     if (!title) return null;
     const refresh = data?.refresh === true;
-    const normalized = { ...data, title, mediaType: data.mediaType || 'movie', refresh };
+    const originalTitle = typeof data?.originalTitle === 'string' ? data.originalTitle.trim() : null;
+    const normalized = { ...data, title, originalTitle, mediaType: data.mediaType || 'movie', refresh };
     // A refresh coalesces with other refreshes but must not join an ordinary
     // lookup already in flight, which would hand back the stale value.
     const key = `${refresh ? 'refresh:' : ''}${normalized.mediaType}:${title}:${normalized.year || ''}`;
@@ -1233,7 +1234,50 @@ class SeerrAPI {
     finally { this.rtPending.delete(key); }
   }
 
-  async resolveRottenTomatoesRatings({ title, year = null, mediaType = 'movie', refresh = false }) {
+  // The queries worth trying, in order. Rotten Tomatoes lists most films under
+  // their English title, so where Seerr gives a localised one the original is
+  // the way back. Deduped by the same normalisation used for matching, so a
+  // title identical to its original is only searched once.
+  rtQueryTitles(title, originalTitle) {
+    const queries = [];
+    for (const candidate of [title, originalTitle]) {
+      const trimmed = typeof candidate === 'string' ? candidate.trim() : '';
+      if (!trimmed) continue;
+      const normalized = this.normalizeTitleForMatch(trimmed);
+      if (!normalized) continue;
+      if (queries.some(existing => this.normalizeTitleForMatch(existing) === normalized)) continue;
+      queries.push(trimmed);
+    }
+    return queries;
+  }
+
+  // The best candidate for one query, or null when there is none worth having.
+  // Candidates are scored against every title we know the film by, not against
+  // the query: searching a localised title returns the film under its English
+  // one, and judging that result by the query would reject the right answer.
+  async rtBestMatchFor(query, titles, year, mediaType) {
+    const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(query)}`;
+    const candidates = this.parseRtSearchResults(await this.fetchRtHtml(searchUrl), mediaType)
+      .map(result => ({
+        ...result,
+        confidence: Math.max(...titles.map(title => this.scoreRtSearchResult(result, { title, year })))
+      }))
+      .sort((a, b) => b.confidence - a.confidence);
+
+    const best = candidates[0];
+    if (!best) return null;
+    // Several films can share a title exactly. With no year to choose between
+    // them, taking whichever Rotten Tomatoes ranked first is a guess, and a
+    // wrong score presented as fact is worse than none. Another query may
+    // still be unambiguous.
+    if (!year && this.rtMatchIsAmbiguous(candidates, best)) {
+      this.log(`Rotten Tomatoes has more than one "${best.title}" and no year was known; not guessing`);
+      return null;
+    }
+    return best.confidence >= RatingsConfig.confidenceThreshold ? best : null;
+  }
+
+  async resolveRottenTomatoesRatings({ title, originalTitle = null, year = null, mediaType = 'movie', refresh = false }) {
     if (!title) return null;
 
     await this.loadRtCache();
@@ -1248,25 +1292,14 @@ class SeerrAPI {
     // Bound the worker cache during long browsing sessions. Insertion enforces
     // the hard limit; this only clears entries that have already expired.
     for (const [key, entry] of this.rtCache) if (Date.now() >= entry.expiresAt) this.rtCache.delete(key);
-    const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`;
-    const searchHtml = await this.fetchRtHtml(searchUrl);
-    const candidates = this.parseRtSearchResults(searchHtml, mediaType)
-      .map(result => ({
-        ...result,
-        confidence: this.scoreRtSearchResult(result, { title, year })
-      }))
-      .sort((a, b) => b.confidence - a.confidence);
-
-    const best = candidates[0];
-    // Several films can share a title exactly. With no year to choose between
-    // them, taking whichever Rotten Tomatoes ranked first is a guess, and a
-    // wrong score presented as fact is worse than none.
-    if (best && !year && this.rtMatchIsAmbiguous(candidates, best)) {
-      this.log(`Rotten Tomatoes has more than one "${best.title}" and no year was known; not guessing`);
-      this.cacheRottenTomatoesResult(cacheKey, null, RatingsConfig.rtNegativeCacheTtlMs);
-      return null;
+    const queries = this.rtQueryTitles(title, originalTitle);
+    let best = null;
+    for (const query of queries) {
+      best = await this.rtBestMatchFor(query, queries, year, mediaType);
+      if (best) break;
     }
-    if (!best || best.confidence < RatingsConfig.confidenceThreshold) {
+
+    if (!best) {
       const empty = null;
       this.cacheRottenTomatoesResult(cacheKey, empty, RatingsConfig.rtNegativeCacheTtlMs);
       return empty;
