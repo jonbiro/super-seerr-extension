@@ -65,16 +65,79 @@ test('entries saved against a different server are discarded', async () => {
   assert.equal(resolved.timesFor(550), 1, 'another server\'s ratings must not be served');
 });
 
-test('a bundle with no scores at all is not persisted', async () => {
+test('a title nothing knows about is remembered, so the next visit stops asking', async () => {
+  // Not storing the absence meant every visit to the same page re-ran the same
+  // lookups and drew the same 404s from Seerr's ratings endpoints, for titles
+  // that are simply not rated anywhere yet.
   const overlay = loadOverlay({ settings });
-  withResolver(overlay, () => ({}));
+  const resolved = withResolver(overlay, () => ({}));
 
   await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
-  await overlay.flushPersistedRatings();
+  await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(resolved.timesFor(550), 1, 'the second visit must not ask again');
 
-  const stored = overlay.localStore[CACHE_KEY];
-  // Without an expiry, storing "found nothing" would mean never looking again.
-  assert.ok(!stored || !stored.entries['movie:550'], 'an empty bundle must not be stored');
+  await overlay.flushPersistedRatings();
+  const entry = overlay.localStore[CACHE_KEY].entries['movie:550'];
+  assert.equal(entry.bundle, null, 'stored as an absence, not as a score');
+  assert.equal(typeof entry.cachedAt, 'number', 'and only with the timestamp that lets it expire');
+});
+
+test('a remembered absence expires, because an unrated film is unrated only for now', async () => {
+  const old = Date.now() - Config.unratedRetryMs - 1000;
+  const overlay = loadOverlay({
+    settings,
+    local: { [CACHE_KEY]: { server: SERVER, matcher: Config.matcherVersion, entries: {
+      'movie:550': { bundle: null, cachedAt: old }
+    } } }
+  });
+  const resolved = withResolver(overlay, () => ({ rtCriticsScore: 80 }));
+
+  const bundle = await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(resolved.timesFor(550), 1, 'past its expiry it is worth asking again');
+  assert.equal(bundle.rtCriticsScore, 80);
+});
+
+test('an absence already in memory expires without help from the loader', async () => {
+  // The stored-entry path and the in-memory path each drop an expired absence,
+  // and either alone makes the other's test pass. This one never loads from
+  // storage: the entry is put straight into the live cache.
+  const overlay = loadOverlay({ settings });
+  const resolved = withResolver(overlay, () => ({ rtCriticsScore: 80 }));
+  await overlay.loadPersistedRatings();
+  overlay.ratingsCache.set('movie:550', { bundle: null, cachedAt: Date.now() - Config.unratedRetryMs - 1000 });
+
+  const bundle = await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(resolved.timesFor(550), 1, 'a live entry past its expiry is looked up again');
+  assert.equal(bundle.rtCriticsScore, 80);
+});
+
+test('an expired absence is not loaded from storage in the first place', async () => {
+  const overlay = loadOverlay({
+    settings,
+    local: { [CACHE_KEY]: { server: SERVER, matcher: Config.matcherVersion, entries: {
+      'movie:550': { bundle: null, cachedAt: Date.now() - Config.unratedRetryMs - 1000 },
+      'movie:551': { bundle: null, cachedAt: Date.now() }
+    } } }
+  });
+  await overlay.loadPersistedRatings();
+
+  assert.equal(overlay.ratingsCache.has('movie:550'), false, 'the expired one is left behind');
+  assert.equal(overlay.ratingsCache.has('movie:551'), true, 'the current one is kept');
+});
+
+test('an absence stored without a timestamp is not trusted', async () => {
+  // Nothing should write one, but an entry that cannot expire must not be the
+  // thing that silences a title forever.
+  const overlay = loadOverlay({
+    settings,
+    local: { [CACHE_KEY]: { server: SERVER, matcher: Config.matcherVersion, entries: {
+      'movie:550': { bundle: null, cachedAt: null }
+    } } }
+  });
+  const resolved = withResolver(overlay, () => ({ rtCriticsScore: 80 }));
+
+  await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(resolved.timesFor(550), 1);
 });
 
 test('a partial bundle is still persisted', async () => {

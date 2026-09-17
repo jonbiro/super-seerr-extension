@@ -38,6 +38,12 @@ const RatingsConfig = {
   // gives them another chance.
   seerrRatingsFailureLimit: 12,
 
+  // How long "nothing knows this title" stands before it is worth asking again.
+  // Not remembering it at all meant a fresh round of requests, and a fresh 404
+  // from Seerr's ratings endpoints, on every visit to the same page. A film
+  // that nobody has rated yet is unrated only for now, so this expires.
+  unratedRetryMs: 7 * 24 * 60 * 60 * 1000,
+
   overlayCacheMaxEntries: 5000,
   // Rotten Tomatoes lookups do expire, so this only bounds a browsing session.
   rtCacheMaxEntries: 5000,

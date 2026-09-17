@@ -6,7 +6,9 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
-## [3.1.48]
+## [3.1.49]
+
+- Titles that nothing has rated are now remembered as such for a week. The overlay stored only scores, so every visit to the same page re-ran the same lookups for the same unrated titles and drew the same 404s from Seerr's ratings endpoints. The absence expires, because a film nobody has reviewed yet is unrated only for now, and “Refresh scores” forgets it at once.
 
 - `superSeerrDiagnose()` now reports how many ratings requests the overlay itself issued. Seerr's own front end asks the same endpoints for the same missing data, so a console full of 404s cannot be attributed by reading it.
 

@@ -103,11 +103,15 @@
           // A live entry from this session is fresher than anything stored.
           if (ratingsCache.has(key) || !entry || typeof entry !== 'object') continue;
           const bundle = entry.bundle;
-          if (!bundle || typeof bundle !== 'object') continue;
-          ratingsCache.set(key, {
-            bundle: Model.createRatingsBundle(bundle),
-            cachedAt: typeof entry.cachedAt === 'number' ? entry.cachedAt : null
-          });
+          const cachedAt = typeof entry.cachedAt === 'number' ? entry.cachedAt : null;
+          if (!bundle) {
+            // A remembered "nothing", worth keeping only while it is current.
+            if (cachedAt === null || Date.now() - cachedAt >= Config.unratedRetryMs) continue;
+            ratingsCache.set(key, { bundle: null, cachedAt });
+            continue;
+          }
+          if (typeof bundle !== 'object') continue;
+          ratingsCache.set(key, { bundle: Model.createRatingsBundle(bundle), cachedAt });
         }
       } catch (error) {
         log('Could not read the stored ratings cache:', error);
@@ -131,11 +135,14 @@
         if (!configuredServer) return;
         const entries = {};
         for (const [key, value] of ratingsCache) {
-          if (key.startsWith('pending:') || !value?.bundle) continue;
-          // Storing "found nothing" without an expiry would mean never looking
-          // again, so only bundles carrying a score are kept.
-          if (!Model.hasAnyScore(value.bundle)) continue;
-          entries[key] = { bundle: value.bundle, cachedAt: value.cachedAt ?? null };
+          if (key.startsWith('pending:') || !value) continue;
+          // A null bundle is a remembered "nothing knows this title", and it is
+          // kept: that is what stops the same lookups running on every visit.
+          // Every one carries the timestamp that lets it expire, because the
+          // only two ways into this cache set one, and the loader refuses an
+          // absence that has none.
+          if (value.bundle && !Model.hasAnyScore(value.bundle)) continue;
+          entries[key] = { bundle: value.bundle ?? null, cachedAt: value.cachedAt ?? null };
         }
         await chrome.storage.local.set({
           [PERSISTED_RATINGS_KEY]: { server: configuredServer.href, matcher: Config.matcherVersion, entries }
@@ -1000,9 +1007,14 @@
     await loadRatingsAvailability();
 
     const key = ratingsCacheKey(tmdbId, title, year, mediaType);
-    const cached = options.refresh === true ? null : ratingsCache.get(key);
+    let cached = options.refresh === true ? null : ratingsCache.get(key);
+    // A remembered "nothing" expires; a remembered score does not.
+    if (cached && !cached.bundle && Date.now() - (cached.cachedAt ?? 0) >= Config.unratedRetryMs) {
+      ratingsCache.delete(key);
+      cached = null;
+    }
     if (cached) {
-      log(`Cache hit for ${key}`);
+      log(cached.bundle ? `Cache hit for ${key}` : `Known to be unrated: ${key}`);
       // Re-insert to mark it most recently used, so the cap evicts by use
       // rather than by insertion order.
       ratingsCache.delete(key);
@@ -1022,13 +1034,15 @@
 
     try {
       const bundle = await promise;
-      if (bundle && ratingsCache.get(pendingKey) === promise) {
+      // Storing the absence is the point: without it every visit asks again.
+      const storable = bundle && Model.hasAnyScore(bundle) ? bundle : null;
+      if (ratingsCache.get(pendingKey) === promise) {
         while (resolvedCacheSize() >= Config.overlayCacheMaxEntries) {
           const lru = [...ratingsCache.keys()].find(existingKey => !existingKey.startsWith('pending:'));
           if (lru === undefined) break;
           ratingsCache.delete(lru);
         }
-        ratingsCache.set(key, { bundle, cachedAt: Date.now() });
+        ratingsCache.set(key, { bundle: storable, cachedAt: Date.now() });
         schedulePersistedRatingsFlush();
       }
       return bundle;
