@@ -437,8 +437,15 @@
       if (getCardMediaInfo(card)) return;
       const title = (card.querySelector('h2, h3, [class*="title"], [class*="Title"]')?.textContent
         || card.querySelector('img[alt]')?.getAttribute('alt') || '').trim().toLowerCase();
-      if (!title) return;
-      const matches = lastListItems.map(mediaInfoFromListItem).filter(info => info && info.title.trim().toLowerCase() === title);
+      const image = card.querySelector('img');
+      const posterUrl = image?.getAttribute('src') || '';
+      const posterMatches = lastListItems.filter(item => {
+        const poster = item.posterPath || item.poster_path;
+        return typeof poster === 'string' && poster.length > 1 && posterUrl.split('?')[0].endsWith(poster);
+      });
+      const matches = posterMatches.length
+        ? posterMatches.map(mediaInfoFromListItem).filter(Boolean)
+        : lastListItems.map(mediaInfoFromListItem).filter(info => title && info && info.title.trim().toLowerCase() === title);
       // DOM order can differ from API order after sorting or lazy loading.
       // An ambiguous title must remain unresolved rather than request the wrong ID.
       if (matches.length !== 1) return;

@@ -7,9 +7,12 @@ const source = file => fs.readFileSync(file, 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 async function settle() { for (let i = 0; i < 12; i++) await flush(); }
 
-function createOverlay({ settings = {}, path = '/search?query=test', embedded = null, listItems = [], linkless = false, wrapped = false } = {}) {
+function createOverlay({ settings = {}, path = '/search?query=test', embedded = null, listItems = [], linkless = false, wrapped = false, posters = false } = {}) {
   const dom = new JSDOM(`<main><div id="grid">${['Low', 'High', 'Unknown'].map((title, index) => `<article data-testid="title-card" data-id="${index + 1}"><a href="/movie/${index + 1}"><h2>${title}</h2></a></article>`).join('')}</div></main>`, { url: `https://seerr.example${path}`, runScripts: 'outside-only' });
   const { window } = dom;
+  if (posters) window.document.querySelectorAll('[data-testid="title-card"]').forEach((card, index) => {
+    card.innerHTML = `<div role="link"><img alt="" src="https://image.tmdb.org/t/p/w300/poster${index + 1}.jpg"></div>`;
+  });
   if (wrapped) window.document.querySelectorAll('[data-testid="title-card"]').forEach(card => {
     const item = window.document.createElement('li');
     card.replaceWith(item); item.append(card);
@@ -169,4 +172,20 @@ test('Seerr list-item wrappers sort as complete cards and reset without empty sl
   fixture.change({ overlayFeatures: { newValue: fixture.storage.overlayFeatures } });
   await settle();
   assert.equal(order(), '1,2,3');
+});
+
+
+test('poster-only Seerr cards resolve by exact poster identity instead of API order', async t => {
+  const fixture = createOverlay({ wrapped: true, posters: true, listItems: [
+    { id: 2, mediaType: 'movie', title: 'High', posterPath: '/poster2.jpg' },
+    { id: 1, mediaType: 'movie', title: 'Low', posterPath: '/poster1.jpg' }
+  ] });
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  const doc = fixture.window.document;
+  assert.equal(doc.querySelector('.seerr-score-coverage').textContent, '2/3 scored');
+  const select = doc.querySelector('.seerr-sort-select');
+  select.value = 'rt-critics-desc'; select.dispatchEvent(new fixture.window.Event('change'));
+  assert.equal(doc.querySelector('#grid > li > article').dataset.id, '2');
+  assert.equal(doc.querySelector('[data-id="3"] .seerr-card-badge'), null);
 });

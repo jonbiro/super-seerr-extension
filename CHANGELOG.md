@@ -2,6 +2,11 @@
 
 All notable changes to the Super Seerr extension will be documented in this file.
 
+## [3.1.10]
+
+- Resolve poster-only Seerr cards using unique, exact poster paths from the session list API, so ratings and sorting work before titles or links appear.
+- Added a regression with shuffled API results and an unidentified poster.
+
 ## [3.1.9]
 
 - Fixed sorting on Seerr movie grids whose title cards are nested inside list items. Controls now target the complete list, and sorting, filtering, and Reset preserve card wrappers.
