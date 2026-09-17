@@ -484,6 +484,16 @@ class SeerrAPI {
     }
 
     try {
+      // The page usually already knows the TMDB id. Trust it rather than
+      // running up to 19 fuzzy title searches that can resolve to the wrong
+      // title — requestMedia has always taken this shortcut.
+      const knownTmdbId = parseInt(mediaData.tmdbId, 10);
+      if (Number.isInteger(knownTmdbId) && knownTmdbId > 0) {
+        this.log('📊 [Background] Using provided TMDB ID, skipping search:', knownTmdbId);
+        const details = await this.getMediaDetails(knownTmdbId, mediaData.mediaType);
+        return this.formatMediaStatus(details, mediaData.mediaType);
+      }
+
       this.log('📊 [Background] Starting search for title:', mediaData.title, 'type:', mediaData.mediaType);
       const searchTerms = this.generateSearchTerms(mediaData.title);
       this.log('📊 [Background] Generated search terms:', searchTerms);
@@ -599,11 +609,15 @@ class SeerrAPI {
       const matchingRequest = requests.find(request => {
         const requestMediaType = request.type === 'movie' ? 'movie' : 'tv';
         const matchesType = requestMediaType === mediaType;
-        const matchesTmdbId = request.media?.tmdbId === tmdbId || request.media?.id === tmdbId;
+        // Only tmdbId identifies the title. request.media.id is Seerr's own
+        // sequential row id, and comparing it here matched an unrelated
+        // request whenever some row's id happened to equal this TMDB id —
+        // which is common, since both are small integers.
+        const matchesTmdbId = Number(request.media?.tmdbId) === Number(tmdbId);
 
         this.log(`📊 [Background] Checking request:`, {
           requestId: request.id, requestType: requestMediaType, matchesType,
-          mediaId: request.media?.tmdbId || request.media?.id, matchesTmdbId,
+          tmdbId: request.media?.tmdbId, matchesTmdbId,
           title: request.media?.title || request.media?.name
         });
 

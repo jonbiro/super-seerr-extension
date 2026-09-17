@@ -237,6 +237,13 @@
     });
   }
 
+  const SCORE_FIELDS = ['rtCriticsScore', 'rtAudienceScore', 'imdbRating', 'tmdbRating'];
+
+  // A bundle no further source can improve; nothing left to fill in.
+  function isBundleComplete(bundle) {
+    return !!bundle && SCORE_FIELDS.every(field => bundle[field] !== null);
+  }
+
   function mergeBundles(primary, secondary) {
     if (!primary) return secondary || null;
     if (!secondary) return primary;
@@ -366,6 +373,12 @@
         bundle = mergeBundles(bundle, next);
       } catch (error) {
         log(`Seerr ratings fetch failed for ${endpoint}:`, error);
+      }
+      // These run once per card. Walking the remaining endpoints when there is
+      // nothing left to fill multiplies load on a self-hosted server for free.
+      if (isBundleComplete(bundle)) {
+        log(`Seerr ratings complete after ${endpoint}; skipping remaining endpoints`);
+        break;
       }
     }
 
@@ -526,7 +539,7 @@
       }
     }
     // Continue filling partial bundles without overwriting higher-trust data.
-    if (!bundle || ['rtCriticsScore', 'rtAudienceScore', 'imdbRating', 'tmdbRating'].some(field => bundle[field] === null)) {
+    if (!isBundleComplete(bundle)) {
       bundle = mergeBundles(bundle, await fetchSeerrSessionRatings(tmdbId, mediaType));
     }
     return bundle || Model.createRatingsBundle({ lastUpdated: Date.now() });

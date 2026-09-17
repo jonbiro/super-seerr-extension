@@ -59,7 +59,7 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, apiCo
   const source = fs.readFileSync(path.join(__dirname, '../../src/content/seerr-integration.js'), 'utf8');
   // Expose closure functions in the test VM only; execute the real production code.
   vm.runInContext(source.replace(/\}\)\(\);\s*$/, `globalThis.overlay = {
-    getRatings, resolveRatings, mergeBundles, buildSummary, injectDetailRatings,
+    getRatings, resolveRatings, mergeBundles, isBundleComplete, fetchSeerrSessionRatings, buildSummary, injectDetailRatings,
     extractSeerrNativeRatings, cleanupOverlay, ratingsCache, isSeerrPage, isRequestableTitle,
     applyScoreSort, applyScoreFilters,
     setSort: order => { currentSort = order; },
