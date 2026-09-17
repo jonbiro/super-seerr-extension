@@ -2,22 +2,23 @@
 // All overlay consumers use this model. Partial bundles (some fields null) are valid.
 
 function createRatingsBundle(partial = {}) {
+  partial = partial && typeof partial === 'object' ? partial : {};
+  const score = (value, max) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max ? value : null;
   return {
-    rtCriticsScore:  partial.rtCriticsScore  ?? null,  // 0–100 integer or null
-    rtAudienceScore: partial.rtAudienceScore ?? null,  // 0–100 integer or null
-    imdbRating:      partial.imdbRating      ?? null,  // 0.0–10.0 float or null
-    tmdbRating:      partial.tmdbRating      ?? null,  // 0.0–10.0 float or null
-    confidence:      partial.confidence      ?? 0,     // 0–1 float
+    rtCriticsScore:  score(partial.rtCriticsScore, 100),  // 0–100 integer or null
+    rtAudienceScore: score(partial.rtAudienceScore, 100),  // 0–100 integer or null
+    imdbRating:      score(partial.imdbRating, 10),  // 0.0–10.0 float or null
+    tmdbRating:      score(partial.tmdbRating, 10),  // 0.0–10.0 float or null
+    confidence:      score(partial.confidence, 1) ?? 0,     // 0–1 float
     source:          partial.source          ?? 'unknown',
     lastUpdated:     partial.lastUpdated     ?? null
   };
 }
 
 function hasAnyScore(bundle) {
-  return bundle.rtCriticsScore !== null ||
-         bundle.rtAudienceScore !== null ||
-         bundle.imdbRating !== null ||
-         bundle.tmdbRating !== null;
+  if (!bundle || typeof bundle !== 'object') return false;
+  return ['rtCriticsScore', 'rtAudienceScore', 'imdbRating', 'tmdbRating'].some(key =>
+    typeof bundle[key] === 'number' && Number.isFinite(bundle[key]));
 }
 
 if (typeof module !== 'undefined' && module.exports) {

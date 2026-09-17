@@ -41,3 +41,14 @@ test('hasAnyScore returns true when any score is present', () => {
   assert.strictEqual(hasAnyScore(createRatingsBundle({})), false);
   assert.strictEqual(hasAnyScore(createRatingsBundle({ rtCriticsScore: null, rtAudienceScore: null, imdbRating: null, tmdbRating: null })), false);
 });
+
+test('invalid scores and non-object inputs never become displayable ratings', () => {
+  for (const input of [null, undefined, 'invalid', 42]) assert.equal(hasAnyScore(createRatingsBundle(input)), false);
+  for (const value of [NaN, Infinity, -1, 101, '90', {}, []]) {
+    const bundle = createRatingsBundle({ rtCriticsScore: value, confidence: value });
+    assert.equal(bundle.rtCriticsScore, null);
+    assert.equal(bundle.confidence, 0);
+  }
+  assert.equal(hasAnyScore({}), false);
+  assert.equal(hasAnyScore(null), false);
+});

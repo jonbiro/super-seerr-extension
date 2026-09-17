@@ -25,27 +25,17 @@ class OptionsManager {
     this.toggleButton?.addEventListener('click', () => this.toggleApiKeyVisibility());
     this.skipButton?.addEventListener('click', () => window.close());
     
-    // Auto-save on input change (with debounce)
-    let saveTimeout;
-    [this.serverUrlInput, this.apiKeyInput].forEach(input => {
-      input?.addEventListener('input', () => {
-        clearTimeout(saveTimeout);
-        saveTimeout = setTimeout(() => this.autoSave(), 1000);
-      });
-    });
   }
 
   async loadSettings() {
     try {
-      const settings = await chrome.storage.sync.get(['seerrUrl', 'seerrApiKey']);
+      const settings = await chrome.storage.sync.get(['seerrUrl', 'seerrApiKey', 'overlayFeatures']);
       
-      if (settings.seerrUrl) {
-        this.serverUrlInput.value = settings.seerrUrl;
-      }
-      
-      if (settings.seerrApiKey) {
-        this.apiKeyInput.value = settings.seerrApiKey;
-      }
+      this.serverUrlInput.value = settings.seerrUrl || '';
+      this.apiKeyInput.value = settings.seerrApiKey || '';
+      document.querySelectorAll('[data-overlay-feature]').forEach(input => {
+        input.checked = settings.overlayFeatures?.[input.dataset.overlayFeature] !== false;
+      });
     } catch (error) {
       console.error('Error loading settings:', error);
       this.showStatus('error', 'Failed to load settings');
@@ -55,13 +45,6 @@ class OptionsManager {
   async handleSave(event) {
     event.preventDefault();
     await this.saveSettings();
-  }
-
-  async autoSave() {
-    // Only auto-save if URL has a value
-    if (this.serverUrlInput.value.trim()) {
-      await this.saveSettings(false); // Don't show success message for auto-save
-    }
   }
 
   async saveSettings(showSuccess = true) {
@@ -77,6 +60,10 @@ class OptionsManager {
     // Validate URL format
     try {
       const parsed = new URL(serverUrl);
+      if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+        this.showStatus('error', 'Use a server URL without credentials, query parameters, or fragments');
+        return;
+      }
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
         this.showStatus('error', 'Server URL must use http:// or https://');
         return;
@@ -90,7 +77,8 @@ class OptionsManager {
       // Save to storage
       await chrome.storage.sync.set({
         seerrUrl: serverUrl,
-        seerrApiKey: apiKey
+        seerrApiKey: apiKey,
+        overlayFeatures: Object.fromEntries(Array.from(document.querySelectorAll('[data-overlay-feature]'), input => [input.dataset.overlayFeature, input.checked]))
       });
 
       if (showSuccess) {
@@ -135,13 +123,17 @@ class OptionsManager {
     }
 
     if (!apiKey) {
-      this.showStatus('error', 'An API key is required to test the connection. Enter your key or skip setup.');
+      this.showStatus('error', 'An API key is required for this test. You can save just the server URL for ratings-only mode.');
       return;
     }
 
     // Validate URL format
     try {
       const parsed = new URL(serverUrl);
+      if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+        this.showStatus('error', 'Use a server URL without credentials, query parameters, or fragments');
+        return;
+      }
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
         this.showStatus('error', 'Server URL must use http:// or https://');
         return;
@@ -156,20 +148,13 @@ class OptionsManager {
     this.showStatus('loading', 'Testing connection to Seerr server...');
 
     try {
-      // Save settings first (so background script can use them)
-      await chrome.storage.sync.set({
-        seerrUrl: serverUrl,
-        seerrApiKey: apiKey
+      const response = await chrome.runtime.sendMessage({
+        action: 'testConnection',
+        data: { seerrUrl: serverUrl, seerrApiKey: apiKey }
       });
 
-      // Brief delay to let storage sync propagate to the background worker
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Test the connection via background script
-      const response = await chrome.runtime.sendMessage({ action: 'testConnection' });
-
       if (response.success) {
-        this.showStatus('success', `Connected successfully! Welcome, ${response.data.user}`);
+        this.showStatus('success', `Connected as ${response.data.user}. Click Save Settings to apply these values.`);
       } else {
         this.showStatus('error', response.error || 'Connection test failed');
       }
@@ -189,13 +174,14 @@ class OptionsManager {
   }
 
   showStatus(type, message) {
+    clearTimeout(this.statusTimeout);
     this.statusDiv.className = `status ${type}`;
     const statusTextEl = this.statusDiv.querySelector('.status-text');
     if (statusTextEl) statusTextEl.textContent = message;
     
     // Auto-hide status after 5 seconds (except for loading)
-    if (type !== 'loading') {
-      setTimeout(() => {
+    if (type === 'success') {
+      this.statusTimeout = setTimeout(() => {
         this.statusDiv.className = 'status hidden';
       }, 5000);
     }

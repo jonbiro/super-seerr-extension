@@ -47,6 +47,15 @@
                     </small>
                 </div>
 
+                <fieldset class="overlay-options">
+                    <legend>Seerr page enhancements</legend>
+                    <label><input type="checkbox" data-overlay-feature="cardBadges" checked> Ratings on title cards</label>
+                    <label><input type="checkbox" data-overlay-feature="detailRatingsRow" checked> Detail-page ratings</label>
+                    <label><input type="checkbox" data-overlay-feature="preRequestSummary" checked> Review summary</label>
+                    <label><input type="checkbox" data-overlay-feature="sortFilter" checked> Sort and filter controls</label>
+                    <label><input type="checkbox" data-overlay-feature="bulkActions" checked> Bulk request selection</label>
+                    <small>Click Save Settings to apply changes. Testing a connection does not save it.</small>
+                </fieldset>
                 <div class="form-actions">
                     <button type="button" id="testConnection" class="button secondary">
                         Test Connection
@@ -63,7 +72,7 @@
                 </div>
             </form>
 
-            <div id="status" class="status hidden">
+            <div id="status" class="status hidden" role="status" aria-live="polite">
                 <div class="status-content">
                     <div class="status-icon"></div>
                     <div class="status-text"></div>

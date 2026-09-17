@@ -13,6 +13,5 @@ dist/
 *.zip
 *.xpi
 
-# Dependencies (future)
+# Dependencies
 node_modules/
-package-lock.json

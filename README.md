@@ -1,175 +1,79 @@
 # Super Seerr
 
-A browser extension that seamlessly integrates with popular movie and TV sites, allowing you to request content directly to your Seerr server. Adds Rotten Tomatoes context on Seerr browse cards and detail pages so you can evaluate titles without leaving Seerr.
+Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your Seerr server.
 
-![Version](https://img.shields.io/badge/version-3.1.5-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Chrome](https://img.shields.io/badge/Chrome-Compatible-brightgreen)
-![Firefox](https://img.shields.io/badge/Firefox-Runtime_validation_pending-orange)
+![Version](https://img.shields.io/badge/version-3.1.8-blue)
 
-## Supported Sites
+[Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
-- **IMDb** — Movie and TV show pages
-- **Rotten Tomatoes** — Movie and TV show reviews
-- **TheMovieDB** — Comprehensive movie database (most accurate matching)
-- **Letterboxd** — Film community platform
-- **Metacritic** — Professional reviews and scores
-- **Trakt** — Movie and TV tracking platform
-- **Filmweb** — Polish movie and TV database
+## Get started
 
-## Features
+1. Run `npm ci` and `make build` with Node.js 22.13 or newer and Make installed.
+2. In Chrome, open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose `dist/chrome`.
+3. Open Super Seerr’s **Settings**, enter your Seerr server URL, and click **Save Settings**.
+4. Refresh Seerr. For request and watchlist actions, add a Seerr API key from Seerr Settings → General → API Key.
 
-### Core
-- **Unified Flyout Interface** — Consistent design across all supported sites with brand-matched theming
-- **Smart Media Detection** — Automatically extracts title, year, media type, and TMDb ID from page content
-- **Real-time Status** — Shows current request status with color indicators and monitoring info
-- **Convenience** — Play button opens Jellyfin directly when content is available
+**Test Connection** checks the entered URL and key without saving them. Editing a field does not save it; use **Save Settings** to apply changes. You can leave the API key empty for ratings-only mode. The toolbar shows **RT** for URL-only setup, **ON** for URL plus API key, and no badge when no URL is saved. These badges describe configuration, not server health.
 
-### Seerr Overlay (runs on your Seerr instance)
-- **Browse-Card Rating Badges** — Compact RT critics and audience scores on discover/search cards
-- **Detail-Page Ratings Row** — RT critics → audience → IMDb → TMDB scores near the request action
-- **Pre-Request Quality Summary** — One-line heuristic: "Critics love it", "Strong reviews", "Mixed reviews"
-- **RT Sorting & Filtering** — Sort by critics/audience score; filter by minimum thresholds
-- **Bulk List Actions** — Multi-select titles, review in confirmation modal, submit as batch
+After rebuilding, reload the extension in Chrome and refresh the pages using it. The local folder remains `dist/chrome`.
 
-### Flyout Panel (runs on supported review sites)
-- **Add to Watchlist** — Save media to your Seerr watchlist without immediately requesting
-- **In-Library Badge** — Green checkmark shows when content is already on Jellyfin
+### Firefox limitation
 
-## Installation
+`make build` also produces `dist/firefox`. Its current manifest retains the requested `background.service_worker` configuration. [Mozilla documents that Firefox does not support that entry](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background), so this package is not ready for Firefox runtime use. It needs a background module script configuration and browser validation. Packaging success is not proof of Firefox compatibility.
 
-### Chrome/Edge
-1. **Download** the latest release from the repository
-2. **Extract** the downloaded ZIP file to a folder on your computer
-3. Open Chrome and navigate to `chrome://extensions/`
-4. Enable "Developer mode" in the top right corner
-5. Click "Load unpacked" and select the extracted extension folder
-6. The extension will be installed and ready to configure
+## What it does
 
-### Firefox
-The current Firefox manifest retains the requested `background.service_worker` configuration. Mozilla currently documents that Firefox does not support this entry; the generated package is not a verified working Firefox add-on. Firefox needs a Manifest V3 background module script configuration before runtime validation. See [Mozilla's background documentation](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background).
+| Surface | Features |
+| --- | --- |
+| IMDb, Rotten Tomatoes, TMDB, Metacritic, Trakt, Filmweb | Movie/TV detection and a themed request flyout |
+| Letterboxd | Movie detection and a themed request flyout |
+| Your configured Seerr server | Ratings on cards and detail pages, quality summaries, sorting, filters, bulk review |
 
-1. **Download** the latest release from the repository
-2. **Extract** the downloaded ZIP file to a folder on your computer
-3. Open Firefox and navigate to `about:debugging`
-4. Click "This Firefox" in the left sidebar
-5. Click "Load Temporary Add-on"
-6. Navigate to the extracted folder and select the `manifest.json` file
+The flyout reports request status, supports watchlisting, and links to Jellyfin when a playable URL is supplied by Seerr. Jellyfin is a separate product; its name and links are intentional.
 
-## Setup
+### Ratings and sorting
 
-1. Click the extension icon in your browser toolbar
-2. Click "Settings" to open the options page
-3. Enter your Seerr server URL (e.g., `https://seerr.yourdomain.com`)
-4. Optionally enter your Seerr API key (found in Settings → General → API Key) to enable requests and watchlist actions
-5. If you supplied an API key, click "Test Connection" to verify your settings
-6. Click "Save Settings"
+On a supported Seerr grid, choose **Sort titles → RT critics: highest first** or an audience-score option. Both directions are available. Unrated titles stay last; ties retain their original relative order. **Original order** restores the initial order; **Reset** also clears filters. Sorting updates as ratings arrive.
 
-With only a server URL, the extension runs in ratings-only mode and shows a purple **RT** toolbar badge. With a URL and API key, it shows a green **ON** badge. Ratings use Rotten Tomatoes lookups and your logged-in Seerr page session. The overlay only activates on the configured server. Missing ratings never prevent bulk requests for titles with a valid media identity.
+Sorting and filtering apply to loaded cards in the grid associated with the controls, not to the entire server catalogue or pages that have not loaded. Separate carousels may not share one control bar. DOM layout changes in Seerr can affect card detection.
 
-## Usage
+Scores are partial data: missing values stay absent. RT matches below the confidence threshold are hidden; approximate accepted matches have a `~` prefix. Summary labels are heuristics, not official RT certification. External title matching can still be wrong, especially for remakes or missing years.
 
-### External Sites
-1. **Navigate** to any movie or TV show page on supported sites
-2. **Look for** the Seerr flyout tab on the right side of your screen
-3. **Click the tab** to expand the flyout panel
-4. **View status** and click the action button to request content
+### Bulk requests
 
-### Seerr Itself
-1. **Browse** your Seerr discover, search, or detail pages
-2. **See** RT scores on cards and detail pages automatically
-3. **Sort** and **filter** using the extension-provided controls
-4. **Select multiple titles** and submit as a batch request
+Choose **Select titles**, select cards, then **Review & Request**. Titles with missing or invalid identities are excluded; missing ratings do not exclude a title. Submissions are spaced 500 ms apart and Seerr still controls permissions and approvals. Cancel or press Escape to stop subsequent requests; an already-sent request cannot be recalled.
 
-### Status Indicators
-- 🟢 **Green**: Available to request or ready to watch
-- 🟡 **Orange**: Request pending approval
-- 🔵 **Blue**: Currently downloading/processing
-- 🔴 **Red**: Error or connection issue
+### Preferences
 
-## Architecture
-
-```
-src/
-├── shared/                       # Shared Libraries
-│   ├── BaseIntegration.js        # Base class for all site integrations
-│   ├── SeerrClient.js            # API communication (MV3 Promise-based)
-│   ├── MediaExtractor.js         # Title/year/TMDb extraction
-│   ├── UIComponents.js           # Flyout interface, notifications, badges
-│   ├── RatingsModel.js           # Typed ratings bundle (partial-data safe)
-│   └── RatingsConfig.js          # Centralized thresholds and summary rules
-├── content/                      # Site Integrations
-│   ├── imdb-integration.js       # IMDb (Yellow theme)
-│   ├── rt-integration.js         # Rotten Tomatoes (Red theme)
-│   ├── tmdb-integration.js       # TheMovieDB (Blue theme)
-│   ├── letterboxd-integration.js # Letterboxd (Green theme)
-│   ├── metacritic-integration.js # Metacritic (Yellow theme)
-│   ├── trakt-integration.js      # Trakt (Purple theme)
-│   ├── filmweb-integration.js    # Filmweb (Yellow/Black theme)
-│   ├── seerr-integration.js      # Seerr overlay (ratings, sort, bulk)
-│   └── seerr-overlay.css         # Overlay stylesheet (dark/light themes)
-├── background/
-│   └── background.js             # Service worker (ES module, asynchronous initialization)
-├── options/
-│   └── options.{html,js,css}     # Settings page
-└── popup/
-    └── popup.{html,js,css}       # Extension popup
-```
+Settings includes separate switches for card badges, detail ratings, summaries, sort/filter controls, and bulk selection. Save to apply them. Hiding card badges does not disable sorting by their underlying scores.
 
 ## Development
 
-### Build
-
-```bash
-make build          # Build Chrome + Firefox (unpacked)
-make build-chrome   # Chrome only
-make build-firefox  # Firefox only
-make release        # Create .zip / .xpi for distribution
+```sh
+npm ci                 # Install the locked development dependencies
+npm run check          # Parse source scripts and verify manifest file paths
+npm test               # Unit, property, worker, DOM, and build tests
+make build             # Increment version; build both unpacked variants
+make build-chrome      # Increment version; build Chrome only
+make build-firefox     # Increment version; build Firefox only
+make release           # Increment version; produce zip/xpi archives
+make clean             # Remove generated dist and Super Seerr archives
 ```
 
-The build process merges `manifest.base.json` with platform-specific overrides (`manifest.chrome.json` / `manifest.firefox.json`) to produce the final manifest for each browser.
+Each Make build invocation increments the patch version once. A combined or parallel build shares that version across both browsers. The base manifest, package metadata, lockfile, and README badge stay synchronized. Tests and cleanup do not increment the working tree’s version. A failed build can consume a version. Run separate Make invocations sequentially in a checkout.
 
-Every build invocation automatically increments the patch version in `manifest.base.json` and `package.json`, and updates the README version badge and local package lock when present. A combined build or release increments once and uses the same version for Chrome and Firefox, including parallel builds. Single-browser and development builds also increment; tests and cleanup do not. Release files use `super-seerr-v<version>-chrome.zip` and `super-seerr-v<version>-firefox.xpi`. A failed build may consume a version number.
+Release files are `super-seerr-v<version>-chrome.zip` and `super-seerr-v<version>-firefox.xpi`. A generated XPI is not a signed or approved store release.
 
-### Test
+Runtime scripts are plain JavaScript; no bundler or provider API subscription is required. `SeerrClient.js` sends messages to the background worker. jsdom and fast-check are development-only dependencies and are not packaged.
 
-```bash
-npm install         # Install test dependencies (fast-check)
-npm test            # Run the complete test suite
-npm run test:watch  # Watch mode
-```
+See [architecture](docs/design.md), [requirements and limits](docs/requirements.md), [verification workflow](docs/tasks.md), and [troubleshooting](docs/troubleshooting.md).
 
-Tests cover storage migration, branding, debug namespace, watchlist visibility, badge idempotence, ratings model, cache coalescing, summary heuristics, overlay injection, and SPA navigation regression.
+## Data and permissions
 
-### Feature Flags
+Seerr requests use your configured URL and API key. Overlay session requests use the logged-in Seerr page session. RT lookup sends a title search to Rotten Tomatoes. Broad URL matching accommodates self-hosted Seerr domains; the overlay checks your configured origin and path before injecting its interface.
 
-The Seerr overlay uses feature flags in `seerr-integration.js` (all enabled by default):
-
-```js
-const FEATURE_FLAGS = {
-  cardBadges: true,           // RT scores on browse cards
-  detailRatingsRow: true,     // Ratings row on detail pages
-  preRequestSummary: true,    // Quality summary text
-  sortFilter: true,           // Sort & filter controls
-  bulkActions: true,          // Multi-select & bulk requests
-};
-```
-
-Set any to `false` to disable that feature without code changes.
-
-### Chrome Load
-
-```bash
-make build-chrome
-# Then: chrome://extensions → Developer Mode → Load unpacked → select dist/chrome/
-```
-
-## Support
-
-For issues or feature requests, [open an issue](https://github.com/jonbiro/super-seerr-extension/issues).
-
-Source: [jonbiro/super-seerr-extension](https://github.com/jonbiro/super-seerr-extension).
+Connection settings use browser sync storage, including the API key. Treat exported profiles and shared machines accordingly. No telemetry service is configured by this project. Debug output can include media titles and server responses; review logs before sharing them.
 
 ## License
 
-This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+MIT; see [LICENSE](LICENSE). Required attribution is retained and included in build packages. Historical connection-key names remain only for compatibility and regression testing.

@@ -9,7 +9,7 @@ const root = path.resolve(__dirname, '..');
 test('builds bump once per invocation and share version across browsers and release names', () => {
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'super-seerr-build-'));
   try {
-    for (const file of ['Makefile', 'scripts', 'manifest.base.json', 'manifest.chrome.json', 'manifest.firefox.json', 'package.json', 'README.md', 'CHANGELOG.md', 'LICENSE', 'src', 'icons']) {
+    for (const file of ['Makefile', 'scripts', 'manifest.base.json', 'manifest.chrome.json', 'manifest.firefox.json', 'package.json', 'README.md', 'CHANGELOG.md', 'LICENSE', 'docs', 'src', 'icons']) {
       fs.cpSync(path.join(root, file), path.join(temp, file), { recursive: true });
     }
     const read = name => JSON.parse(fs.readFileSync(path.join(temp, name), 'utf8'));
@@ -46,6 +46,8 @@ test('builds bump once per invocation and share version across browsers and rele
       const packaged = JSON.parse(execFileSync('unzip', ['-p', archive, 'manifest.json'], { encoding: 'utf8' }));
       assert.equal(packaged.version, '3.1.5');
       assert.equal(packaged.name, 'Super Seerr');
+      assert.equal(execFileSync('unzip', ['-p', archive, 'LICENSE'], { encoding: 'utf8' }), fs.readFileSync(path.join(temp, 'LICENSE'), 'utf8'));
+      assert.match(execFileSync('unzip', ['-p', archive, 'docs/troubleshooting.md'], { encoding: 'utf8' }), /Troubleshooting Super Seerr/);
     }
     make('clean');
     verify('3.1.5');

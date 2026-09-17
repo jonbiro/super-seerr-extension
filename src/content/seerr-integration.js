@@ -5,11 +5,11 @@
 
 (function () {
   if (window.__seerr_overlay_installed) return;
-  window.__seerr_overlay_installed = true;
 
   const Model = window.RatingsModel;
   const Config = window.RatingsConfig;
   if (!Model || !Config) return;
+  window.__seerr_overlay_installed = true;
 
   let debugMode = false;
   function log(...args) { if (debugMode) console.log('🍅 [Seerr Overlay]', ...args); }
@@ -27,13 +27,16 @@
 
   // Check API config — controls whether request features are available
   function checkApiConfig() {
-    return chrome.storage.sync.get(['seerrUrl', 'seerrApiKey']).then(settings => {
+    return chrome.storage.sync.get(['seerrUrl', 'seerrApiKey', 'overlayFeatures']).then(settings => {
+      const previousServer = configuredServer?.href;
+      for (const flag of Object.keys(FEATURE_FLAGS)) FEATURE_FLAGS[flag] = settings.overlayFeatures?.[flag] !== false;
       apiConfigured = !!(settings.seerrUrl && settings.seerrApiKey);
       try {
         configuredServer = settings.seerrUrl ? new URL(settings.seerrUrl) : null;
       } catch (_) {
         configuredServer = null;
       }
+      if (previousServer !== configuredServer?.href) ratingsCache.clear();
       log('API configured:', apiConfigured);
     }).catch(error => log('Could not load Seerr settings:', error));
   }
@@ -41,7 +44,7 @@
 
   // Update when settings change (e.g., user configures from options page)
   chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === 'sync' && (changes.seerrUrl || changes.seerrApiKey)) {
+    if (namespace === 'sync' && (changes.seerrUrl || changes.seerrApiKey || changes.overlayFeatures)) {
       checkApiConfig().then(() => { cleanupOverlay(); injectOverlay(); });
     }
   });
@@ -55,8 +58,15 @@
 
   // ──────────────── Route Detection ────────────────
 
+  function serverPath() {
+    const base = configuredServer?.pathname.replace(/\/+$/, '') || '';
+    if (base && window.location.pathname === base) return '/';
+    return base && window.location.pathname.startsWith(`${base}/`)
+      ? window.location.pathname.slice(base.length) : window.location.pathname;
+  }
+
   function detectRoute() {
-    const path = window.location.pathname;
+    const path = serverPath();
     if (/^\/movie\/\d+/.test(path)) return { type: 'movie-detail', id: path.match(/\/movie\/(\d+)/)[1] };
     if (/^\/tv\/\d+/.test(path))    return { type: 'tv-detail',    id: path.match(/\/tv\/(\d+)/)[1] };
     if (/^\/search/.test(path))     return { type: 'search' };
@@ -72,7 +82,7 @@
 
   // ──────────────── SPA Navigation ────────────────
 
-  let currentPath = window.location.pathname;
+  let currentPath = window.location.pathname + window.location.search;
   let routeGeneration = 0;
   if (!history.__seerrOverlayPatched) {
     history.__seerrOverlayPatched = true;
@@ -88,10 +98,23 @@
     };
   }
   window.addEventListener('popstate', () => setTimeout(handleRouteChange, 150));
+  // Isolated content scripts cannot reliably patch the page's history methods.
+  let navigationTimer = setInterval(handleRouteChange, 1000);
+  window.addEventListener('pagehide', () => {
+    clearInterval(navigationTimer); navigationTimer = null;
+    if (cardObserver) { cardObserver.disconnect(); cardObserver = null; }
+    clearTimeout(cardObserverTimer);
+  });
+  window.addEventListener('pageshow', () => {
+    if (navigationTimer === null) navigationTimer = setInterval(handleRouteChange, 1000);
+    if (isSeerrPage() && isListRoute(detectRoute())) setupCardObserver();
+  });
 
   function handleRouteChange() {
-    if (window.location.pathname === currentPath) return;
-    currentPath = window.location.pathname;
+    const nextPath = window.location.pathname + window.location.search;
+    if (nextPath === currentPath) return;
+    currentPath = nextPath;
+    if (!isSeerrPage()) return;
     seerrDomReadyRetries = 0;
     cleanupOverlay();
     injectOverlay();
@@ -110,6 +133,18 @@
 
   function cleanupOverlay() {
     routeGeneration++;
+    const cards = getMediaCards();
+    for (const grid of new Set(cards.map(card => card.parentElement).filter(Boolean))) {
+      applyScoreSort(grid, 'default');
+    }
+    cards.forEach(card => {
+      card.style.display = '';
+      card.__seerrBadgesResolving = false;
+      card.__seerrBadgesCleared = true;
+      delete card.__seerrRatings;
+      delete card.__seerrMediaInfo;
+      delete card.__seerrListMediaInfo;
+    });
     bulkMode = false;
     selectedCards.clear();
     bulkActionBar = null;
@@ -131,30 +166,25 @@
     // Disconnect card mutation observer so it doesn't fire on the old page
     if (cardObserver) { cardObserver.disconnect(); cardObserver = null; }
     clearTimeout(cardObserverTimer);
-    // Reset pending badge flags so cards can be re-injected after navigation
-    document.querySelectorAll('[class*="card"], [class*="Card"]').forEach(c => { c.__seerrBadgesResolving = false; });
-    // Clear the per-card in-progress flag so a future re-injection isn't
-    // permanently blocked by a stale marker.
-    document.querySelectorAll('[class*="card"], [class*="Card"], [class*="media-item"], [class*="MediaCard"]').forEach(card => {
-      card.__seerrBadgesResolving = false;
-      card.__seerrBadgesCleared = true;
-    });
   }
 
   // ──────────────── Ratings Resolution ────────────────
 
+  function parseScore(value, max) {
+    if (typeof value !== 'number' && typeof value !== 'string') return null;
+    if (typeof value === 'string' && !value.trim()) return null;
+    const number = typeof value === 'number' ? value : Number(value.trim().replace(/%$/, ''));
+    return Number.isFinite(number) && number >= 0 && number <= max ? number : null;
+  }
+
   function parsePercentScore(value) {
-    if (value === null || value === undefined || value === '') return null;
-    const raw = typeof value === 'number' ? value : parseFloat(String(value).match(/\d+(?:\.\d+)?/)?.[0]);
-    if (!Number.isFinite(raw)) return null;
-    return Math.max(0, Math.min(100, Math.round(raw)));
+    const score = parseScore(value, 100);
+    return score === null ? null : Math.round(score);
   }
 
   function parseTenPointScore(value) {
-    if (value === null || value === undefined || value === '') return null;
-    const raw = typeof value === 'number' ? value : parseFloat(String(value).match(/\d+(?:\.\d+)?/)?.[0]);
-    if (!Number.isFinite(raw)) return null;
-    return Math.max(0, Math.min(10, Math.round(raw * 10) / 10));
+    const score = parseScore(value, 10);
+    return score === null ? null : Math.round(score * 10) / 10;
   }
 
   function firstParsedScore(obj, keys, parser) {
@@ -223,8 +253,18 @@
 
   function objectTmdbId(obj) {
     if (!obj || typeof obj !== 'object') return null;
-    return obj.tmdbId ?? obj.id ?? obj.mediaInfo?.tmdbId ?? obj.media?.tmdbId ?? obj.media?.id ?? null;
+    return obj.tmdbId ?? obj.mediaInfo?.tmdbId ?? obj.media?.tmdbId ?? obj.media?.id ?? obj.id ?? null;
   }
+
+  function mediaTypeOf(obj, fallback = null) {
+    const type = obj?.mediaType || obj?.type || obj?.media?.mediaType || obj?.mediaInfo?.mediaType;
+    if (type === 'movie' || type === 'tv') return type;
+    if (obj?.firstAirDate) return 'tv';
+    if (obj?.releaseDate) return 'movie';
+    return fallback;
+  }
+
+  function ratingKey(id, mediaType) { return `${mediaType || 'unknown'}:${id}`; }
 
   function objectTitle(obj) {
     if (!obj || typeof obj !== 'object') return '';
@@ -245,25 +285,28 @@
     const scripts = document.querySelectorAll('script[type="application/json"], script#__NEXT_DATA__');
     const seen = new WeakSet();
 
-    function visit(node) {
+    function visit(node, inheritedType = null) {
       if (!node || typeof node !== 'object' || seen.has(node)) return;
       seen.add(node);
 
       const tmdbId = objectTmdbId(node);
+      const route = detectRoute();
+      const routeType = String(route?.id) === String(tmdbId) ? route?.type.split('-')[0] : null;
+      const mediaType = mediaTypeOf(node, inheritedType || routeType);
       if (tmdbId !== null && tmdbId !== undefined) {
         let bundle = bundleFromRatingObject(node, 'seerr-native');
         bundle = mergeBundles(bundle, bundleFromRatingObject(node.mediaInfo, 'seerr-native'));
         bundle = mergeBundles(bundle, bundleFromRatingObject(node.media, 'seerr-native'));
         if (bundle && Model.hasAnyScore(bundle)) {
-          const key = String(tmdbId);
+          const key = ratingKey(tmdbId, mediaType);
           embeddedRatingsByTmdbId.set(key, mergeBundles(embeddedRatingsByTmdbId.get(key), bundle));
         }
       }
 
       if (Array.isArray(node)) {
-        node.forEach(visit);
+        node.forEach(child => visit(child, inheritedType));
       } else {
-        Object.keys(node).forEach(key => visit(node[key]));
+        Object.keys(node).forEach(key => visit(node[key], mediaType));
       }
     }
 
@@ -274,61 +317,19 @@
     });
   }
 
-  function extractSeerrNativeRatings(tmdbId = null) {
-    const bundle = {};
-
-    // Look for embedded JSON data (e.g., __NEXT_DATA__ or similar)
-    const scripts = document.querySelectorAll('script[type="application/json"]');
-    scripts.forEach(script => {
-      try {
-        const data = JSON.parse(script.textContent);
-        const direct = bundleFromRatingObject(data?.props?.pageProps?.media, 'seerr-native');
-        if (direct) Object.assign(bundle, direct);
-        // Seerr typically embeds media data in various shapes
-        if (data?.props?.pageProps?.media) {
-          const m = data.props.pageProps.media;
-          if (m.rtCriticsScore != null) bundle.rtCriticsScore = parseInt(m.rtCriticsScore);
-          if (m.rtAudienceScore != null) bundle.rtAudienceScore = parseInt(m.rtAudienceScore);
-          if (m.voteAverage != null) bundle.tmdbRating = parseFloat(m.voteAverage);
-          if (m.imdbRating != null) bundle.imdbRating = parseFloat(m.imdbRating);
-        }
-      } catch (_) {}
-    });
-
-    if (tmdbId !== null && tmdbId !== undefined) {
-      indexEmbeddedRatings();
-      const embedded = embeddedRatingsByTmdbId.get(String(tmdbId));
-      if (embedded && Model.hasAnyScore(embedded)) return embedded;
-    }
-
-    // Unscoped page text belongs only to the current detail title, never to
-    // every card in a browse grid.
+  function extractSeerrNativeRatings(tmdbId = null, mediaType = null) {
+    indexEmbeddedRatings();
     const route = detectRoute();
-    if (!route || !route.type.endsWith('-detail') || String(route.id) !== String(tmdbId)) return null;
-
-    // Try to extract from the DOM (ratings may be rendered as text)
-    const rtElements = document.querySelectorAll('[data-rating], .rt-score');
-    rtElements.forEach(el => {
-      const text = el.textContent.trim();
-      const scoreMatch = text.match(/(\d+)%/);
-      if (scoreMatch && bundle.rtCriticsScore == null) {
-        bundle.rtCriticsScore = parseInt(scoreMatch[1]);
-      }
-    });
-
-    if (Object.keys(bundle).length > 0) {
-      bundle.confidence = 1.0;
-      bundle.source = 'seerr-native';
-      bundle.lastUpdated = Date.now();
-    }
-
-    return Object.keys(bundle).length > 0 ? Model.createRatingsBundle(bundle) : null;
+    const type = mediaType || (String(route?.id) === String(tmdbId) ? route?.type.split('-')[0] : null);
+    return embeddedRatingsByTmdbId.get(ratingKey(tmdbId, type)) || null;
   }
 
   async function fetchJsonFromSeerr(endpoint) {
-    const url = new URL(endpoint, window.location.origin);
+    const basePath = configuredServer?.pathname.replace(/\/+$/, '') || '';
+    const url = new URL(`${basePath}${endpoint}`, window.location.origin);
     const response = await fetch(url.toString(), {
       method: 'GET',
+      signal: AbortSignal.timeout(Config.requestTimeoutMs),
       credentials: 'include',
       headers: { Accept: 'application/json' }
     });
@@ -365,9 +366,10 @@
   function getListRatingsEndpoint(route) {
     const search = window.location.search || '';
     if (route?.type === 'discover') {
-      if (/^\/discover\/tv/.test(window.location.pathname)) return `/api/v1/discover/tv${search}`;
-      if (/^\/discover\/movies/.test(window.location.pathname)) return `/api/v1/discover/movies${search}`;
+      if (/^\/discover\/tv/.test(serverPath())) return `/api/v1/discover/tv${search}`;
+      if (/^\/discover\/movies/.test(serverPath())) return `/api/v1/discover/movies${search}`;
     }
+    if (route?.type === 'search') return `/api/v1/search${search}`;
     if (route?.type === 'requests') {
       return '/api/v1/request?take=100&skip=0';
     }
@@ -385,11 +387,12 @@
       item.request?.media
     ].filter(Boolean);
 
+    const fallbackType = mediaTypeOf(item, /^\/discover\/tv/.test(serverPath()) ? 'tv' : /^\/discover\/movies/.test(serverPath()) ? 'movie' : null);
     candidates.forEach(candidate => {
       const tmdbId = objectTmdbId(candidate);
       const bundle = bundleFromRatingObject(candidate, source);
       if (tmdbId !== null && tmdbId !== undefined) {
-        const key = String(tmdbId);
+        const key = ratingKey(tmdbId, mediaTypeOf(candidate, fallbackType));
         const title = objectTitle(candidate);
         const year = objectYear(candidate);
         if (title || year) {
@@ -400,7 +403,7 @@
         }
       }
       if (tmdbId !== null && tmdbId !== undefined && bundle && Model.hasAnyScore(bundle)) {
-        const key = String(tmdbId);
+        const key = ratingKey(tmdbId, mediaTypeOf(candidate, fallbackType));
         pageRatingsByTmdbId.set(key, mergeBundles(pageRatingsByTmdbId.get(key), bundle));
       }
     });
@@ -412,10 +415,9 @@
     const tmdbId = objectTmdbId(candidate);
     if (tmdbId === null || tmdbId === undefined) return null;
 
-    let mediaType = candidate.mediaType || item.mediaType || candidate.type || item.type || null;
-    if (mediaType !== 'movie' && mediaType !== 'tv') {
-      mediaType = /^\/discover\/tv/.test(window.location.pathname) ? 'tv' : 'movie';
-    }
+    const mediaType = mediaTypeOf(candidate, mediaTypeOf(item,
+      /^\/discover\/tv/.test(serverPath()) ? 'tv' : /^\/discover\/movies/.test(serverPath()) ? 'movie' : null));
+    if (!mediaType) return null;
 
     return {
       link: null,
@@ -430,10 +432,17 @@
   function hydrateCardsFromListItems(root = document) {
     if (!lastListItems.length) return;
     const cards = getMediaCards(root);
-    cards.forEach((card, index) => {
+    cards.forEach(card => {
       if (getCardMediaInfo(card)) return;
-      const info = mediaInfoFromListItem(lastListItems[index]);
-      if (info) card.__seerrListMediaInfo = info;
+      const title = (card.querySelector('h2, h3, [class*="title"], [class*="Title"]')?.textContent
+        || card.querySelector('img[alt]')?.getAttribute('alt') || '').trim().toLowerCase();
+      if (!title) return;
+      const matches = lastListItems.map(mediaInfoFromListItem).filter(info => info && info.title.trim().toLowerCase() === title);
+      // DOM order can differ from API order after sorting or lazy loading.
+      // An ambiguous title must remain unresolved rather than request the wrong ID.
+      if (matches.length !== 1) return;
+      const info = matches[0];
+      card.__seerrListMediaInfo = info;
     });
   }
 
@@ -486,12 +495,12 @@
 
   async function resolveRatings(tmdbId, title, year, mediaType = null) {
     log(`Resolving ratings for TMDB ${tmdbId}`);
-    const native = extractSeerrNativeRatings(tmdbId);
+    const native = extractSeerrNativeRatings(tmdbId, mediaType);
     await indexCurrentListRatings();
-    const pageMeta = tmdbId !== null && tmdbId !== undefined ? pageMetadataByTmdbId.get(String(tmdbId)) : null;
+    const pageMeta = tmdbId !== null && tmdbId !== undefined ? pageMetadataByTmdbId.get(ratingKey(tmdbId, mediaType)) : null;
     const lookupTitle = title || pageMeta?.title || '';
     const lookupYear = year || pageMeta?.year || null;
-    const pageBundle = tmdbId !== null && tmdbId !== undefined ? pageRatingsByTmdbId.get(String(tmdbId)) : null;
+    const pageBundle = tmdbId !== null && tmdbId !== undefined ? pageRatingsByTmdbId.get(ratingKey(tmdbId, mediaType)) : null;
     let bundle = mergeBundles(native, pageBundle);
 
     if (!bundle || bundle.rtCriticsScore === null || bundle.rtAudienceScore === null) {
@@ -527,12 +536,17 @@
 
     try {
       const bundle = await promise;
-      if (bundle) {
+      if (bundle && ratingsCache.get(pendingKey) === promise) {
+        if (ratingsCache.size >= Config.cacheMaxEntries) {
+          for (const existingKey of ratingsCache.keys()) {
+            if (!existingKey.startsWith('pending:')) { ratingsCache.delete(existingKey); break; }
+          }
+        }
         ratingsCache.set(key, { bundle, expiresAt: Date.now() + Config.cacheTtlMs });
       }
       return bundle;
     } finally {
-      ratingsCache.delete(pendingKey);
+      if (ratingsCache.get(pendingKey) === promise) ratingsCache.delete(pendingKey);
     }
   }
 
@@ -632,7 +646,7 @@
   // ──────────────── Injection ────────────────
 
   function injectCardBadges() {
-    if (!FEATURE_FLAGS.cardBadges) return;
+    if (!FEATURE_FLAGS.cardBadges && !FEATURE_FLAGS.sortFilter) return;
 
     // Find media cards on discover/search pages
     const cards = getMediaCards();
@@ -645,6 +659,7 @@
 
     cards.forEach(card => {
       if (card.querySelector('[data-seerr-overlay="true"][class*="card-badge"], [data-seerr-overlay="true"][class*="audience-badge"]')) return;
+      if (card.__seerrRatings) return;
       if (card.__seerrBadgesResolving) return; // already resolving, skip this pass
 
       // Try to extract title/TMDB ID from card
@@ -674,33 +689,36 @@
             card.__seerrBadgesResolving = false;
             return;
           }
+          card.__seerrRatings = bundle;
           if (!bundle || !Model.hasAnyScore(bundle)) {
             card.__seerrBadgesResolving = false;
             return;
           }
 
-          if (bundle.rtCriticsScore !== null && bundle.confidence >= Config.confidenceThreshold) {
-            const prefix = bundle.confidence < 1.0 && bundle.confidence >= Config.confidenceThreshold ? '~' : '';
-            const badge = document.createElement('span');
-            badge.className = 'seerr-card-badge';
-            badge.setAttribute('data-seerr-overlay', 'true');
-            badge.textContent = `🍅 ${prefix}${bundle.rtCriticsScore}%`;
-            card.appendChild(badge);
-          }
-          if (bundle.rtAudienceScore !== null && bundle.confidence >= Config.confidenceThreshold) {
-            const audienceBadge = document.createElement('span');
-            audienceBadge.className = 'seerr-card-badge seerr-card-audience-badge';
-            audienceBadge.setAttribute('data-seerr-overlay', 'true');
-            audienceBadge.textContent = `🍿 ${bundle.confidence < 1 ? '~' : ''}${bundle.rtAudienceScore}%`;
-            if (bundle.rtCriticsScore !== null || bundle.tmdbRating !== null) audienceBadge.style.top = '28px';
-            card.appendChild(audienceBadge);
-          }
-          if ((bundle.rtCriticsScore === null || bundle.confidence < Config.confidenceThreshold) && bundle.tmdbRating !== null) {
-            const tmdbBadge = document.createElement('span');
-            tmdbBadge.className = 'seerr-card-badge seerr-card-tmdb-badge';
-            tmdbBadge.setAttribute('data-seerr-overlay', 'true');
-            tmdbBadge.textContent = `🎬 ${bundle.tmdbRating}/10`;
-            card.appendChild(tmdbBadge);
+          if (FEATURE_FLAGS.cardBadges) {
+            if (bundle.rtCriticsScore !== null && bundle.confidence >= Config.confidenceThreshold) {
+              const prefix = bundle.confidence < 1.0 && bundle.confidence >= Config.confidenceThreshold ? '~' : '';
+              const badge = document.createElement('span');
+              badge.className = 'seerr-card-badge';
+              badge.setAttribute('data-seerr-overlay', 'true');
+              badge.textContent = `🍅 ${prefix}${bundle.rtCriticsScore}%`;
+              card.appendChild(badge);
+            }
+            if (bundle.rtAudienceScore !== null && bundle.confidence >= Config.confidenceThreshold) {
+              const audienceBadge = document.createElement('span');
+              audienceBadge.className = 'seerr-card-badge seerr-card-audience-badge';
+              audienceBadge.setAttribute('data-seerr-overlay', 'true');
+              audienceBadge.textContent = `🍿 ${bundle.confidence < 1 ? '~' : ''}${bundle.rtAudienceScore}%`;
+              if (bundle.rtCriticsScore !== null || bundle.tmdbRating !== null) audienceBadge.style.top = '28px';
+              card.appendChild(audienceBadge);
+            }
+            if ((bundle.rtCriticsScore === null || bundle.confidence < Config.confidenceThreshold) && bundle.tmdbRating !== null) {
+              const tmdbBadge = document.createElement('span');
+              tmdbBadge.className = 'seerr-card-badge seerr-card-tmdb-badge';
+              tmdbBadge.setAttribute('data-seerr-overlay', 'true');
+              tmdbBadge.textContent = `🎬 ${bundle.tmdbRating}/10`;
+              card.appendChild(tmdbBadge);
+            }
           }
           updateSortFilterCoverage();
           applyScoreFilters(getCardsGrid());
@@ -1089,6 +1107,7 @@
   }
 
   function getCardScore(card) {
+    if (card.__seerrRatings) return card.__seerrRatings.confidence >= Config.confidenceThreshold ? card.__seerrRatings.rtCriticsScore : null;
     const badge = card.querySelector('.seerr-card-badge');
     if (!badge) return null;
     const match = badge.textContent.match(/🍅\s*~?(\d+)%/);
@@ -1096,6 +1115,7 @@
   }
 
   function getCardAudienceScore(card) {
+    if (card.__seerrRatings) return card.__seerrRatings.confidence >= Config.confidenceThreshold ? card.__seerrRatings.rtAudienceScore : null;
     const badge = card.querySelector('.seerr-card-audience-badge');
     if (!badge) return null;
     const match = badge.textContent.match(/🍿\s*~?(\d+)%/);
@@ -1103,6 +1123,7 @@
   }
 
   function getCardTmdbScore(card) {
+    if (card.__seerrRatings) return card.__seerrRatings.tmdbRating;
     const badge = card.querySelector('.seerr-card-tmdb-badge');
     if (!badge) return null;
     const match = badge.textContent.match(/🎬\s*(\d+(?:\.\d+)?)\/10/);
@@ -1139,17 +1160,23 @@
         const computed = window.getComputedStyle(card);
         if (computed.position === 'static') card.style.position = 'relative';
 
-        const checkbox = document.createElement('div');
+        const checkbox = document.createElement('button');
+        checkbox.type = 'button';
         checkbox.className = 'seerr-select-checkbox';
+        checkbox.setAttribute('role', 'checkbox');
+        checkbox.setAttribute('aria-checked', 'false');
+        checkbox.setAttribute('aria-label', `Select ${getCardMediaInfo(card)?.title || 'title'}`);
         checkbox.setAttribute('data-seerr-overlay', 'true');
         checkbox.addEventListener('click', (e) => {
           e.stopPropagation();
           if (selectedCards.has(card)) {
             selectedCards.delete(card);
             checkbox.classList.remove('checked');
+            checkbox.setAttribute('aria-checked', 'false');
           } else {
             selectedCards.add(card);
             checkbox.classList.add('checked');
+            checkbox.setAttribute('aria-checked', 'true');
           }
           updateBulkActionBar();
         });
@@ -1226,7 +1253,7 @@
   }
 
   function openBulkConfirmation() {
-    if (selectedCards.size === 0) return;
+    if (selectedCards.size === 0 || document.querySelector('.seerr-confirmation-modal')) return;
 
     const titles = getSelectedTitles();
     // Ratings are optional context. Request eligibility depends on a media
@@ -1236,6 +1263,9 @@
 
     const modal = document.createElement('div');
     modal.className = 'seerr-confirmation-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-label', 'Review your bulk request');
     modal.setAttribute('data-seerr-overlay', 'true');
     modal.innerHTML = `
       <h3>Review your bulk request</h3>
@@ -1262,7 +1292,19 @@
 
     document.body.appendChild(modal);
 
-    modal.querySelector('.cancel-btn').addEventListener('click', () => modal.remove());
+    const previousFocus = document.activeElement;
+    const closeModal = () => { modal.remove(); previousFocus?.focus(); };
+    modal.querySelector('.cancel-btn').addEventListener('click', closeModal);
+    modal.querySelector('.cancel-btn').focus();
+    modal.addEventListener('keydown', event => {
+      if (event.key === 'Escape') { event.preventDefault(); closeModal(); }
+      if (event.key === 'Tab') {
+        const controls = [...modal.querySelectorAll('button:not(:disabled), summary')];
+        const index = controls.indexOf(document.activeElement);
+        if (event.shiftKey && index <= 0) { event.preventDefault(); controls.at(-1)?.focus(); }
+        else if (!event.shiftKey && index === controls.length - 1) { event.preventDefault(); controls[0]?.focus(); }
+      }
+    });
 
     modal.querySelector('.confirm-btn').addEventListener('click', async () => {
       if (!apiConfigured) {
@@ -1271,6 +1313,8 @@
         return;
       }
       const btn = modal.querySelector('.confirm-btn');
+      if (btn.disabled) return;
+      const generation = routeGeneration;
       btn.disabled = true;
       btn.textContent = 'Requesting...';
 
@@ -1279,6 +1323,7 @@
       const BULK_REQUEST_DELAY_MS = 500;
 
       for (let i = 0; i < readyTitles.length; i++) {
+        if (!modal.isConnected || generation !== routeGeneration) return;
         const t = readyTitles[i];
         btn.textContent = `Requesting ${i + 1}/${readyTitles.length}...`;
         const tmdbIdNum = parseInt(t.tmdbId, 10);
@@ -1304,7 +1349,8 @@
         }
       }
 
-      modal.remove();
+      if (!modal.isConnected || generation !== routeGeneration) return;
+      closeModal();
       hideBulkActionBar();
 
       const summary = document.createElement('div');

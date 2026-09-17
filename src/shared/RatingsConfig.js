@@ -17,6 +17,8 @@ const RatingsConfig = {
   audienceCriticsDelta: 15,  // e.g. audience 80, critics 60 → "Audience likes it more"
 
   // Session cache TTL in milliseconds (5 minutes)
+  requestTimeoutMs: 10000,
+  cacheMaxEntries: 500,
   cacheTtlMs: 5 * 60 * 1000,
   rtNegativeCacheTtlMs: 60 * 60 * 1000,
   rtCacheTtlMs: 24 * 60 * 60 * 1000,

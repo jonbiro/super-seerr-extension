@@ -9,7 +9,7 @@ function loadWorker({ get = async () => ({}), fetch = async () => ({ ok: true, t
   const writes = [];
   const removals = [];
   const context = vm.createContext({
-    console: { log() {}, warn() {}, error() {} }, URL, fetch, RatingsConfig: Config,
+    console: { log() {}, warn() {}, error() {} }, URL, fetch, AbortSignal, RatingsConfig: Config,
     chrome: {
       storage: { sync: { get, set: async value => writes.push(value), remove: async keys => removals.push(keys) }, onChanged: { addListener: fn => { listeners.storage = fn; } } },
       action: { setBadgeText() {}, setBadgeBackgroundColor() {} },
@@ -87,4 +87,44 @@ test('RT lookup works without Seerr config and uses central positive and negativ
   api.parseRtSearchResults = () => [];
   assert.equal(await api.getRottenTomatoesRatings({ title: 'Absent' }), null);
   assert.ok(api.rtCache.get('movie:Absent:').expiresAt >= start + Config.rtNegativeCacheTtlMs);
+});
+
+test('worker coalesces RT calls across callers and retries after rejection', async () => {
+  const { api } = loadWorker();
+  let calls = 0, release;
+  api.resolveRottenTomatoesRatings = () => { calls++; return new Promise(resolve => { release = resolve; }); };
+  const requests = Array.from({ length: 8 }, () => api.getRottenTomatoesRatings({ title: 'Same' }));
+  assert.equal(calls, 1);
+  release({ rtCriticsScore: 80 });
+  await Promise.all(requests);
+  api.resolveRottenTomatoesRatings = async () => { throw new Error('network'); };
+  await assert.rejects(api.getRottenTomatoesRatings({ title: 'Retry' }), /network/);
+  api.resolveRottenTomatoesRatings = async () => ({ rtCriticsScore: 90 });
+  assert.equal((await api.getRottenTomatoesRatings({ title: 'Retry' })).rtCriticsScore, 90);
+});
+
+test('temporary connection tests do not replace saved worker settings', async () => {
+  const requests = [];
+  const { api, ready } = loadWorker({
+    get: async () => ({ seerrUrl: 'https://saved.example', seerrApiKey: 'saved-key' }),
+    fetch: async (url, options) => { requests.push({ url, options }); return { ok: true, json: async () => ({ displayName: 'Tester' }) }; }
+  });
+  await ready;
+  const result = await new Promise(resolve => api.handleMessage({ action: 'testConnection', data: { seerrUrl: 'https://test.example', seerrApiKey: 'temporary' } }, {}, resolve));
+  assert.equal(result.success, true);
+  assert.equal(api.baseUrl, 'https://saved.example');
+  assert.equal(api.apiKey, 'saved-key');
+  assert.equal(requests[0].url, 'https://test.example/api/v1/auth/me');
+  assert.equal(requests[0].options.headers['X-Api-Key'], 'temporary');
+  assert.ok(requests[0].options.signal);
+  assert.equal(requests[0].options.redirect, 'error');
+});
+
+test('RT cache remains bounded when distinct lookups finish concurrently', async () => {
+  const { api } = loadWorker();
+  api.fetchRtHtml = async () => '';
+  api.parseRtSearchResults = () => [];
+  await Promise.all(Array.from({ length: Config.cacheMaxEntries + 20 }, (_, i) => api.getRottenTomatoesRatings({ title: `Title ${i}` })));
+  assert.equal(api.rtCache.size, Config.cacheMaxEntries);
+  assert.equal(api.rtPending.size, 0);
 });

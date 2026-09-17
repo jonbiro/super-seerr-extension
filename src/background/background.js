@@ -7,6 +7,7 @@ class SeerrAPI {
     this.baseUrl = null;
     this.apiKey = null;
     this.rtCache = new Map();
+    this.rtPending = new Map();
   }
 
   async migrateStorage() {
@@ -67,7 +68,16 @@ class SeerrAPI {
           break;
 
         case 'testConnection':
-          const connectionResult = await this.testConnection();
+          const connectionClient = request.data ? new SeerrAPI() : this;
+          if (request.data) {
+            const url = new URL(request.data.seerrUrl);
+            if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+              throw new Error('Use a server URL without credentials, query parameters, or fragments');
+            }
+            connectionClient.baseUrl = url.href;
+            connectionClient.apiKey = request.data.seerrApiKey;
+          }
+          const connectionResult = await connectionClient.testConnection();
           sendResponse({ success: true, data: connectionResult });
           break;
 
@@ -882,6 +892,7 @@ class SeerrAPI {
     }
     const response = await fetch(target.href, {
       redirect: 'error',
+      signal: AbortSignal.timeout(RatingsConfig.requestTimeoutMs),
       credentials: 'omit',
       headers: {
         Accept: 'text/html,application/xhtml+xml'
@@ -893,13 +904,34 @@ class SeerrAPI {
     return response.text();
   }
 
-  async getRottenTomatoesRatings({ title, year = null, mediaType = 'movie' }) {
+  cacheRottenTomatoesResult(key, value, ttl) {
+    this.rtCache.delete(key);
+    while (this.rtCache.size >= RatingsConfig.cacheMaxEntries) this.rtCache.delete(this.rtCache.keys().next().value);
+    this.rtCache.set(key, { value, expiresAt: Date.now() + ttl });
+  }
+
+  async getRottenTomatoesRatings(data) {
+    const title = typeof data?.title === 'string' ? data.title.trim() : '';
+    if (!title) return null;
+    const normalized = { ...data, title, mediaType: data.mediaType || 'movie' };
+    const key = `${normalized.mediaType}:${title}:${normalized.year || ''}`;
+    if (this.rtPending.has(key)) return this.rtPending.get(key);
+    const pending = this.resolveRottenTomatoesRatings(normalized);
+    this.rtPending.set(key, pending);
+    try { return await pending; }
+    finally { this.rtPending.delete(key); }
+  }
+
+  async resolveRottenTomatoesRatings({ title, year = null, mediaType = 'movie' }) {
     if (!title) return null;
 
     const cacheKey = `${mediaType}:${title}:${year || ''}`;
     const cached = this.rtCache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) return cached.value;
 
+    // Bound the worker cache during long browsing sessions.
+    for (const [key, entry] of this.rtCache) if (Date.now() >= entry.expiresAt) this.rtCache.delete(key);
+    if (this.rtCache.size >= RatingsConfig.cacheMaxEntries) this.rtCache.delete(this.rtCache.keys().next().value);
     const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`;
     const searchHtml = await this.fetchRtHtml(searchUrl);
     const candidates = this.parseRtSearchResults(searchHtml, mediaType)
@@ -912,7 +944,7 @@ class SeerrAPI {
     const best = candidates[0];
     if (!best || best.confidence < RatingsConfig.confidenceThreshold) {
       const empty = null;
-      this.rtCache.set(cacheKey, { value: empty, expiresAt: Date.now() + RatingsConfig.rtNegativeCacheTtlMs });
+      this.cacheRottenTomatoesResult(cacheKey, empty, RatingsConfig.rtNegativeCacheTtlMs);
       return empty;
     }
 
@@ -933,7 +965,9 @@ class SeerrAPI {
       matchedYear: best.year
     };
 
-    this.rtCache.set(cacheKey, { value: result, expiresAt: Date.now() + RatingsConfig.rtCacheTtlMs });
+    const ttl = result.rtCriticsScore === null && result.rtAudienceScore === null
+      ? RatingsConfig.rtNegativeCacheTtlMs : RatingsConfig.rtCacheTtlMs;
+    this.cacheRottenTomatoesResult(cacheKey, result, ttl);
     return result;
   }
 
@@ -1012,6 +1046,8 @@ class SeerrAPI {
     const url = `${this.baseUrl.replace(/\/$/, '')}${endpoint}`;
     const options = {
       method,
+      redirect: 'error',
+      signal: AbortSignal.timeout(RatingsConfig.requestTimeoutMs),
       headers: {
         'Content-Type': 'application/json',
         'X-Api-Key': this.apiKey
@@ -1034,7 +1070,7 @@ class SeerrAPI {
         throw new Error(errorMessage);
       }
 
-      return await response.json();
+      return response.status === 204 ? null : await response.json();
     } catch (error) {
       if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
         throw new Error('Could not connect to Seerr server. Please check the URL and your network connection.');

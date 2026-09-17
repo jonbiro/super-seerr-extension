@@ -33,10 +33,10 @@ test('Seerr list filtering operates on media cards, not overlay badge elements',
   );
 });
 
-test('Seerr list filtering hydrates card IDs from list API order when links are absent', () => {
+test('Seerr list filtering hydrates card IDs from list API titles when links are absent', () => {
   assert.ok(
     seerrIntegration.includes('function hydrateCardsFromListItems'),
-    'Content script should map list API items onto rendered title cards'
+    'Content script should match list API titles to rendered title cards'
   );
   assert.ok(
     seerrIntegration.includes('card.__seerrListMediaInfo = info'),

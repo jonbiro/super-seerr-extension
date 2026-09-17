@@ -8,7 +8,7 @@ CHROME_DIST = $(DIST_DIR)/chrome
 FIREFOX_DIST = $(DIST_DIR)/firefox
 
 # Files to include in the extension
-COMMON_FILES = src icons README.md CHANGELOG.md LICENSE
+COMMON_FILES = src icons docs README.md CHANGELOG.md LICENSE
 
 # Exclude macOS hidden files and development/git folders for zip
 EXCLUDES = -x "*.DS_Store" -x "__MACOSX" -x "*.git*" -x ".idea*" -x "screenshots/*" -x ".github*"
@@ -57,7 +57,7 @@ clean-firefox:
 clean:
 	@echo "Cleaning up..."
 	@rm -rf $(DIST_DIR)
-	@rm -f *.xpi *.zip 2>/dev/null || true
+	@rm -f $(NAME)-v*.xpi $(NAME)-v*.zip 2>/dev/null || true
 	@echo "Done."
 
 # Development targets

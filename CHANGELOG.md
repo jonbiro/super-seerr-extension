@@ -2,6 +2,16 @@
 
 All notable changes to the Super Seerr extension will be documented in this file.
 
+## [3.1.8]
+
+- Added explicit saved overlay preferences and non-saving connection tests.
+- Separated embedded/list ratings by movie/TV identity and preserved server base paths.
+- Handled query-only navigation, cleanup, and page restoration.
+- Added request deadlines, RT lookup coalescing, bounded caches, and invalid-score handling.
+- Kept sorting available with badges hidden; improved keyboard selection and cancellable bulk dialogs.
+- Added production DOM regressions, syntax/manifest checks, a committed dependency lockfile, and documentation in build packages.
+- Replaced obsolete migration plans with current architecture, requirements, verification, and troubleshooting documentation.
+
 ## [3.1.5]
 
 - Corrected historical migration examples to preserve active settings and shared client files.

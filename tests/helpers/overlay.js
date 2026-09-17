@@ -40,8 +40,8 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, sendM
     querySelectorAll: selector => selector.startsWith('script') ? scripts.map(data => ({ textContent: JSON.stringify(data) })) : []
   };
   const context = vm.createContext({
-    console, URL, document, fetch,
-    setTimeout() {}, clearTimeout() {},
+    console, URL, document, fetch, AbortSignal,
+    setTimeout() {}, clearTimeout() {}, setInterval() {}, clearInterval() {},
     history: { pushState() {}, replaceState() {} },
     chrome: { storage: { sync: { get: async () => settings }, onChanged: { addListener() {} } }, runtime: { sendMessage } },
     window: { RatingsModel: Model, RatingsConfig: Config, location: { pathname, search: '', origin: 'https://seerr.example' }, addEventListener() {} }
