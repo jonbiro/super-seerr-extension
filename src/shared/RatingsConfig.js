@@ -24,10 +24,11 @@ const RatingsConfig = {
   //
   // The overlay ratings cache has no expiry by design, so this cap is its only
   // bound; eviction is least-recently-used.
-  // Some Seerr instances have no reachable IMDb source, so /ratingscombined
-  // 404s for every title. Stop asking after this many consecutive failures;
-  // any success resets it, and a refresh gives it another chance.
-  combinedRatingsFailureLimit: 12,
+  // Seerr's two ratings endpoints share one backend, so where that backend is
+  // unreachable both 404 for every title. Stop asking after this many
+  // consecutive failures across the pair; any success resets it, and a refresh
+  // gives them another chance.
+  seerrRatingsFailureLimit: 12,
 
   overlayCacheMaxEntries: 5000,
   // Rotten Tomatoes lookups do expire, so this only bounds a browsing session.

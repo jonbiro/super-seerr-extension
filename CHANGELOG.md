@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.40]
+
+- Fixed the previous release moving its 404s rather than stopping them. Skipping `/ratings` relied on `/ratingscombined` being asked first and failing, so once the latter was given up on, that signal never fired and every card asked `/ratings` instead. Both endpoints are now given up on together.
+- Fixed a second case that would never have stopped: Seerr answers `/ratingscombined` with 200 when it holds either source, so a server with IMDb but no Rotten Tomatoes succeeded there and failed on `/ratings` for every card, with each success clearing the count. Failures are now tracked per endpoint.
+
 ## [3.1.39]
 
 - The popup now says something different depending on what you have set up. Every state shared one description, so once you had added an API key it still told you what an API key would let you do. It now reads **Ready to request** when requests are available and **Ratings are on** when only the server URL is saved, each describing what you can actually do rather than announcing that the extension is running.

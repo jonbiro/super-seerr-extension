@@ -461,12 +461,31 @@
     detail: ['tmdbRating']
   };
 
-  // A Seerr with no reachable IMDb source 404s /ratingscombined for every
-  // title. Each ask costs a request and a console error for data that will
-  // not arrive, so stop after a sustained run of failures.
-  let combinedRatingsFailures = 0;
-  const combinedRatingsGivenUp = () => combinedRatingsFailures >= Config.combinedRatingsFailureLimit;
-  function resetCombinedRatings() { combinedRatingsFailures = 0; }
+  // Seerr serves /ratings and /ratingscombined from one backend, so where that
+  // is unreachable both 404 for every title, costing a request and a console
+  // error apiece for data that will not arrive. They are given up on together:
+  // dropping only the combined endpoint simply moved every failure onto
+  // /ratings, because the skip for it depended on combined failing first.
+  const seerrRatingsFailures = { ratings: 0, ratingscombined: 0 };
+  const RATINGS_ENDPOINTS = new Set(['ratings', 'ratingscombined']);
+
+  // Counted per endpoint, because the two fail independently: Seerr answers
+  // /ratingscombined with 200 when it holds either source, so a server with
+  // IMDb but no Rotten Tomatoes succeeds there and 404s on /ratings for every
+  // card. One shared counter would be reset by those successes and never trip.
+  //
+  // The implication runs one way. A combined 404 means neither source exists,
+  // so /ratings cannot succeed either and both are dropped. A /ratings 404
+  // says nothing about IMDb, so combined keeps going.
+  function seerrRatingsGivenUp(kind) {
+    if (seerrRatingsFailures.ratingscombined >= Config.seerrRatingsFailureLimit) return true;
+    return seerrRatingsFailures[kind] >= Config.seerrRatingsFailureLimit;
+  }
+
+  function resetSeerrRatings() {
+    seerrRatingsFailures.ratings = 0;
+    seerrRatingsFailures.ratingscombined = 0;
+  }
 
   function endpointCanHelp(bundle, fields) {
     return !bundle || fields.some(field => bundle[field] === null || bundle[field] === undefined);
@@ -482,7 +501,7 @@
          [`/api/v1/movie/${tmdbId}`, 'detail']];
     const endpoints = all
       .filter(([, kind]) => endpointCanHelp(known, SESSION_ENDPOINT_FIELDS[kind]))
-      .filter(([, kind]) => !(kind === 'ratingscombined' && combinedRatingsGivenUp()))
+      .filter(([, kind]) => !(RATINGS_ENDPOINTS.has(kind) && seerrRatingsGivenUp(kind)))
       .map(([endpoint]) => endpoint);
 
     let bundle = null;
@@ -498,12 +517,14 @@
       }
       try {
         const result = await fetchJsonFromSeerr(endpoint);
-        if (endpoint.endsWith('/ratingscombined')) {
-          if (result.ok) resetCombinedRatings();
+        const kind = endpoint.endsWith('/ratingscombined') ? 'ratingscombined'
+          : endpoint.endsWith('/ratings') ? 'ratings' : null;
+        if (kind) {
+          if (result.ok) seerrRatingsFailures[kind] = 0;
           else if (result.status === 404) {
-            combinedRatingsFailures++;
-            if (combinedRatingsGivenUp()) {
-              log(`Seerr has answered ${combinedRatingsFailures} combined ratings requests with 404; not asking again this session`);
+            seerrRatingsFailures[kind]++;
+            if (seerrRatingsGivenUp(kind)) {
+              log(`Seerr has answered ${seerrRatingsFailures[kind]} ${kind} requests with 404; not asking again this session`);
             }
           }
         }
@@ -807,7 +828,7 @@
     }
     // Refreshing is the user asking us to try again, including endpoints we
     // had given up on.
-    resetCombinedRatings();
+    resetSeerrRatings();
     if (forgotten > 0) schedulePersistedRatingsFlush();
     return forgotten;
   }
@@ -1826,9 +1847,9 @@
           lastAt: observedStats.lastAt,
           byPath: Object.fromEntries(observedStats.byUrl)
         },
-        combinedRatings: {
-          consecutiveFailures: combinedRatingsFailures,
-          givenUp: combinedRatingsGivenUp()
+        seerrRatings: {
+          consecutiveFailures: { ...seerrRatingsFailures },
+          givenUp: { ratings: seerrRatingsGivenUp('ratings'), ratingscombined: seerrRatingsGivenUp('ratingscombined') }
         },
         listItems: lastListItems.length,
         cachedTitles: resolvedCacheSize(),

@@ -68,7 +68,7 @@ That works in the console's default context. The same report is available as `se
 
 ## Every title shows Rotten Tomatoes but no IMDb
 
-IMDb ratings come from Seerr's own `/ratingscombined` endpoint, which reaches an external service; Rotten Tomatoes does not, which is why one can work while the other does not. If `combinedRatings.givenUp` is true in `diagnose()`, Seerr answered a long run of those requests with 404 and Super Seerr stopped asking for this session. That is a property of the server, not of the extension: check that Seerr itself shows IMDb ratings on a title page. **Refresh scores** makes it try again.
+IMDb ratings come from Seerr's own `/ratingscombined` endpoint, which reaches an external service; Rotten Tomatoes does not, which is why one can work while the other does not. If `seerrRatings.givenUp` shows true for an endpoint in `diagnose()`, Seerr answered a long run of those requests with 404 and Super Seerr stopped asking for this session. That is a property of the server, not of the extension: check that Seerr itself shows IMDb ratings on a title page. **Refresh scores** makes it try again.
 
 ## The API key is missing on another device
 
