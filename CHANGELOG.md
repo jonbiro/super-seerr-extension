@@ -2,6 +2,11 @@
 
 All notable changes to the Super Seerr extension will be documented in this file.
 
+## [3.1.9]
+
+- Fixed sorting on Seerr movie grids whose title cards are nested inside list items. Controls now target the complete list, and sorting, filtering, and Reset preserve card wrappers.
+- Added a regression covering the live Seerr list structure, coverage counts, filtering, Reset, and disabling the overlay.
+
 ## [3.1.8]
 
 - Added explicit saved overlay preferences and non-saving connection tests.

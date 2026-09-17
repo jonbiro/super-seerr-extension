@@ -7,9 +7,13 @@ const source = file => fs.readFileSync(file, 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 async function settle() { for (let i = 0; i < 12; i++) await flush(); }
 
-function createOverlay({ settings = {}, path = '/search?query=test', embedded = null, listItems = [], linkless = false } = {}) {
+function createOverlay({ settings = {}, path = '/search?query=test', embedded = null, listItems = [], linkless = false, wrapped = false } = {}) {
   const dom = new JSDOM(`<main><div id="grid">${['Low', 'High', 'Unknown'].map((title, index) => `<article data-testid="title-card" data-id="${index + 1}"><a href="/movie/${index + 1}"><h2>${title}</h2></a></article>`).join('')}</div></main>`, { url: `https://seerr.example${path}`, runScripts: 'outside-only' });
   const { window } = dom;
+  if (wrapped) window.document.querySelectorAll('[data-testid="title-card"]').forEach(card => {
+    const item = window.document.createElement('li');
+    card.replaceWith(item); item.append(card);
+  });
   if (linkless) window.document.querySelectorAll('a').forEach(link => link.replaceWith(...link.childNodes));
   const storage = { seerrUrl: 'https://seerr.example', seerrApiKey: 'fixture', ...settings };
   let storageListener;
@@ -140,4 +144,29 @@ test('linkless cards use unique title matches rather than list positions', async
   assert.equal(cards[0].__seerrListMediaInfo.tmdbId, '11');
   assert.equal(cards[1].__seerrListMediaInfo.tmdbId, '22');
   assert.equal(cards[2].__seerrListMediaInfo, undefined);
+});
+
+
+test('Seerr list-item wrappers sort as complete cards and reset without empty slots', async t => {
+  const fixture = createOverlay({ wrapped: true });
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  const doc = fixture.window.document;
+  const order = () => [...doc.querySelectorAll('#grid > li > article')].map(el => el.dataset.id).join(',');
+  assert.equal(doc.querySelector('#seerr-filter-bar').nextElementSibling.id, 'grid');
+  assert.equal(doc.querySelector('.seerr-score-coverage').textContent, '2/3 scored');
+  const select = doc.querySelector('.seerr-sort-select');
+  select.value = 'rt-critics-desc'; select.dispatchEvent(new fixture.window.Event('change'));
+  assert.equal(order(), '2,1,3');
+  const input = doc.querySelector('.seerr-min-critics');
+  input.value = '80'; input.dispatchEvent(new fixture.window.Event('input'));
+  assert.equal(doc.querySelector('[data-id="1"]').parentElement.style.display, 'none');
+  doc.querySelector('.seerr-reset-sort').click();
+  assert.equal(order(), '1,2,3');
+  assert.ok([...doc.querySelectorAll('#grid > li')].every(item => item.style.display === '' && item.children.length === 1));
+  select.value = 'rt-critics-desc'; select.dispatchEvent(new fixture.window.Event('change'));
+  fixture.storage.overlayFeatures = { sortFilter: false, cardBadges: false };
+  fixture.change({ overlayFeatures: { newValue: fixture.storage.overlayFeatures } });
+  await settle();
+  assert.equal(order(), '1,2,3');
 });

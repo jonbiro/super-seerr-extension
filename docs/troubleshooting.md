@@ -20,6 +20,8 @@ For a reproducible issue, report title, year, movie/TV type, page route, extensi
 
 ## Sorting does not affect every title
 
+If the toolbar shows “1/1 scored” above a list with many movies, reload Super Seerr version 3.1.9 or later in your browser’s extensions page, then refresh Seerr. Earlier builds targeted an individual list item instead of the complete list.
+
 Only loaded cards in the grid associated with the controls are sorted. Unrated titles remain last. Other carousels and unloaded pages are not a server-side sorted catalogue. The order updates as ratings resolve; Reset restores original order and clears filters.
 
 ## Connection testing fails

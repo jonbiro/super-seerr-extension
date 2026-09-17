@@ -134,11 +134,12 @@
   function cleanupOverlay() {
     routeGeneration++;
     const cards = getMediaCards();
-    for (const grid of new Set(cards.map(card => card.parentElement).filter(Boolean))) {
+    for (const grid of new Set(cards.map(card => getCardsGrid([card])).filter(Boolean))) {
       applyScoreSort(grid, 'default');
     }
     cards.forEach(card => {
       card.style.display = '';
+      getCardLayoutItem(card).style.display = '';
       card.__seerrBadgesResolving = false;
       card.__seerrBadgesCleared = true;
       delete card.__seerrRatings;
@@ -633,8 +634,15 @@
     });
   }
 
+  // Seerr renders title-card inside a <li>. Move the list item, never
+  // detach the card from its React-owned wrapper or sort inside one item.
+  function getCardLayoutItem(card) {
+    const item = card.closest?.('li');
+    return item && item.querySelectorAll('[data-testid="title-card"]').length === 1 ? item : card;
+  }
+
   function getCardsGrid(cards = getMediaCards()) {
-    return cards[0]?.parentElement || null;
+    return cards[0] ? getCardLayoutItem(cards[0]).parentElement : null;
   }
 
   function insertControlsBeforeGrid(bar, grid) {
@@ -932,7 +940,7 @@
       : [...visible.sort(compare), ...hidden.sort((a, b) => originalIndex(a) - originalIndex(b))];
     // Avoid triggering a MutationObserver loop when the order is unchanged.
     if (ordered.every((card, index) => card === currentCards[index])) return;
-    ordered.forEach(card => grid.appendChild(card));
+    ordered.forEach(card => grid.appendChild(getCardLayoutItem(card)));
   }
 
   const currentFilters = {
@@ -953,6 +961,7 @@
       const hidesForAudience = filters.minAudience > 0 && (as === null || as < filters.minAudience);
       const hidesForTmdb = filters.minTmdb > 0 && (ts === null || ts < filters.minTmdb);
       c.style.display = (hidesForCritics || hidesForAudience || hidesForTmdb) ? 'none' : '';
+      getCardLayoutItem(c).style.display = c.style.display;
     });
     applyScoreSort(grid);
   }
@@ -1067,7 +1076,8 @@
       });
       ordered.forEach(c => {
         c.style.display = '';
-        grid.appendChild(c);
+        getCardLayoutItem(c).style.display = '';
+        grid.appendChild(getCardLayoutItem(c));
       });
       currentSort = 'default';
       sortSelect.value = 'default';
