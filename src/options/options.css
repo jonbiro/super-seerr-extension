@@ -318,3 +318,5 @@ footer a:hover {
 .permission-warning { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border: 1px solid #f59e0b; border-left-width: 4px; border-radius: 8px; background: rgba(245, 158, 11, 0.12); padding: 16px; margin: 20px 0; }
 .permission-warning.hidden { display: none; }
 .permission-warning-text { flex: 1 1 260px; line-height: 1.5; }
+.cache-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+.cache-count { opacity: 0.75; }

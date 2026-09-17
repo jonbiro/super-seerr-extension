@@ -46,7 +46,10 @@ test('production cache coalesces calls, separates movie/TV IDs and retries rejec
   let release;
   overlay.setResolver(() => { calls++; return new Promise(resolve => { release = resolve; }); });
   const pending = Array.from({ length: 10 }, () => overlay.getRatings(1, 'Movie', null, 'movie'));
-  assert.equal(calls, 1);
+  // getRatings loads the stored cache before resolving, so the resolver is no
+  // longer reached synchronously. Coalescing still applies once it is.
+  await tick();
+  assert.equal(calls, 1, 'ten concurrent calls must still produce one resolve');
   release(overlay.Model.createRatingsBundle({ rtCriticsScore: 80, confidence: 1 }));
   await Promise.all(pending);
   overlay.setResolver(async () => { calls++; return overlay.Model.createRatingsBundle({ rtCriticsScore: 20, confidence: 1 }); });
@@ -99,10 +102,14 @@ test('production detail injection discards work completed after navigation', asy
   let release;
   overlay.setResolver(() => new Promise(resolve => { release = resolve; }));
   overlay.injectDetailRatings();
+  // Let the stored-cache read settle so the resolver is actually in flight;
+  // otherwise this navigates away before any work has started.
+  await tick();
+  assert.equal(typeof release, 'function', 'the resolver should be in flight');
   overlay.context.window.location.pathname = '/movie/2';
   release(overlay.Model.createRatingsBundle({ rtCriticsScore: 90, confidence: 1 }));
   await tick();
-  assert.equal(overlay.container.children.length, 1);
+  assert.equal(overlay.container.children.length, 1, 'no ratings row for the page we left');
 });
 
 test('production overlay only recognizes the configured Seerr origin and path', async () => {

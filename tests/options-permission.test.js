@@ -13,18 +13,28 @@ function openOptions({ granted = true, synced = {}, local = {} } = {}) {
   const { window } = dom;
   const syncWrites = [];
   const localWrites = [];
+  const localRemovals = [];
   const requested = [];
   const order = [];
 
+  // Mutable stores: a read after a write must see the write, or a test can
+  // pass against a page that never actually changed anything.
+  const syncStore = { ...synced };
+  const localStore = { ...local };
   window.chrome = {
     storage: {
       sync: {
-        get: async () => ({ ...synced }),
-        set: async value => { order.push('sync.set'); syncWrites.push(value); }
+        get: async () => ({ ...syncStore }),
+        set: async value => { order.push('sync.set'); syncWrites.push(value); Object.assign(syncStore, value); }
       },
       local: {
-        get: async () => ({ ...local }),
-        set: async value => { order.push('local.set'); localWrites.push(value); }
+        get: async () => ({ ...localStore }),
+        set: async value => { order.push('local.set'); localWrites.push(value); Object.assign(localStore, value); },
+        remove: async keys => {
+          order.push('local.remove');
+          localRemovals.push(keys);
+          (Array.isArray(keys) ? keys : [keys]).forEach(key => delete localStore[key]);
+        }
       }
     },
     permissions: {
@@ -34,7 +44,7 @@ function openOptions({ granted = true, synced = {}, local = {} } = {}) {
     runtime: { sendMessage: async () => ({ success: true }) }
   };
   window.eval(fs.readFileSync('src/options/options.js', 'utf8'));
-  return { dom, window, syncWrites, localWrites, requested, order };
+  return { dom, window, syncWrites, localWrites, localRemovals, requested, order };
 }
 
 const warningHidden = window => window.document.getElementById('permissionWarning').classList.contains('hidden');
@@ -128,4 +138,35 @@ test('the saved key is loaded back from local storage into the form', async t =>
 
   assert.equal(ctx.window.document.getElementById('apiKey').value, 'stored-key');
   assert.equal(ctx.window.document.getElementById('debugLogging').checked, true);
+});
+
+test('Settings reports how many ratings are cached and clears them', async t => {
+  const ctx = openOptions({
+    granted: true,
+    local: { overlayRatingsV1: { server: 'https://seerr.example/', entries: { 'movie:550': {}, 'tv:1396': {} } } }
+  });
+  t.after(() => ctx.dom.window.close());
+  await flush();
+
+  assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /2 titles cached/);
+  assert.equal(ctx.window.document.getElementById('clearRatingsCache').disabled, false);
+
+  ctx.window.document.getElementById('clearRatingsCache').click();
+  await flush();
+
+  // Removal, not an empty write: open tabs treat a write as a normal flush.
+  // Flatten: the arrays come from the page realm.
+  assert.deepEqual(ctx.localRemovals.map(keys => [...keys]), [['overlayRatingsV1']]);
+  assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /No ratings cached/);
+  assert.equal(ctx.window.document.getElementById('clearRatingsCache').disabled, true, 'nothing left to clear');
+});
+
+test('an empty or missing ratings cache disables the clear button', async t => {
+  for (const local of [{}, { overlayRatingsV1: { server: 'x', entries: {} } }, { overlayRatingsV1: 'corrupt' }]) {
+    const ctx = openOptions({ granted: true, local });
+    t.after(() => ctx.dom.window.close());
+    await flush();
+    assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /No ratings cached/);
+    assert.equal(ctx.window.document.getElementById('clearRatingsCache').disabled, true);
+  }
 });

@@ -42,6 +42,10 @@ The Firefox manifest now uses the `background.scripts` module form that Firefox 
 
 The site integrations and the Seerr overlay use different permissions. Open Settings: if a notice offers **Grant access**, the overlay has no permission to run on your server and cannot appear until you approve it. Changing the server URL asks again for the new origin, so re-saving after a move needs a fresh approval.
 
+## A rating looks wrong or out of date
+
+Cached ratings do not expire, so a score that has changed upstream keeps its stored value. Use **Settings → Troubleshooting → Clear ratings cache**; open Seerr tabs pick this up without a reload.
+
 ## The API key is missing on another device
 
 The server URL and overlay preferences sync across devices; the API key does not, because it is a secret held in device-local storage. Enter it once per device from Seerr Settings → General → API Key. Upgrading from a version that synced the key moves it to local storage on the device where it was saved.

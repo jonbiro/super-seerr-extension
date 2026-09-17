@@ -28,7 +28,10 @@ class Element {
   }
 }
 
-function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, apiConfigured = true, sendMessage = async () => ({ success: false }), fetch = async () => ({ ok: false }) } = {}) {
+function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local = {}, apiConfigured = true, sendMessage = async () => ({ success: false }), fetch = async () => ({ ok: false }) } = {}) {
+  const localStore = { ...local };
+  let storageListener = null;
+  const timers = [];
   const container = new Element();
   const title = container.appendChild(new Element('h1'));
   title.textContent = 'Example';
@@ -41,13 +44,23 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, apiCo
   };
   const context = vm.createContext({
     console, URL, document, fetch, AbortSignal,
-    setTimeout() {}, clearTimeout() {}, setInterval() {}, clearInterval() {},
+    // Timers are recorded rather than run, so tests stay deterministic. Call
+    // runTimers() to fire what the code under test scheduled.
+    setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length; },
+    clearTimeout(id) { if (timers[id - 1]) timers[id - 1].fn = null; },
+    setInterval() {}, clearInterval() {},
     history: { pushState() {}, replaceState() {} },
     chrome: {
       storage: {
         sync: { get: async () => settings },
-        local: { get: async () => ({}) },
-        onChanged: { addListener() {} }
+        local: {
+          get: async keys => Object.fromEntries(
+            (Array.isArray(keys) ? keys : [keys]).filter(key => localStore[key] !== undefined).map(key => [key, localStore[key]])
+          ),
+          set: async value => { Object.assign(localStore, value); },
+          remove: async keys => { (Array.isArray(keys) ? keys : [keys]).forEach(key => delete localStore[key]); }
+        },
+        onChanged: { addListener(fn) { storageListener = fn; } }
       },
       // Answered here so a test's sendMessage only ever sees ratings traffic.
       runtime: { sendMessage: message => message?.action === 'getConfigState'
@@ -62,10 +75,21 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, apiCo
     getRatings, resolveRatings, mergeBundles, isBundleComplete, fetchSeerrSessionRatings, buildSummary, injectDetailRatings,
     extractSeerrNativeRatings, cleanupOverlay, ratingsCache, isSeerrPage, isRequestableTitle,
     applyScoreSort, applyScoreFilters,
+    loadPersistedRatings, flushPersistedRatings,
     setSort: order => { currentSort = order; },
     setResolver: fn => { resolveRatings = fn; }
   }; })();`), context);
-  return { ...context.overlay, context, container, Model };
+  return {
+    ...context.overlay, context, container, Model, localStore,
+    // Simulate a write from elsewhere, e.g. Settings clearing the cache.
+    changeLocal: changes => storageListener?.(changes, 'local'),
+    // Fire timers scheduled at or under `maxDelay`, newest batch first drained.
+    runTimers: (maxDelay = Infinity) => {
+      const due = timers.filter(timer => timer.fn && timer.delay <= maxDelay);
+      due.forEach(timer => { const fn = timer.fn; timer.fn = null; fn(); });
+      return due.length;
+    }
+  };
 }
 
 module.exports = { loadOverlay, Element };

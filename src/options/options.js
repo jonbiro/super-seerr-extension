@@ -1,5 +1,8 @@
 // Options page JavaScript
 
+// Written by the Seerr overlay; see src/content/seerr-integration.js.
+const RATINGS_CACHE_KEY = 'overlayRatingsV1';
+
 class OptionsManager {
   constructor() {
     this.form = document.getElementById('settingsForm');
@@ -12,6 +15,8 @@ class OptionsManager {
     this.statusDiv = document.getElementById('status');
     this.permissionWarning = document.getElementById('permissionWarning');
     this.debugLoggingInput = document.getElementById('debugLogging');
+    this.clearCacheButton = document.getElementById('clearRatingsCache');
+    this.cacheCount = document.getElementById('ratingsCacheCount');
     this.grantButton = document.getElementById('grantPermission');
 
     this.init();
@@ -28,8 +33,38 @@ class OptionsManager {
     this.toggleButton?.addEventListener('click', () => this.toggleApiKeyVisibility());
     this.skipButton?.addEventListener('click', () => window.close());
     this.grantButton?.addEventListener('click', () => this.grantOverlayAccess());
+    this.clearCacheButton?.addEventListener('click', () => this.clearRatingsCache());
 
     await this.refreshPermissionWarning();
+    await this.refreshCacheCount();
+  }
+
+  // Cached ratings persist until cleared, so show how many are held.
+  async refreshCacheCount() {
+    if (!this.cacheCount) return;
+    let held = 0;
+    try {
+      const stored = (await chrome.storage.local.get([RATINGS_CACHE_KEY]))[RATINGS_CACHE_KEY];
+      held = Object.keys(stored?.entries || {}).length;
+    } catch (_) {
+      held = 0;
+    }
+    this.cacheCount.textContent = held === 0
+      ? 'No ratings cached'
+      : `${held} title${held === 1 ? '' : 's'} cached`;
+    if (this.clearCacheButton) this.clearCacheButton.disabled = held === 0;
+  }
+
+  async clearRatingsCache() {
+    try {
+      // Removing the key is what open Seerr tabs watch for; a write is not a clear.
+      await chrome.storage.local.remove([RATINGS_CACHE_KEY]);
+      this.showStatus('success', 'Ratings cache cleared');
+    } catch (error) {
+      console.error('Could not clear the ratings cache:', error);
+      this.showStatus('error', 'Failed to clear the ratings cache');
+    }
+    await this.refreshCacheCount();
   }
 
   // An origin match pattern for the URL in the form, or null when unusable.

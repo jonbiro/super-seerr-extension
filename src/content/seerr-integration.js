@@ -38,7 +38,8 @@
       } catch (_) {
         configuredServer = null;
       }
-      if (previousServer !== configuredServer?.href) ratingsCache.clear();
+      // A different server's ratings are meaningless here.
+      if (previousServer !== configuredServer?.href) forgetPersistedRatings();
 
       const response = await chrome.runtime.sendMessage({ action: 'getConfigState' }).catch(() => null);
       apiConfigured = response?.success === true && response.data?.apiConfigured === true;
@@ -52,12 +53,85 @@
   // Update when settings change (e.g., user configures from options page).
   // The URL and feature flags sync; the API key is device-local.
   chrome.storage.onChanged.addListener((changes, namespace) => {
+    // Settings clears the cache by removing the key. Our own flushes always
+    // write a value, so only a removal counts as a clear.
+    if (namespace === 'local' && changes[PERSISTED_RATINGS_KEY] && changes[PERSISTED_RATINGS_KEY].newValue === undefined) {
+      forgetPersistedRatings();
+      cleanupOverlay();
+      injectOverlay();
+      return;
+    }
     const relevant = (namespace === 'sync' && (changes.seerrUrl || changes.overlayFeatures)) ||
       (namespace === 'local' && changes.seerrApiKey);
     if (relevant) checkApiConfig().then(() => { cleanupOverlay(); injectOverlay(); });
   });
 
-  const ratingsCache = new Map(); // key: tmdbId (string), value: { bundle, expiresAt }
+  // key: `${mediaType}:${tmdbId}`, value: { bundle }. `pending:` keys hold the
+  // in-flight promise instead, so serialisation skips them.
+  const ratingsCache = new Map();
+
+  // Resolved bundles persist so a page reload does not re-resolve every card.
+  // There is no expiry by design: entries live until the entry cap evicts them
+  // or the user clears the cache from Settings.
+  const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';
+  const PERSISTED_RATINGS_FLUSH_MS = 500;
+  let persistedRatingsReady = null;
+  let persistedRatingsFlushTimer = null;
+  let persistedRatingsFlushing = null;
+
+  function loadPersistedRatings() {
+    persistedRatingsReady ??= (async () => {
+      try {
+        const stored = (await chrome.storage.local.get([PERSISTED_RATINGS_KEY]))[PERSISTED_RATINGS_KEY];
+        if (!stored || typeof stored !== 'object') return;
+        // Entries belong to the server they were read from.
+        if (stored.server !== configuredServer?.href) return;
+        if (!stored.entries || typeof stored.entries !== 'object') return;
+        for (const [key, bundle] of Object.entries(stored.entries)) {
+          // A live entry from this session is fresher than anything stored.
+          if (ratingsCache.has(key) || !bundle || typeof bundle !== 'object') continue;
+          ratingsCache.set(key, { bundle: Model.createRatingsBundle(bundle) });
+        }
+      } catch (error) {
+        log('Could not read the stored ratings cache:', error);
+      }
+    })();
+    return persistedRatingsReady;
+  }
+
+  function schedulePersistedRatingsFlush() {
+    if (persistedRatingsFlushTimer !== null) return;
+    persistedRatingsFlushTimer = setTimeout(() => {
+      persistedRatingsFlushTimer = null;
+      flushPersistedRatings();
+    }, PERSISTED_RATINGS_FLUSH_MS);
+  }
+
+  // Serialised so overlapping flushes cannot interleave their writes.
+  function flushPersistedRatings() {
+    persistedRatingsFlushing = (persistedRatingsFlushing ?? Promise.resolve()).then(async () => {
+      try {
+        if (!configuredServer) return;
+        const entries = {};
+        for (const [key, value] of ratingsCache) {
+          if (key.startsWith('pending:') || !value?.bundle) continue;
+          // Storing "found nothing" without an expiry would mean never looking
+          // again, so only bundles carrying a score are kept.
+          if (!Model.hasAnyScore(value.bundle)) continue;
+          entries[key] = value.bundle;
+        }
+        await chrome.storage.local.set({ [PERSISTED_RATINGS_KEY]: { server: configuredServer.href, entries } });
+      } catch (error) {
+        log('Could not persist the ratings cache:', error);
+      }
+    });
+    return persistedRatingsFlushing;
+  }
+
+  function forgetPersistedRatings() {
+    ratingsCache.clear();
+    persistedRatingsReady = null;
+  }
   const embeddedRatingsByTmdbId = new Map();
   const pageRatingsByTmdbId = new Map();
   const pageMetadataByTmdbId = new Map();
@@ -546,10 +620,16 @@
   }
 
   async function getRatings(tmdbId, title, year, mediaType = null) {
+    await loadPersistedRatings();
+
     const key = `${mediaType || 'unknown'}:${tmdbId || `${title}:${year || ''}`}`;
     const cached = ratingsCache.get(key);
-    if (cached && Date.now() < cached.expiresAt) {
+    if (cached) {
       log(`Cache hit for ${key}`);
+      // Re-insert to mark it most recently used, so the cap evicts by use
+      // rather than by insertion order.
+      ratingsCache.delete(key);
+      ratingsCache.set(key, cached);
       return cached.bundle;
     }
 
@@ -566,17 +646,24 @@
     try {
       const bundle = await promise;
       if (bundle && ratingsCache.get(pendingKey) === promise) {
-        if (ratingsCache.size >= Config.cacheMaxEntries) {
-          for (const existingKey of ratingsCache.keys()) {
-            if (!existingKey.startsWith('pending:')) { ratingsCache.delete(existingKey); break; }
-          }
+        while (resolvedCacheSize() >= Config.cacheMaxEntries) {
+          const lru = [...ratingsCache.keys()].find(existingKey => !existingKey.startsWith('pending:'));
+          if (lru === undefined) break;
+          ratingsCache.delete(lru);
         }
-        ratingsCache.set(key, { bundle, expiresAt: Date.now() + Config.cacheTtlMs });
+        ratingsCache.set(key, { bundle });
+        schedulePersistedRatingsFlush();
       }
       return bundle;
     } finally {
       if (ratingsCache.get(pendingKey) === promise) ratingsCache.delete(pendingKey);
     }
+  }
+
+  function resolvedCacheSize() {
+    let count = 0;
+    for (const key of ratingsCache.keys()) if (!key.startsWith('pending:')) count++;
+    return count;
   }
 
   // ──────────────── Quality Summary ────────────────
@@ -1435,7 +1522,7 @@
         }))
       };
     },
-    clearCache:   () => ratingsCache.clear(),
+    clearCache:   () => { forgetPersistedRatings(); chrome.storage.local.remove([PERSISTED_RATINGS_KEY]); },
     inject:       () => { cleanupOverlay(); injectOverlay(); },
     reInject:     () => { cleanupOverlay(); injectOverlay(); }
   };

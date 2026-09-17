@@ -60,9 +60,17 @@
                 <fieldset class="overlay-options">
                     <legend>Troubleshooting</legend>
                     <label><input type="checkbox" id="debugLogging"> Verbose logging in the background console</label>
+                    <div class="cache-row">
+                        <button type="button" id="clearRatingsCache" class="button secondary">Clear ratings cache</button>
+                        <span id="ratingsCacheCount" class="cache-count"></span>
+                    </div>
                     <small>
                         Off by default. Turn this on only while reproducing a problem: the log can include
                         media titles and Seerr responses, so review it before sharing.
+                    </small>
+                    <small>
+                        Ratings you have already seen are kept so revisiting Seerr does not look them up again.
+                        They do not expire; clear them to force a fresh lookup. Clearing takes effect in open Seerr tabs.
                     </small>
                 </fieldset>
                 <div class="form-actions">
