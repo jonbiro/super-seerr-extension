@@ -386,3 +386,27 @@ test('the stacked badge offset lives with the styles that determine it', async t
   const css = require('node:fs').readFileSync('src/content/seerr-overlay.css', 'utf8');
   assert.match(css, /\.seerr-card-badge-stacked\s*\{[^}]*top:/, 'the offset is defined in CSS');
 });
+
+test('the bulk bar does not break its labels across lines', () => {
+  const css = require('node:fs').readFileSync('src/content/seerr-overlay.css', 'utf8');
+  const rule = css.slice(css.indexOf('.seerr-bulk-action-bar {'), css.indexOf('}', css.indexOf('.seerr-bulk-action-bar {')));
+  assert.match(rule, /white-space:\s*nowrap/, '"3 selected" and "Review & Request" were wrapping');
+});
+
+test('selection is not signalled by colour alone', async t => {
+  // A filled square and an empty one differ only in fill, which anyone who
+  // cannot distinguish the two colours has no way to read.
+  const css = require('node:fs').readFileSync('src/content/seerr-overlay.css', 'utf8');
+  assert.match(css, /\.seerr-select-checkbox\.checked::after\s*\{[^}]*content:/,
+    'the checked state should carry a mark, not just a fill');
+
+  const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  const doc = fixture.window.document;
+  doc.querySelector('.seerr-toggle-select').click();
+  const box = doc.querySelector('.seerr-select-checkbox');
+  assert.equal(box.getAttribute('aria-checked'), 'false');
+  box.click();
+  assert.equal(box.getAttribute('aria-checked'), 'true', 'and the state is exposed to assistive tech');
+  assert.ok(box.classList.contains('checked'));
+});

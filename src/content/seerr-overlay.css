@@ -307,6 +307,20 @@
   background: rgba(0, 0, 0, 0.55);
 }
 
+/* Selection was signalled by fill colour alone. The tick means the state is
+   still readable without relying on colour. */
+.seerr-select-checkbox.checked::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 0px;
+  width: 4px;
+  height: 9px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
 .seerr-select-checkbox.checked {
   background: #8b5cf6;
   border-color: #8b5cf6;
@@ -333,6 +347,8 @@
   font-family: inherit;
   color: #f9fafb;
   font-size: 13px;
+  /* "3 selected" and "Review & Request" were breaking mid-label. */
+  white-space: nowrap;
 }
 
 .seerr-bulk-action-bar button {

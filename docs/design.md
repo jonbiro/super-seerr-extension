@@ -102,7 +102,7 @@ Sorting uses score plus original card index, keeps unrated titles last in both d
 
 ## Bulk interaction
 
-Selection uses card identity rather than array index. Keyboard-accessible selection buttons expose checkbox state. Review uses a labeled dialog, focus cycling, Escape handling, escaped title text, and explicit confirmation.
+Selection uses card identity rather than array index. Keyboard-accessible selection buttons expose checkbox state, and a selected card carries a tick rather than only a fill colour, so the state does not depend on distinguishing two colours. Review uses a labeled dialog, focus cycling, Escape handling, escaped title text, and explicit confirmation.
 
 The batch accepts valid positive IDs with movie/TV types regardless of ratings. Requests are spaced 500 ms apart. Removing the modal or changing routes stops future submissions after any current request finishes. Seerr remains responsible for authorization, approvals, and duplicate handling.
 

@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.38]
+
+- A selected card now shows a tick. Selection was signalled by fill colour alone, which is unreadable to anyone who cannot distinguish the two colours.
+- Fixed the bulk bar breaking "3 selected" and "Review & Request" across two lines.
+
 ## [3.1.37]
 
 - Moved the permission notice in Settings above the form. It explains why the ratings overlay is not running, and sat below the action buttons where it was easy to miss entirely.
