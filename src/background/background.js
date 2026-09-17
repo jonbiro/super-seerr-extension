@@ -701,9 +701,15 @@ class SeerrAPI {
     let status = null;
     let mediaUrl = null;
     let serviceUrl = null;
+    // Seerr has two status enums. A request carries MediaRequestStatus
+    // (pending/approved/declined/failed/completed) while media carries
+    // MediaStatus (unknown/pending/processing/partial/available/
+    // blocklisted/deleted). The same number means different things.
+    let statusKind = 'media';
 
     if (mediaDetails.status !== undefined && mediaDetails.media) {
       status = mediaDetails.status;
+      statusKind = 'request';
       mediaUrl = mediaDetails.media.mediaUrl;
       serviceUrl = mediaDetails.media.serviceUrl;
       this.log('📊 [Background] Found REQUEST object with status:', status);
@@ -711,6 +717,7 @@ class SeerrAPI {
     } else if (mediaDetails.requests && mediaDetails.requests.length > 0) {
       const latestRequest = mediaDetails.requests[0];
       status = latestRequest.status;
+      statusKind = 'request';
       if (latestRequest.media) {
         mediaUrl = latestRequest.media.mediaUrl;
         serviceUrl = latestRequest.media.serviceUrl;
@@ -756,7 +763,7 @@ class SeerrAPI {
     if (mediaUrl) result.watchUrl = mediaUrl;
     if (serviceUrl) result.serviceUrl = serviceUrl;
 
-    this.log('📊 [Background] Mapping status:', status, '(type:', typeof status, ') to UI format');
+    this.log('📊 [Background] Mapping', statusKind, 'status:', status, '(type:', typeof status, ') to UI format');
     this.log('📊 [Background] Raw status value for debugging:', JSON.stringify(status));
 
     const numericStatus = parseInt(status);
@@ -771,10 +778,84 @@ class SeerrAPI {
     }
     this.log('📊 [Background] Numeric status:', numericStatus);
 
-    switch (numericStatus) {
+    if (statusKind === 'request') this.applyRequestStatus(result, numericStatus, mediaUrl);
+    else this.applyMediaStatus(result, numericStatus, mediaUrl, mediaDetails);
+
+    const monitoringInfo = this.detectMonitoringStatus(mediaDetails, mediaType);
+    if (monitoringInfo) {
+      result.monitoring = monitoringInfo;
+      this.log('📊 [Background] Monitoring info:', monitoringInfo);
+    }
+
+    this.log('📊 [Background] Formatted status:', result);
+    return result;
+  }
+
+  // MediaRequestStatus: 1 pending, 2 approved, 3 declined, 4 failed,
+  // 5 completed. These describe the request, not whether media exists.
+  applyRequestStatus(result, status, mediaUrl) {
+    switch (status) {
       case 1:
-        result.status = 'unknown';
-        result.message = 'Status unclear';
+        result.status = 'pending';
+        result.message = 'Request awaiting approval';
+        result.buttonText = 'Request Pending';
+        result.buttonClass = 'pending';
+        break;
+
+      case 2:
+        result.status = 'pending';
+        result.message = 'Request approved';
+        result.buttonText = 'Request Approved';
+        result.buttonClass = 'pending';
+        break;
+
+      case 3:
+        result.status = 'declined';
+        result.message = 'Request declined';
+        result.buttonText = 'Request Declined';
+        result.buttonClass = 'error';
+        break;
+
+      case 4:
+        // Offer a retry: a failed request is the one case where requesting
+        // again is the useful action.
+        result.status = 'failed';
+        result.message = 'Request failed';
+        result.buttonText = 'Try Again';
+        result.buttonClass = 'request';
+        break;
+
+      case 5:
+        result.status = 'available_watch';
+        result.message = 'Available on Jellyfin';
+        result.buttonText = 'Available';
+        result.buttonClass = 'available';
+        if (mediaUrl) {
+          result.watchUrl = mediaUrl;
+          result.buttonText = 'Watch on Jellyfin';
+          result.buttonClass = 'watch';
+        }
+        break;
+
+      default:
+        this.log('📊 [Background] Unknown request status:', status, 'treating as requestable');
+        result.status = 'available';
+        result.message = 'Ready to request';
+        result.buttonText = 'Request on Seerr';
+        result.buttonClass = 'request';
+        break;
+    }
+    return result;
+  }
+
+  // MediaStatus: 1 unknown, 2 pending, 3 processing, 4 partially available,
+  // 5 available, 6 blocklisted, 7 deleted.
+  applyMediaStatus(result, status, mediaUrl, mediaDetails) {
+    switch (status) {
+      case 1:
+        // Seerr treats UNKNOWN as "not requested" and offers the request.
+        result.status = 'available';
+        result.message = 'Ready to request';
         result.buttonText = 'Request on Seerr';
         result.buttonClass = 'request';
         break;
@@ -788,60 +869,16 @@ class SeerrAPI {
 
       case 3: {
         result.status = 'downloading';
-        result.message = 'Processing download (detailed progress not available)';
+        result.message = 'Processing download';
         result.buttonText = 'Processing...';
         result.buttonClass = 'downloading';
 
-        this.log('🔍 [DEBUG] DOWNLOADING STATUS DETECTED - Investigating available data');
-        this.log('🔍 [DEBUG] Full mediaDetails object:', JSON.stringify(mediaDetails, null, 2));
-
-        const progressFields = ['progress', 'percentage', 'downloadProgress', 'completion', 'percent'];
-        const speedFields = ['speed', 'downloadSpeed', 'rate', 'transferRate'];
-        const etaFields = ['eta', 'timeRemaining', 'estimatedCompletion', 'remainingTime'];
-        const clientFields = ['downloadClient', 'downloader', 'client'];
-
-        progressFields.forEach(field => {
-          if (mediaDetails[field] !== undefined) {
-            this.log(`🔍 [DEBUG] Found progress field '${field}':`, mediaDetails[field]);
-            result.progress = mediaDetails[field];
-          }
-        });
-
-        speedFields.forEach(field => {
-          if (mediaDetails[field] !== undefined) {
-            this.log(`🔍 [DEBUG] Found speed field '${field}':`, mediaDetails[field]);
-            result.downloadSpeed = mediaDetails[field];
-          }
-        });
-
-        etaFields.forEach(field => {
-          if (mediaDetails[field] !== undefined) {
-            this.log(`🔍 [DEBUG] Found ETA field '${field}':`, mediaDetails[field]);
-            result.eta = mediaDetails[field];
-          }
-        });
-
-        clientFields.forEach(field => {
-          if (mediaDetails[field] !== undefined) {
-            this.log(`🔍 [DEBUG] Found client field '${field}':`, mediaDetails[field]);
-            result.downloadClient = mediaDetails[field];
-          }
-        });
-
-        if (mediaDetails.media) {
-          this.log('🔍 [DEBUG] Checking media sub-object for progress data...');
-          [...progressFields, ...speedFields, ...etaFields, ...clientFields].forEach(field => {
-            if (mediaDetails.media[field] !== undefined) {
-              this.log(`🔍 [DEBUG] Found media.${field}:`, mediaDetails.media[field]);
-            }
-          });
+        const progress = this.extractDownloadProgress(mediaDetails);
+        Object.assign(result, progress);
+        if (progress.progress !== undefined) {
+          result.message = `Download in progress (${progress.progress}%)`;
+          result.buttonText = `Downloading ${progress.progress}%`;
         }
-
-        if (result.progress !== undefined) {
-          result.message = `Download in progress (${result.progress}%)`;
-          result.buttonText = `Downloading ${result.progress}%`;
-        }
-
         break;
       }
 
@@ -870,23 +907,49 @@ class SeerrAPI {
         }
         break;
 
+      case 6:
+        // Blocklisted on the server; requesting it cannot succeed.
+        result.status = 'blocklisted';
+        result.message = 'Blocklisted on Seerr';
+        result.buttonText = 'Blocklisted';
+        result.buttonClass = 'error';
+        break;
+
+      case 7:
+        // Removed from the library, so requesting it again is the right offer.
+        result.status = 'available';
+        result.message = 'Ready to request';
+        result.buttonText = 'Request on Seerr';
+        result.buttonClass = 'request';
+        break;
+
       default:
-        this.log('📊 [Background] Unknown status value:', status, 'treating as available');
+        this.log('📊 [Background] Unknown media status:', status, 'treating as available');
         result.status = 'available';
         result.message = 'Ready to request';
         result.buttonText = 'Request on Seerr';
         result.buttonClass = 'request';
         break;
     }
-
-    const monitoringInfo = this.detectMonitoringStatus(mediaDetails, mediaType);
-    if (monitoringInfo) {
-      result.monitoring = monitoringInfo;
-      this.log('📊 [Background] Monitoring info:', monitoringInfo);
-    }
-
-    this.log('📊 [Background] Formatted status:', result);
     return result;
+  }
+
+  // Seerr does not document download progress fields, so these are probed.
+  extractDownloadProgress(mediaDetails) {
+    const found = {};
+    if (!mediaDetails) return found;
+    const groups = {
+      progress: ['progress', 'percentage', 'downloadProgress', 'completion', 'percent'],
+      downloadSpeed: ['speed', 'downloadSpeed', 'rate', 'transferRate'],
+      eta: ['eta', 'timeRemaining', 'estimatedCompletion', 'remainingTime'],
+      downloadClient: ['downloadClient', 'downloader', 'client']
+    };
+    for (const [key, fields] of Object.entries(groups)) {
+      for (const field of fields) {
+        if (mediaDetails[field] !== undefined) found[key] = mediaDetails[field];
+      }
+    }
+    return found;
   }
 
   detectMonitoringStatus(mediaDetails, mediaType) {

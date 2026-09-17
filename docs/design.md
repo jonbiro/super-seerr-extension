@@ -28,6 +28,8 @@ The content-script client retries only a failed round trip. A reply of `{ succes
 
 Messages use an `action` plus action-specific fields. Request/status/watchlist/RT actions use `data`; search and debug helpers also have legacy top-level arguments. Replies are `{ success: true, data }` or `{ success: false, error }`.
 
+Seerr has two status enums and the same number means different things in each: a request carries `MediaRequestStatus` (pending, approved, declined, failed, completed) while media carries `MediaStatus` (unknown, pending, processing, partially available, available, blocklisted, deleted). Status extraction records which kind it found and maps with the matching table. Blocklisted media is reported as such rather than offered for request; deleted media, and media of unknown status, are requestable, which matches Seerr's own cards.
+
 Principal actions are `requestMedia`, `getMediaStatus`, `searchMedia`, `addToWatchlist`, `testConnection`, `getRottenTomatoesRatings`, `getConfigState`, `reloadSettings`, and `ping`. `getConfigState` reports whether requests are available without returning the API key, so the overlay never holds the secret. `testConnection` optionally accepts `data: { seerrUrl, seerrApiKey }` and uses a separate client instance; it never replaces saved settings.
 
 The API helper sends `X-Api-Key` to the configured Seerr endpoint, has a finite timeout, rejects redirects, handles non-success HTTP responses, and accepts empty 204 responses. Rejected redirects prevent credentials being forwarded to an unexpected destination; configure the final server URL.
