@@ -1026,7 +1026,7 @@ class SeerrAPI {
 
   cacheRottenTomatoesResult(key, value, ttl) {
     this.rtCache.delete(key);
-    while (this.rtCache.size >= RatingsConfig.cacheMaxEntries) this.rtCache.delete(this.rtCache.keys().next().value);
+    while (this.rtCache.size >= RatingsConfig.rtCacheMaxEntries) this.rtCache.delete(this.rtCache.keys().next().value);
     this.rtCache.set(key, { value, expiresAt: Date.now() + ttl });
     this.scheduleRtCacheFlush();
   }

@@ -96,9 +96,9 @@ test('the persisted cache never exceeds the configured entry bound', async () =>
   const worker = loadWorker();
   stubRt(worker.api);
   worker.api.parseRtSearchResults = () => [];
-  await Promise.all(Array.from({ length: Config.cacheMaxEntries + 20 }, (_, i) => worker.api.getRottenTomatoesRatings({ title: `Title ${i}` })));
+  await Promise.all(Array.from({ length: Config.rtCacheMaxEntries + 20 }, (_, i) => worker.api.getRottenTomatoesRatings({ title: `Title ${i}` })));
   await worker.api.flushRtCache();
 
-  assert.equal(worker.api.rtCache.size, Config.cacheMaxEntries);
-  assert.equal(Object.keys(worker.localStore[RT_KEY]).length, Config.cacheMaxEntries);
+  assert.equal(worker.api.rtCache.size, Config.rtCacheMaxEntries);
+  assert.equal(Object.keys(worker.localStore[RT_KEY]).length, Config.rtCacheMaxEntries);
 });

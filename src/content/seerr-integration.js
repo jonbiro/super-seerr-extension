@@ -646,7 +646,7 @@
     try {
       const bundle = await promise;
       if (bundle && ratingsCache.get(pendingKey) === promise) {
-        while (resolvedCacheSize() >= Config.cacheMaxEntries) {
+        while (resolvedCacheSize() >= Config.overlayCacheMaxEntries) {
           const lru = [...ratingsCache.keys()].find(existingKey => !existingKey.startsWith('pending:'));
           if (lru === undefined) break;
           ratingsCache.delete(lru);

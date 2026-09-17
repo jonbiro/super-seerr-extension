@@ -106,7 +106,7 @@ test('RT cache remains bounded when distinct lookups finish concurrently', async
   const { api } = loadWorker();
   api.fetchRtHtml = async () => '';
   api.parseRtSearchResults = () => [];
-  await Promise.all(Array.from({ length: Config.cacheMaxEntries + 20 }, (_, i) => api.getRottenTomatoesRatings({ title: `Title ${i}` })));
-  assert.equal(api.rtCache.size, Config.cacheMaxEntries);
+  await Promise.all(Array.from({ length: Config.rtCacheMaxEntries + 20 }, (_, i) => api.getRottenTomatoesRatings({ title: `Title ${i}` })));
+  assert.equal(api.rtCache.size, Config.rtCacheMaxEntries);
   assert.equal(api.rtPending.size, 0);
 });

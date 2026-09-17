@@ -17,9 +17,16 @@ const RatingsConfig = {
   audienceCriticsDelta: 15,  // e.g. audience 80, critics 60 → "Audience likes it more"
 
   requestTimeoutMs: 10000,
+
+  // Two caches, bounded separately: they hold different-sized entries under
+  // different expiry rules, and each persists as one rewritten blob, so the
+  // cap is also what decides how large that write gets.
+  //
   // The overlay ratings cache has no expiry by design, so this cap is its only
   // bound; eviction is least-recently-used.
-  cacheMaxEntries: 500,
+  overlayCacheMaxEntries: 5000,
+  // Rotten Tomatoes lookups do expire, so this only bounds a browsing session.
+  rtCacheMaxEntries: 5000,
   rtNegativeCacheTtlMs: 60 * 60 * 1000,
   rtCacheTtlMs: 24 * 60 * 60 * 1000,
 };

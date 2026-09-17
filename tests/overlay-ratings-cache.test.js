@@ -89,21 +89,21 @@ test('the cache stays within its entry cap', async () => {
   const overlay = loadOverlay({ settings });
   withResolver(overlay, scored);
 
-  for (let i = 0; i < Config.cacheMaxEntries + 25; i++) {
+  for (let i = 0; i < Config.overlayCacheMaxEntries + 25; i++) {
     await overlay.getRatings(i, `Title ${i}`, 2000, 'movie');
   }
   await overlay.flushPersistedRatings();
 
-  assert.ok(overlay.ratingsCache.size <= Config.cacheMaxEntries, `in-memory cache grew to ${overlay.ratingsCache.size}`);
-  assert.ok(Object.keys(overlay.localStore[CACHE_KEY].entries).length <= Config.cacheMaxEntries);
+  assert.ok(overlay.ratingsCache.size <= Config.overlayCacheMaxEntries, `in-memory cache grew to ${overlay.ratingsCache.size}`);
+  assert.ok(Object.keys(overlay.localStore[CACHE_KEY].entries).length <= Config.overlayCacheMaxEntries);
 });
 
 test('the cap evicts least recently used, not merely oldest', async () => {
   const overlay = loadOverlay({ settings });
   withResolver(overlay, scored);
 
-  // Fill exactly to the cap: ids 1..cacheMaxEntries.
-  for (let i = 1; i <= Config.cacheMaxEntries; i++) await overlay.getRatings(i, `Title ${i}`, 2000, 'movie');
+  // Fill exactly to the cap: ids 1..overlayCacheMaxEntries.
+  for (let i = 1; i <= Config.overlayCacheMaxEntries; i++) await overlay.getRatings(i, `Title ${i}`, 2000, 'movie');
 
   // Touch the oldest entry so it is no longer least recently used, then
   // overflow by one so exactly one eviction happens.
