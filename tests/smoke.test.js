@@ -95,7 +95,9 @@ test('HTML files use Seerr branding', () => {
   const popupHtml = fs.readFileSync(path.join(SRC_DIR, 'popup', 'popup.html'), 'utf-8');
   assert.ok(popupHtml.includes('Super Seerr'), 'popup.html title');
   assert.ok(popupHtml.includes('<h1>Super Seerr</h1>'), 'popup.html h1');
-  assert.ok(popupHtml.includes('See ratings on your Seerr server'), 'popup.html configured state');
+  // Branding, not wording: pinning the whole sentence made every copy edit a
+  // failure. What matters here is that the configured state names Seerr.
+  assert.match(popupHtml, /id="configuredDetail"[^>]*>[^<]*Seerr/, 'popup.html configured state names Seerr');
   assert.ok(popupHtml.includes('Connect Your Seerr Server'), 'popup.html not-configured state');
   assert.ok(popupHtml.includes('Unable to connect to your Seerr server'), 'popup.html error state');
 });

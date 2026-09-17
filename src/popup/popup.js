@@ -8,6 +8,8 @@ class PopupManager {
     this.errorState = document.getElementById('errorState');
     this.errorMessage = document.getElementById('errorMessage');
     this.serverUrlSpan = document.getElementById('serverUrl');
+    this.configuredHeading = document.getElementById('configuredHeading');
+    this.configuredDetail = document.getElementById('configuredDetail');
     this.openOptionsButton = document.getElementById('openOptions');
     this.testConnectionButton = document.getElementById('testConnection');
     
@@ -39,6 +41,7 @@ class PopupManager {
 
       // Update server URL display
       this.serverUrlSpan.textContent = this.formatServerUrl(settings.seerrUrl);
+      this.describeConfigured(!!settings.seerrApiKey);
       if (!settings.seerrApiKey) {
         this.showConfiguredState();
         this.testConnectionButton.classList.add('hidden');
@@ -69,6 +72,17 @@ class PopupManager {
       this.showErrorState('Failed to load extension status');
       this.setStatus('error', 'Error');
     }
+  }
+
+  // Two meaningfully different states share this block: ratings only, and
+  // ratings plus requests. Describing both the same way told a reader who had
+  // already added a key what an API key would do for them.
+  describeConfigured(canRequest) {
+    if (!this.configuredHeading || !this.configuredDetail) return;
+    this.configuredHeading.textContent = canRequest ? 'Ready to request' : 'Ratings are on';
+    this.configuredDetail.textContent = canRequest
+      ? 'Ratings show on your Seerr pages, and you can request titles from IMDb, Rotten Tomatoes and five more sites.'
+      : 'Ratings show on your Seerr pages. Add an API key in Settings to request titles from IMDb, Rotten Tomatoes and five more sites.';
   }
 
   showConfiguredState() {
