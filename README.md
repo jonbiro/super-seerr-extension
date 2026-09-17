@@ -2,7 +2,7 @@
 
 A browser extension that seamlessly integrates with popular movie and TV sites, allowing you to request content directly to your Seerr server. Adds Rotten Tomatoes context on Seerr browse cards and detail pages so you can evaluate titles without leaving Seerr.
 
-![Version](https://img.shields.io/badge/version-3.1.4-blue)
+![Version](https://img.shields.io/badge/version-3.1.5-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 ![Chrome](https://img.shields.io/badge/Chrome-Compatible-brightgreen)
 ![Firefox](https://img.shields.io/badge/Firefox-Runtime_validation_pending-orange)
@@ -109,7 +109,7 @@ src/
 │   ├── seerr-integration.js      # Seerr overlay (ratings, sort, bulk)
 │   └── seerr-overlay.css         # Overlay stylesheet (dark/light themes)
 ├── background/
-│   └── background.js             # Service worker (ES module, top-level await)
+│   └── background.js             # Service worker (ES module, asynchronous initialization)
 ├── options/
 │   └── options.{html,js,css}     # Settings page
 └── popup/

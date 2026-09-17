@@ -4,7 +4,7 @@
 
 ## Introduction
 
-This feature migrates the browser extension from "Seerr" branding to "Seerr" branding. The migration is purely cosmetic and structural — it does not alter any API endpoints (`/api/v1/...`) or Jellyfin-related functionality. The scope covers: renaming classes and files, updating storage keys with transparent backward-compatible migration, replacing all user-visible strings, updating manifest metadata, renaming the debug namespace, and updating project-level files (README, CHANGELOG, Makefile). Existing users must experience zero disruption; their stored configuration must be silently migrated on first startup after the update.
+This feature migrates the browser extension to the Super Seerr extension identity. The migration is purely cosmetic and structural — it does not alter any API endpoints (`/api/v1/...`) or Jellyfin-related functionality. The scope covers: renaming classes and files, updating storage keys with transparent backward-compatible migration, replacing all user-visible strings, updating manifest metadata, renaming the debug namespace, and updating project-level files (README, CHANGELOG, Makefile). Existing users must experience zero disruption; their stored configuration must be silently migrated on first startup after the update.
 
 ## Structure Note
 
@@ -21,10 +21,10 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 - **Extension**: The browser extension being migrated (Chrome/Firefox).
 - **Background Script**: `src/background/background.js` — the service worker that manages API calls and storage.
-- **SeerrAPI**: The renamed background-script class, formerly `SeerrAPI`.
-- **SeerrClient**: The renamed shared client class in `src/shared/SeerrClient.js`, formerly `SeerrClient`.
-- **Storage Migration**: The one-time, silent process of reading old storage keys (`seerrUrl`, `seerrApiKey`) and writing their values to new keys (`seerrUrl`, `seerrApiKey`), then deleting the old keys.
-- **Old Storage Keys**: `seerrUrl` and `seerrApiKey` — the Chrome sync storage keys used before migration.
+- **SeerrAPI**: The background-script class.
+- **SeerrClient**: The shared client class in `src/shared/SeerrClient.js`.
+- **Storage Migration**: The one-time, silent process of reading distinct historical storage keys and filling absent active keys (`seerrUrl`, `seerrApiKey`), then deleting only the historical keys.
+- **Old Storage Keys**: The distinct historical keys handled by `migrateStorage()` in the background worker.
 - **New Storage Keys**: `seerrUrl` and `seerrApiKey` — the Chrome sync storage keys used after migration.
 - **Manifest**: `manifest.base.json`, `manifest.chrome.json`, and `manifest.firefox.json` — the WebExtension manifest files.
 - **Content Script Entry**: A file path reference within a `content_scripts[].js` array in the Manifest.
@@ -41,12 +41,12 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. WHEN the Background Script initialises and `seerrUrl` is present in `chrome.storage.sync`, THE Background Script SHALL read the value of `seerrUrl`, write it to `seerrUrl`, and then delete `seerrUrl` from `chrome.storage.sync`.
-2. WHEN the Background Script initialises and `seerrApiKey` is present in `chrome.storage.sync`, THE Background Script SHALL read the value of `seerrApiKey`, write it to `seerrApiKey`, and then delete `seerrApiKey` from `chrome.storage.sync`.
-3. WHEN the Background Script initialises and neither `seerrUrl` nor `seerrApiKey` is present in `chrome.storage.sync`, THE Background Script SHALL skip the migration step without error.
-4. WHEN the Storage Migration completes, THE Background Script SHALL load the active configuration from `seerrUrl` and `seerrApiKey`.
-5. IF the Storage Migration fails due to a storage access error, THEN THE Background Script SHALL log the error and continue loading settings from any already-present `seerrUrl` and `seerrApiKey` values.
-6. THE Background Script SHALL perform the Storage Migration before registering the `chrome.storage.onChanged` listener so that the listener only observes New Storage Keys.
+1. WHEN historical connection keys are present, copy their values into the corresponding active keys only if the active keys are undefined.
+2. Preserve existing active values, including an intentionally empty API key.
+3. Remove only historical keys after their values are safely copied; never remove active keys during migration.
+4. Load active configuration from `seerrUrl` and `seerrApiKey` after migration.
+5. Log storage errors and continue using any active settings already present.
+6. Register listeners synchronously, and make message handling wait for settings initialization to complete.
 
 ### Requirement 2: Storage Key Rename Across All JS Files
 
@@ -54,7 +54,7 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 #### Acceptance Criteria
 
-1. THE Background Script SHALL use `seerrUrl` and `seerrApiKey` as the sole storage key names for all `chrome.storage.sync.get` and `chrome.storage.sync.set` calls.
+1. THE Background Script SHALL use `seerrUrl` and `seerrApiKey` for active connection settings; the migration helper may additionally read and remove historical keys.
 2. THE Background Script SHALL observe only `seerrUrl` and `seerrApiKey` within the `chrome.storage.onChanged` listener.
 3. THE Extension options page script (`options.js`) SHALL read and write `seerrUrl` and `seerrApiKey` exclusively in all `chrome.storage.sync` calls.
 4. THE Extension popup script (`popup.js`) SHALL read `seerrUrl` and `seerrApiKey` exclusively in all `chrome.storage.sync.get` calls.
@@ -67,7 +67,7 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 
 1. THE Background Script SHALL declare the primary API class as `SeerrAPI`, replacing the former `SeerrAPI` declaration.
 2. THE Background Script SHALL instantiate `SeerrAPI` as the active class, replacing any instantiation of `SeerrAPI`.
-3. THE Background Script SHALL contain no remaining references to the identifier `SeerrAPI`.
+3. THE Background Script SHALL retain the `SeerrAPI` class and its instance.
 
 ### Requirement 4: File Rename and Class Rename — SeerrClient
 
@@ -78,7 +78,7 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 1. THE Extension SHALL provide the shared client at the path `src/shared/SeerrClient.js`, replacing `src/shared/SeerrClient.js`.
 2. THE file `src/shared/SeerrClient.js` SHALL declare and export the class `SeerrClient`, replacing the former `SeerrClient` class declaration.
 3. THE `BaseIntegration.js` file SHALL instantiate `SeerrClient` in place of `SeerrClient`.
-4. THE Extension SHALL contain no remaining source files or references to the filename `SeerrClient.js` or the class name `SeerrClient`.
+4. THE Extension SHALL retain `SeerrClient.js` and its class exports for all supported site integrations.
 
 ### Requirement 5: Manifest Updates
 
@@ -105,7 +105,7 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 5. THE `tmdb-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof SeerrClient !== 'undefined'`.
 6. THE `trakt-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof SeerrClient !== 'undefined'`.
 7. THE `filmweb-integration.js` content script SHALL check `typeof SeerrClient !== 'undefined'` in its initialisation guard, replacing the former check for `typeof SeerrClient !== 'undefined'`.
-8. THE Extension SHALL contain no remaining initialisation guards in any site content script that reference `typeof SeerrClient`.
+8. THE Extension SHALL retain initialization guards that check `typeof SeerrClient` before using the client.
 
 ### Requirement 6: UI String Updates — Button Text
 
@@ -143,7 +143,7 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 #### Acceptance Criteria
 
 1. THE `BaseIntegration.js` file SHALL create and populate `window.seerr_debug` in the `setupDebugFunctions` method, replacing `window.seerr_debug`.
-2. THE `BaseIntegration.js` file SHALL NOT create or reference `window.seerr_debug`.
+2. THE `BaseIntegration.js` file SHALL preserve existing entries in `window.seerr_debug`.
 3. WHEN `window.seerr_debug` is already initialised, THE `BaseIntegration.js` file SHALL add site-specific debug functions to the existing object without resetting it.
 
 ### Requirement 9: Comment and Log Message Updates
@@ -179,7 +179,7 @@ Requirements 13 and 14 are in Phase 1 because the init guard fixes are a direct 
 4. THE `UIComponents.js` `injectStyles()` method SHALL use the style ID `seerr-styles-${this.siteName.toLowerCase()}`.
 5. THE 7 site integration files (`imdb-integration.js`, `rt-integration.js`, `tmdb-integration.js`, `letterboxd-integration.js`, `metacritic-integration.js`, `trakt-integration.js`, `filmweb-integration.js`) SHALL use the `seerr-` prefix in all site-specific CSS override blocks.
 6. THE `BaseIntegration.js` file SHALL use the `seerr-` prefix in all DOM query selectors (e.g., `.seerr-media-info`, `.seerr-title`), replacing any `seerr-` prefixed selectors.
-7. THE Extension SHALL contain no remaining CSS class names, element IDs, or DOM selectors using the `seerr-` prefix.
+7. THE Extension SHALL consistently use the `seerr-` prefix for extension CSS classes, element IDs, and DOM selectors.
 
 ### Requirement 14: Fix `MediaExtractor.createMediaData()` to pass through `tmdbId`
 

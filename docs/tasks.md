@@ -4,7 +4,7 @@
 
 ## Overview
 
-Migrate the browser extension from "Seerr" branding to "Seerr" branding through a series of targeted file edits. The migration covers: creating the renamed client file, updating the background script (class rename + storage migration), updating all storage key references across JS files, updating manifest metadata and content script paths, fixing init guards in all 7 site integrations, fixing MediaExtractor tmdbId passthrough, updating all HTML branding strings, renaming the debug namespace, updating project-level files (README, CHANGELOG, Makefile), setting up test infrastructure, and deleting the old client file. No API endpoints or Jellyfin references are changed.
+Migrate the browser extension to Super Seerr branding through a series of targeted file edits. The migration covers: creating the renamed client file, updating the background script (class rename + storage migration), updating all storage key references across JS files, updating manifest metadata and content script paths, fixing init guards in all 7 site integrations, fixing MediaExtractor tmdbId passthrough, updating all HTML branding strings, renaming the debug namespace, updating project-level files (README, CHANGELOG, Makefile), setting up test infrastructure, and deleting the old client file. No API endpoints or Jellyfin references are changed.
 
 ## Tasks
 
@@ -27,7 +27,7 @@ Migrate the browser extension from "Seerr" branding to "Seerr" branding through 
 
   - [ ]* 1.2 Write property test for `SeerrClient` error message branding
     - **Property 4 (partial): Status response button text references new brand**
-    - Verify the connection-failure error message in `SeerrClient` contains `"Seerr"` and does not contain `"Seerr"`
+    - Verify the connection-failure error message in `SeerrClient` contains `"Seerr"` and uses the current server name
     - **Validates: Requirements 6.3**
 
 - [ ] 2. Update `src/shared/BaseIntegration.js`
@@ -43,19 +43,19 @@ Migrate the browser extension from "Seerr" branding to "Seerr" branding through 
 
   - [ ]* 2.2 Write property test for button text branding (Property 3)
     - **Property 3: Button text never references old brand**
-    - Generate varied `mediaData` objects; call the button creation path; assert the button text contains `"Request on Seerr"` and does NOT contain `"Request on Seerr"`
+    - Generate varied `mediaData` objects; call the button creation path; assert the button text contains `"Request on Seerr"` and contains no obsolete product branding
     - **Validates: Requirements 6.1**
 
   - [ ]* 2.3 Write property test for debug namespace (Properties 6 & 7)
     - **Property 6: Debug namespace does not pollute old key**
     - **Property 7: Debug namespace accumulates without reset**
-    - Generate site name strings and pre-existing `window.seerr_debug` objects; call `setupDebugFunctions()`; assert `window.seerr_debug[siteName]` is set, `window.seerr_debug` is never created, and prior entries remain intact
+    - Generate site name strings and pre-existing `window.seerr_debug` objects; call `setupDebugFunctions()`; assert `window.seerr_debug[siteName]` is set, no historical debug namespace is created, and prior entries remain intact
     - **Validates: Requirements 8.1, 8.2, 8.3**
 
 - [ ] 3. Update `src/background/background.js`
   - [ ] 3.1 Add `migrateStorage()` method and update `init()` sequence in `background.js`
-    - Add the `migrateStorage()` method as specified in the design: reads `seerrUrl`/`seerrApiKey`, writes to `seerrUrl`/`seerrApiKey`, removes old keys; logs success or catches and logs errors without throwing
-    - Update `init()` to call `await this.migrateStorage()` as the first step, before `loadSettings()` and before registering the `chrome.storage.onChanged` listener
+    - Add the `migrateStorage()` method as specified in the design: reads distinct historical keys, fills absent `seerrUrl`/`seerrApiKey` values, and removes only the historical keys; logs success or catches and logs errors without throwing
+    - Register listeners synchronously at module scope, then initialize settings and migrate historical keys; make message handlers await initialization
     - _Requirements: 1.1, 1.2, 1.3, 1.4, 1.5, 1.6_
 
   - [ ]* 3.2 Write property tests for storage migration (Properties 1 & 2)
@@ -82,7 +82,7 @@ Migrate the browser extension from "Seerr" branding to "Seerr" branding through 
   - [ ]* 3.5 Write property test for status response button text branding (Property 4 & 5)
     - **Property 4: Status response button text references new brand**
     - **Property 5: "Watch on Jellyfin" is preserved**
-    - Generate `mediaDetails` objects with status codes 1, 2, 3, and absent → assert `buttonText` contains `"Seerr"` and not `"Seerr"`
+    - Generate `mediaDetails` objects with status codes 1, 2, 3, and absent → assert `buttonText` contains `"Seerr"` and uses the current server name
     - Generate `mediaDetails` with `status === 5` and random non-empty `mediaUrl` strings → assert `buttonText === "Watch on Jellyfin"`
     - **Validates: Requirements 6.2, 10.1, 10.2**
 
@@ -240,18 +240,18 @@ Migrate the browser extension from "Seerr" branding to "Seerr" branding through 
   - [ ] 11.3 Create test stub files under `tests/` for smoke tests
     - _Requirements: 33.4, 33.5_
 
-- [ ] 12. Delete `src/shared/SeerrClient.js` and verify no stale references
-  - [ ] 12.1 Delete `src/shared/SeerrClient.js`
+- [ ] 12. Preserve `src/shared/SeerrClient.js` and verify current references
+  - [ ] 12.1 Verify `src/shared/SeerrClient.js` exists
     - Remove the file from the repository
     - _Requirements: 4.1, 4.4_
 
-  - [ ]* 12.2 Write smoke/grep tests to verify no stale Seerr identifiers remain
-    - Assert no source file contains `SeerrClient`, `SeerrAPI`, `seerrUrl`, `seerrApiKey`, `window.seerr_debug`, or the user-visible string `"Seerr"` (excluding occurrences of `"Jellyfin"`)
+  - [ ]* 12.2 Write smoke/grep tests to verify current Super Seerr product metadata
+    - Assert active client, worker, storage, and debug identifiers use their current names; permit historical storage identifiers only in migration code and regression tests.
     - Assert `src/shared/SeerrClient.js` exists
-    - Assert `src/shared/SeerrClient.js` does NOT exist
+    - Assert `src/shared/SeerrClient.js` exists
     - Parse and assert `manifest.base.json` fields: `name`, `description`, `action.default_title`, and all 7 content script paths point to `SeerrClient.js`
     - Parse `options.html` and `popup.html` and assert the specific text values per Requirements 7.1–7.11
-    - Assert README.md, CHANGELOG.md, and Makefile contain no stale Seerr-branded text (excluding `"Jellyfin"`)
+    - Assert README.md, CHANGELOG.md, and Makefile contain current Super Seerr product branding (excluding `"Jellyfin"`)
     - _Requirements: 3.3, 4.4, 5.1–5.5, 7.1–7.11, 10.1, 10.2, 32.1–32.6_
 
 - [ ] 13. Final checkpoint — Ensure all tests pass
@@ -454,7 +454,7 @@ Show Rotten Tomatoes context on Seerr browse cards and detail pages so users can
 
 - Tasks marked with `*` are optional and can be skipped for faster MVP
 - Each task references specific requirements for traceability
-- Task 1 creates the new file before anything imports it; task 12 deletes the old file last to avoid a broken intermediate state
+- Task 1 verifies the shared client; task 12 verifies references without deleting the active client file
 - Tasks 5 (init guard fixes) and 6 (tmdbId fix) run before options/popup/manifest/HTML because they are structurally part of the core migration
 - The `migrateStorage()` step (3.1) runs before the `onChanged` listener registration per Requirement 1.6
 - All `"Watch on Jellyfin"` and `/api/v1/` strings are explicitly left untouched throughout

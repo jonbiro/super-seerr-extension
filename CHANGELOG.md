@@ -2,6 +2,12 @@
 
 All notable changes to the Super Seerr extension will be documented in this file.
 
+## [3.1.5]
+
+- Corrected historical migration examples to preserve active settings and shared client files.
+- Clarified that ratings-only mode requires saving a server URL.
+- Corrected documentation of worker initialization and Firefox compatibility.
+
 ## [3.1.4]
 
 - Published project metadata and issue links for Super Seerr under jonbiro/super-seerr-extension.
@@ -37,8 +43,8 @@ All notable changes to the Super Seerr extension will be documented in this file
 
 ### 🏗️ Architecture
 
-- **ES Modules**: Background service worker uses `type: module` with top-level `await`. Listeners registered synchronously at top level (no race conditions)
-- **Firefox MV3**: FF manifest uses `service_worker` instead of `background.scripts`, matching Chrome's lifecycle
+- **ES Modules**: Background service worker uses `type: module` with asynchronous initialization. Listeners register synchronously; messages wait for settings
+- **Firefox MV3**: The Firefox manifest retains `service_worker`; this remains an unresolved runtime compatibility limitation, as described in README
 - **Native Promise API**: All `chrome.runtime.sendMessage` calls use native Promise-based API (~12 callback wrappers eliminated)
 - **Shared Ratings Model**: `RatingsModel.js` (typed bundle with partial-data support) and `RatingsConfig.js` (centralized thresholds)
 - **Seerr Overlay CSS**: `seerr-overlay.css` injected via manifest `css` array — matches Seerr's visual density, supports dark/light themes

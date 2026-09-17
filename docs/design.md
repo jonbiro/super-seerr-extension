@@ -4,9 +4,9 @@
 
 ## Overview
 
-This document describes the architecture and implementation plan for migrating the Seerr browser extension from "Seerr" branding to "Seerr" branding. The migration is purely cosmetic and structural — no API endpoints, Jellyfin references, or functional logic change. The work is divided into six areas: storage key migration, class/file renaming, manifest updates, UI string updates, debug namespace rename, and comment/log cleanup.
+This document describes the architecture and implementation plan for standardizing the Super Seerr extension and preserving compatibility with existing settings. The migration is purely cosmetic and structural — no API endpoints, Jellyfin references, or functional logic change. The work is divided into six areas: storage key migration, class/file renaming, manifest updates, UI string updates, debug namespace rename, and comment/log cleanup.
 
-The extension uses no build system. All files are plain JavaScript loaded directly by the browser via `content_scripts` entries in the manifest. This means every rename is a direct file/string edit with no transpilation step.
+The extension uses Make to merge browser manifests and increment versions, without a bundler or transpiler. All files are plain JavaScript loaded directly by the browser via `content_scripts` entries in the manifest. This means every rename is a direct file/string edit with no transpilation step.
 
 ---
 
@@ -27,7 +27,7 @@ The extension has the following layers:
                      │ extends
         ┌────────────▼─────────────┐
         │  src/shared/             │
-        │  ├── SeerrClient.js      │  ← renamed from SeerrClient.js
+        │  ├── SeerrClient.js      │  ← shared messaging client
         │  ├── BaseIntegration.js  │
         │  ├── MediaExtractor.js   │
         │  └── UIComponents.js     │
@@ -35,7 +35,7 @@ The extension has the following layers:
                      │ chrome.runtime.sendMessage
         ┌────────────▼─────────────┐
         │  src/background/         │
-        │  └── background.js       │  ← class SeerrAPI (was SeerrAPI)
+        │  └── background.js       │  ← class SeerrAPI
         └──────────────────────────┘
         
         ┌──────────────────────────┐
@@ -52,61 +52,11 @@ No file other than `SeerrClient.js` is renamed. All other changes are string rep
 
 ### 1. Storage Migration — `background.js`
 
-The current `init()` method in `SeerrAPI` (→ `SeerrAPI`) calls `loadSettings()` then registers `chrome.storage.onChanged`. The migration step is inserted between those two actions so the listener only ever fires for new keys.
+The worker registers message and storage listeners synchronously at module scope. A shared initialization promise loads settings, migrates historical storage keys, and loads settings again. Message handlers wait for this promise before calling the API.
 
-New `init()` sequence:
+The production `migrateStorage()` in `src/background/background.js` is the authoritative implementation. Historical key names are confined to that compatibility code and its tests. Migration copies a historical value only when the corresponding active key is undefined; an intentionally empty current API key is preserved. After a successful write, only the historical keys are removed. Active `seerrUrl` and `seerrApiKey` must never appear in the removal list.
 
-```javascript
-async init() {
-  // Step 1: migrate old keys before anything else
-  await this.migrateStorage();
-
-  // Step 2: load active config from new keys
-  await this.loadSettings();
-
-  // Step 3: register listener AFTER migration (only sees new keys)
-  chrome.storage.onChanged.addListener((changes, namespace) => {
-    if (namespace === 'sync' && (changes.seerrUrl || changes.seerrApiKey)) {
-      this.loadSettings();
-    }
-  });
-
-  chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-    this.handleMessage(request, sender, sendResponse);
-    return true;
-  });
-}
-```
-
-`migrateStorage()` implementation:
-
-```javascript
-async migrateStorage() {
-  try {
-    const old = await chrome.storage.sync.get(['seerrUrl', 'seerrApiKey']);
-    const updates = {};
-    const removals = [];
-
-    if (old.seerrUrl) {
-      updates.seerrUrl = old.seerrUrl;
-      removals.push('seerrUrl');
-    }
-    if (old.seerrApiKey) {
-      updates.seerrApiKey = old.seerrApiKey;
-      removals.push('seerrApiKey');
-    }
-
-    if (removals.length > 0) {
-      await chrome.storage.sync.set(updates);
-      await chrome.storage.sync.remove(removals);
-      console.log('✅ [Seerr] Storage migration complete');
-    }
-  } catch (error) {
-    console.error('❌ [Seerr] Storage migration failed, continuing:', error);
-    // Non-fatal: loadSettings will use whatever new keys already exist
-  }
-}
-```
+Migration is non-fatal on storage errors and idempotent once historical keys have been removed. See `tests/background-runtime.test.js` for execution against the actual worker, including preservation of current settings.
 
 `loadSettings()` after migration uses only new keys:
 
@@ -132,7 +82,7 @@ All `buttonText` fields that returned `'Request on Seerr'` are updated to `'Requ
 
 ### 3. File Rename and Class Rename — `SeerrClient.js`
 
-A new file `src/shared/SeerrClient.js` is created. The old file `src/shared/SeerrClient.js` is deleted.
+The shared client lives at `src/shared/SeerrClient.js`. Retain this file; it is loaded by all seven site integrations.
 
 Changes inside the file:
 
@@ -333,7 +283,7 @@ The `SeerrAPI` instance shape in `background.js` remains:
 |---|---|
 | Storage migration throws | Log error, continue — `loadSettings` reads whatever new keys already exist |
 | Old keys absent at migration time | No-op, no error |
-| Both old and new keys present simultaneously | Old keys overwrite new keys, then old keys deleted (migration always wins) |
+| Both old and new keys present simultaneously | Current values take precedence; historical keys are removed after a successful migration |
 | SeerrClient connection failure | Throws `Error('Cannot connect to Seerr server...')` |
 | Background script missing config | Throws `Error('Seerr server URL and API key are required...')` |
 
@@ -431,7 +381,7 @@ Tests use Node's built-in test runner (`node --test`). The fast-check library pr
 
 The recommended execution order minimises the time the extension is in a broken state:
 
-1. Create `src/shared/SeerrClient.js` (new file, do not delete old yet)
+1. Verify the shared client at `src/shared/SeerrClient.js`
 2. Update `BaseIntegration.js` to reference `SeerrClient` and new strings
 3. Update `background.js` — class rename, storage migration, new keys, new strings
 4. Fix SeerrClient init guards in all 7 site integration files
@@ -445,7 +395,7 @@ The recommended execution order minimises the time the extension is in a broken 
 12. Update `CHANGELOG.md` — header line
 13. Update `Makefile` — NAME variable
 14. Set up test infrastructure — `package.json`, `tests/` directory
-15. Delete `src/shared/SeerrClient.js`
+15. Verify all site integrations load `src/shared/SeerrClient.js`
 16. Verify no remaining references to old identifiers
 
 ---
@@ -456,7 +406,7 @@ The recommended execution order minimises the time the extension is in a broken 
 
 ### Property 1: Storage migration is a round trip
 
-*For any* pair of values `(url, apiKey)` stored under the old keys `seerrUrl` / `seerrApiKey`, running `migrateStorage()` followed by `loadSettings()` SHALL result in `this.baseUrl === url` and `this.apiKey === apiKey`, and the old keys SHALL be absent from `chrome.storage.sync`.
+*For any* pair of values `(url, apiKey)` stored under distinct historical keys, with active keys initially absent, running `migrateStorage()` followed by `loadSettings()` SHALL result in `this.baseUrl === url` and `this.apiKey === apiKey`, and the old keys SHALL be absent from `chrome.storage.sync`.
 
 **Validates: Requirements 1.1, 1.2, 1.4**
 
@@ -468,13 +418,13 @@ The recommended execution order minimises the time the extension is in a broken 
 
 ### Property 3: Button text never references old brand
 
-*For any* media data object passed to the button creation path in `BaseIntegration`, the resulting button element's text content SHALL contain `"Request on Seerr"` and SHALL NOT contain `"Request on Seerr"`.
+*For any* media data object passed to the button creation path in `BaseIntegration`, the resulting button element's text content SHALL contain `"Request on Seerr"` and SHALL contain no obsolete product branding.
 
 **Validates: Requirements 6.1**
 
 ### Property 4: Status response button text references new brand
 
-*For any* media details object passed to `formatMediaStatus()` in `SeerrAPI` where the media is not available for watching (status codes 1, 2, 3, or absent), the returned `buttonText` field SHALL contain `"Seerr"` and SHALL NOT contain `"Seerr"`.
+*For any* media details object passed to `formatMediaStatus()` in `SeerrAPI` where the media is not available for watching (status codes 1, 2, 3, or absent), the returned `buttonText` field SHALL contain `"Seerr"` and SHALL use the current server name.
 
 **Validates: Requirements 6.2**
 
@@ -486,7 +436,7 @@ The recommended execution order minimises the time the extension is in a broken 
 
 ### Property 6: Debug namespace does not pollute old key
 
-*For any* `siteName` string, calling `setupDebugFunctions()` SHALL add an entry to `window.seerr_debug[siteName]` and SHALL NOT create or modify `window.seerr_debug`.
+*For any* `siteName` string, calling `setupDebugFunctions()` SHALL add an entry to `window.seerr_debug[siteName]` and SHALL preserve other entries in that namespace.
 
 **Validates: Requirements 8.1, 8.2**
 
@@ -514,10 +464,10 @@ Each property above maps to a property test using a framework like fast-check (J
 
 ### Smoke / Example-Based Tests
 
-- Grep-based checks: no remaining references to `SeerrClient`, `SeerrAPI`, `seerrUrl`, `seerrApiKey`, `window.seerr_debug`, `"Seerr"` in user-visible strings (excluding `"Jellyfin"` occurrences).
+- Grep-based checks: verify current product metadata and preserve active client, worker, storage, and debug identifiers.
 - JSON parse `manifest.base.json` and assert `name`, `description`, `action.default_title`, and all content script paths.
 - Parse `options.html` and `popup.html` and assert specific text values per Requirements 7.1–7.11.
-- Assert `src/shared/SeerrClient.js` exists and `src/shared/SeerrClient.js` does not exist.
+- Assert `src/shared/SeerrClient.js` exists and exports the expected class.
 
 ---
 
@@ -831,7 +781,7 @@ No callers change. All downstream consumers (watchlist, ratings overlay) can now
 
 ### Architecture
 
-The overlay is a new content script (`src/content/seerr-integration.js`) that runs exclusively on Seerr pages. It does not extend `BaseIntegration` — it is a standalone module that imports the shared `RatingsModel` and `RatingsConfig` helpers. The background script is not involved in ratings lookups; all resolution happens in the content script's execution context using the Seerr page's own data and, when needed, proxied fetch calls through the background.
+The overlay is a new content script (`src/content/seerr-integration.js`) that runs exclusively on Seerr pages. It does not extend `BaseIntegration` — it is a standalone module that imports the shared `RatingsModel` and `RatingsConfig` helpers. The content script merges native and session data with RT lookups performed by the background worker.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
