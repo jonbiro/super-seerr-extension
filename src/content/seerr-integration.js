@@ -20,14 +20,17 @@
     preRequestSummary: true,
     sortFilter: true,
     bulkActions: true,
+    plexWatchlist: true,
   };
 
   let apiConfigured = false;
+  let plexConfigured = false;
   let configuredServer = null;
 
   // Check API config — controls whether request features are available.
   // The API key is deliberately never read here: the worker answers whether
   // requests are possible so the secret stays out of this page's heap.
+  // The Plex token stays out the same way: only plexConfigured crosses.
   async function checkApiConfig() {
     try {
       const settings = await chrome.storage.sync.get(['seerrUrl', 'overlayFeatures']);
@@ -39,11 +42,15 @@
         configuredServer = null;
       }
       // A different server's ratings are meaningless here.
-      if (previousServer !== configuredServer?.href) forgetPersistedRatings();
+      if (previousServer !== configuredServer?.href) {
+        forgetPersistedRatings();
+        lastListItems = [];
+      }
 
       const response = await chrome.runtime.sendMessage({ action: 'getConfigState' }).catch(() => null);
       apiConfigured = response?.success === true && response.data?.apiConfigured === true;
-      log('API configured:', apiConfigured);
+      plexConfigured = response?.success === true && response.data?.plexConfigured === true;
+      log('API configured:', apiConfigured, 'Plex configured:', plexConfigured);
     } catch (error) {
       log('Could not load Seerr settings:', error);
     }
@@ -51,7 +58,7 @@
   checkApiConfig().then(() => injectOverlay());
 
   // Update when settings change (e.g., user configures from options page).
-  // The URL and feature flags sync; the API key is device-local.
+  // The URL and feature flags sync; the API keys are device-local.
   chrome.storage.onChanged.addListener((changes, namespace) => {
     // Settings clears the cache by removing the key. Our own flushes always
     // write a value, so only a removal counts as a clear.
@@ -63,6 +70,9 @@
       embeddedRatingsByTmdbId.clear();
       pageRatingsFetches.clear();
       embeddedRatingsIndexed = false;
+      // The title index is cleared with everything else: it belongs to the
+      // catalogue as it was, and re-resolving it is cheaper than badges.
+      lastListItems = [];
       // Clearing the cache is also a request to retry endpoints we had
       // written off, in case the server has gained a ratings backend since.
       resetSeerrRatings();
@@ -71,14 +81,15 @@
       return;
     }
     const relevant = (namespace === 'sync' && (changes.seerrUrl || changes.overlayFeatures)) ||
-      (namespace === 'local' && changes.seerrApiKey);
+      (namespace === 'local' && (changes.seerrApiKey || changes.plexToken));
     if (relevant) checkApiConfig().then(() => { cleanupOverlay(); injectOverlay(); });
   });
 
   const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';
   const { ratingsCache, loadPersistedRatings, schedulePersistedRatingsFlush,
     flushPersistedRatings, forgetPersistedRatings } = window.createOverlayCache({
-      Config, Model, log, getServer: () => configuredServer
+      Config, Model, log, getServer: () => configuredServer,
+      getListIndex: projectListIndex, restoreListIndex
     });
   const embeddedRatingsByTmdbId = new Map();
   const pageRatingsByTmdbId = new Map();
@@ -141,8 +152,15 @@
   let navigationTimer = setInterval(handleRouteChange, 1000);
   window.addEventListener('pagehide', () => {
     clearInterval(navigationTimer); navigationTimer = null;
+    // A debounced write still waiting would die with this context, taking the
+    // latest resolutions with it. Flush now so a reload finds them on disk.
+    flushPersistedRatings();
     if (cardObserver) { cardObserver.disconnect(); cardObserver = null; }
     clearTimeout(cardObserverTimer);
+  });
+  // A hidden tab may never get pagehide before the browser discards it.
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushPersistedRatings();
   });
   window.addEventListener('pageshow', () => {
     if (navigationTimer === null) navigationTimer = setInterval(handleRouteChange, 1000);
@@ -391,6 +409,87 @@
     }
   }
 
+  // What a cold load needs per title to identify cards before Seerr's own
+  // lists arrive. Raw items carry far more fields than that; only the
+  // identifying ones cross into storage, in a shape the live pipeline reads
+  // back directly (poster matching, media info, page metadata).
+  function projectListIndex(items) {
+    const seen = new Set();
+    const projected = [];    for (const item of items) {
+      if (!item || typeof item !== 'object') continue;
+      const info = mediaInfoFromListItem(item);
+      if (!info || !/^\d+$/.test(String(info.tmdbId))) continue;
+      if (info.mediaType !== 'movie' && info.mediaType !== 'tv') continue;
+      const key = `${info.mediaType}:${info.tmdbId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const raw = item.media || item.mediaInfo || item.movie || item.tv || item;
+      const poster = item.posterPath || item.poster_path || raw.posterPath || raw.poster_path || null;
+      projected.push({
+        tmdbId: String(info.tmdbId),
+        mediaType: info.mediaType,
+        title: info.title || '',
+        originalTitle: objectOriginalTitle(item) || '',
+        year: info.year ?? null,
+        posterPath: typeof poster === 'string' && poster.length > 1 ? poster : null,
+        ...(typeof raw.releaseDate === 'string' ? { releaseDate: raw.releaseDate } : {}),
+        ...(typeof raw.firstAirDate === 'string' ? { firstAirDate: raw.firstAirDate } : {})
+      });
+    }
+    return projected.slice(-(Config.listIndexMaxEntries ?? 2000));
+  }
+
+  // The loader calls this with the stored array after the server and epoch
+  // checks pass. Entries are revalidated: storage is writable by anything
+  // sharing the extension's local area, and a malformed entry must never
+  // identify the wrong card.
+  function restoreListIndex(stored) {
+    if (!Array.isArray(stored)) return;
+    const restored = [];
+    const seen = new Set();
+    for (const entry of stored) {
+      if (!entry || typeof entry !== 'object') continue;
+      const tmdbId = String(entry.tmdbId ?? '');
+      const mediaType = entry.mediaType;
+      if (!/^\d+$/.test(tmdbId) || (mediaType !== 'movie' && mediaType !== 'tv')) continue;
+      const key = `${mediaType}:${tmdbId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const title = typeof entry.title === 'string' ? entry.title : '';
+      const originalTitle = typeof entry.originalTitle === 'string' ? entry.originalTitle : '';
+      const year = Number.isInteger(entry.year) ? entry.year : null;
+      const posterPath = typeof entry.posterPath === 'string' && entry.posterPath.length > 1 ? entry.posterPath : null;
+      restored.push({
+        tmdbId, mediaType, title, originalTitle, year, posterPath,
+        ...(typeof entry.releaseDate === 'string' ? { releaseDate: entry.releaseDate } : {}),
+        ...(typeof entry.firstAirDate === 'string' ? { firstAirDate: entry.firstAirDate } : {})
+      });
+      if (title || originalTitle || year) {
+        // Live observations are fresher than anything stored: fill the gaps
+        // without overwriting what the page already said.
+        if (!pageMetadataByTmdbId.has(key)) {
+          pageMetadataByTmdbId.set(key, { title, originalTitle, year });
+        }
+      }
+    }
+    if (lastListItems.length === 0) {
+      lastListItems = restored;
+      return;
+    }
+    // Live items may have arrived before the stored read finished; keep both,
+    // preferring the live copy where they describe the same title.
+    const liveKeys = new Set();
+    for (const item of lastListItems) {
+      const info = mediaInfoFromListItem(item);
+      if (info) liveKeys.add(`${info.mediaType}:${info.tmdbId}`);
+    }
+    lastListItems = lastListItems.concat(
+      restored.filter(item => !liveKeys.has(`${item.mediaType}:${item.tmdbId}`)));
+    if (lastListItems.length > Config.overlayCacheMaxEntries) {
+      lastListItems = lastListItems.slice(-Config.overlayCacheMaxEntries);
+    }
+  }
+
   // Why a given card has no identity yet. Distinguishes "Seerr has not mounted
   // the link" from "nothing we observed matches this poster" from "the poster
   // matches more than one title, so resolving it would be a guess".
@@ -455,6 +554,11 @@
   // Counters so diagnose() can tell "the observer never spoke" apart from
   // "it spoke but nothing matched".
   const observedStats = { messages: 0, items: 0, byUrl: new Map(), lastAt: null, rejected: 0 };
+  // Seerr fires its first lists while this script is still waiting on settings,
+  // and those first lists are the most identifying ones the page will see.
+  // They wait here instead of being dropped, and replay once the server is
+  // known. Bounded: a page that never configures a server drops them instead.
+  const earlyApiEvents = [];
 
   function handleObservedApiResponse(event) {
     // Same window, same origin, and our channel: anything else is not ours.
@@ -463,7 +567,11 @@
     const data = event.data;
     if (!data || data.channel !== 'super-seerr:api') return;
     if (!Array.isArray(data.items)) { observedStats.rejected++; return; }
-    if (!isSeerrPage()) { observedStats.rejected++; return; }
+    if (!isSeerrPage()) {
+      if (!configuredServer && earlyApiEvents.length < 10) { earlyApiEvents.push(event); return; }
+      observedStats.rejected++;
+      return;
+    }
 
     observedStats.messages++;
     observedStats.items += data.items.length;
@@ -488,6 +596,7 @@
       observedRefreshTimer = null;
       if (!isSeerrPage()) return;
       injectCardBadges();
+      injectPlexCardButtons();
       injectSortFilterControls();
     }, 200);
   }
@@ -793,9 +902,16 @@
     const outcome = {};
     const promise = resolveRatings(tmdbId, title, year, mediaType, { ...options, outcome });
     ratingsCache.set(pendingKey, promise);
+    // A hung channel must not pin the coalesced promise forever: after the
+    // deadline the title goes provisional (retried in minutes, never stored)
+    // and the late answer finds its slot already cleared and drops itself.
+    let resolveTimer = null;
+    const deadline = new Promise(resolve => {
+      resolveTimer = setTimeout(() => { outcome.conclusive = false; resolve(null); }, Config.resolveTimeoutMs);
+    });
 
     try {
-      const bundle = await promise;
+      const bundle = await Promise.race([promise, deadline]);
       // Storing the absence is the point: without it every visit asks again.
       const storable = bundle && Model.hasAnyScore(bundle) ? bundle : null;
       // A lookup that could not complete tells us nothing about the title, so
@@ -814,6 +930,7 @@
       }
       return bundle;
     } finally {
+      if (resolveTimer !== null) clearTimeout(resolveTimer);
       if (ratingsCache.get(pendingKey) === promise) ratingsCache.delete(pendingKey);
     }
   }
@@ -1116,6 +1233,157 @@
     return item;
   }
 
+  // True Plex Watchlist, not Seerr's own list: available titles can be saved
+  // directly to plex.tv from the Seerr detail page, without opening Plex.
+  function injectPlexWatchlistButton() {
+    if (!FEATURE_FLAGS.plexWatchlist || !plexConfigured) return;
+    const route = detectRoute();
+    if (!route || (route.type !== 'movie-detail' && route.type !== 'tv-detail')) return;
+    const titleBlock = document.querySelector('[class*="title"], [class*="Title"], h1');
+    if (!titleBlock) return;
+    const container = titleBlock.closest('[class*="header"], [class*="Header"], [class*="detail"], [class*="Detail"], [class*="media-page"], [data-testid]')
+      || titleBlock.parentElement;
+    if (!container || container.querySelector('.seerr-plex-watchlist-button')) return;
+
+    const tmdbId = route.id;
+    const title = document.querySelector('h1')?.textContent?.trim() || '';
+    const mediaType = route.type === 'tv-detail' ? 'tv' : 'movie';
+    if (!tmdbId) return;
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'seerr-plex-watchlist-button';
+    button.setAttribute('data-seerr-overlay', 'true');
+    button.textContent = '＋ Add to Plex Watchlist';
+    button.addEventListener('click', async () => {
+      if (button.disabled) return;
+      button.disabled = true;
+      button.textContent = 'Adding to Plex…';
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'plexAddToWatchlist',
+          data: { tmdbId: Number(tmdbId), title, mediaType }
+        });
+        if (response && response.success) {
+          button.textContent = response.data && response.data.already ? '✓ On Plex Watchlist' : '✓ Added to Plex Watchlist';
+        } else {
+          throw new Error((response && response.error) || 'Plex Watchlist failed');
+        }
+      } catch (error) {
+        button.disabled = false;
+        button.textContent = '＋ Add to Plex Watchlist';
+        const note = document.createElement('div');
+        note.className = 'seerr-quality-summary';
+        note.setAttribute('data-seerr-overlay', 'true');
+        note.textContent = `Plex Watchlist failed: ${error.message}`;
+        container.appendChild(note);
+        setTimeout(() => note.remove(), 5000);
+      }
+    });
+    container.appendChild(button);
+
+    // Already there renders as state from the start. A click in flight wins:
+    // it disables the button first, so this late answer stands down.
+    chrome.runtime.sendMessage({
+      action: 'plexWatchlistState',
+      data: { tmdbId: Number(tmdbId), title, mediaType }
+    }).then(response => {
+      if (!button.isConnected || button.disabled) return;
+      if (response && response.success && response.data && response.data.onWatchlist) {
+        button.disabled = true;
+        button.textContent = '✓ On Plex Watchlist';
+      }
+    }).catch(() => {});
+  }
+
+  function notifyPlexResult(title, message, kind) {
+    const note = document.createElement('div');
+    note.className = `seerr-notification ${kind}`;
+    note.setAttribute('data-seerr-overlay', 'true');
+    note.innerHTML = '';
+    const heading = document.createElement('div');
+    heading.className = 'seerr-notification-title';
+    heading.textContent = title;
+    const body = document.createElement('div');
+    body.className = 'seerr-notification-message';
+    body.textContent = message;
+    note.append(heading, body);
+    document.body.appendChild(note);
+    setTimeout(() => note.remove(), 5000);
+  }
+
+  // Per-card Plex action for grids (discover, search, watchlist, …): available
+  // titles are exactly what belongs on a Plex Watchlist, and grids are where
+  // browsing happens. One tiny button per card; bulk selection stays
+  // request-oriented, so while it owns the top-left corner these stand down.
+  function injectPlexCardButtons() {
+    if (!FEATURE_FLAGS.plexWatchlist || !plexConfigured) return;
+    if (!isSeerrPage() || !isListRoute(detectRoute())) return;
+    if (bulkMode) return;
+    for (const card of getMediaCards()) {
+      const hasButton = Array.from(card.children)
+        .some(child => child.classList && child.classList.contains('seerr-plex-card-button'));
+      if (hasButton) continue;
+      const info = getCardMediaInfo(card);
+      const tmdbId = Number(info && info.tmdbId);
+      if (!Number.isInteger(tmdbId) || tmdbId <= 0) continue;
+      if (!info.mediaType || (info.mediaType !== 'movie' && info.mediaType !== 'tv')) continue;
+      // Seerr withholds a card's title until it is hovered. The page-world
+      // observer already indexes the titles Seerr fetched for itself, so fill
+      // the gaps from there; the worker falls back to a Seerr lookup.
+      let cardTitle = info.title || '';
+      let cardYear = null;
+      if (!cardTitle) {
+        const meta = pageMetadataByTmdbId.get(ratingKey(info.tmdbId, info.mediaType));
+        if (meta && meta.title) cardTitle = meta.title;
+        if (meta && meta.year) cardYear = meta.year;
+      }
+      const computed = window.getComputedStyle(card);
+      if (computed.position === 'static') card.style.position = 'relative';
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'seerr-plex-card-button';
+      button.setAttribute('data-seerr-overlay', 'true');
+      button.setAttribute('aria-label', `Add ${cardTitle || 'this title'} to Plex Watchlist`);
+      button.title = 'Add to Plex Watchlist';
+      button.textContent = '＋';
+      button.addEventListener('click', async event => {
+        // The card itself navigates to the detail page; the button must not.
+        event.stopPropagation();
+        event.preventDefault();
+        if (button.disabled) return;
+        button.disabled = true;
+        button.textContent = '…';
+        try {
+          const response = await chrome.runtime.sendMessage({
+            action: 'plexAddToWatchlist',
+            data: { tmdbId, title: cardTitle, year: cardYear, mediaType: info.mediaType }
+          });
+          if (!response || !response.success) {
+            throw new Error((response && response.error) || 'Plex Watchlist failed');
+          }
+          button.textContent = '✓';
+          button.classList.add('is-added');
+          button.title = response.data && response.data.already ? 'Already on Plex Watchlist' : 'Added to Plex Watchlist';
+          notifyPlexResult(
+            response.data && response.data.already ? 'Already on Plex Watchlist' : 'Added to Plex Watchlist',
+            `"${cardTitle || response.data.title || 'Title'}" ${response.data && response.data.already ? 'is already' : 'has been added to'} your Plex Watchlist`,
+            'success');
+        } catch (error) {
+          button.disabled = false;
+          button.textContent = '＋';
+          notifyPlexResult('Plex Watchlist Failed', error.message || 'Failed to add to Plex Watchlist', 'error');
+        }
+      });
+      card.appendChild(button);
+    }
+  }
+
+  function removePlexCardButtons() {
+    document.querySelectorAll('.seerr-plex-card-button').forEach(el => el.remove());
+  }
+
   let injectionInProgress = false;
   let seerrDomReadyRetries = 0;
   const MAX_SEERR_DOM_RETRIES = 5;
@@ -1151,13 +1419,31 @@
 
       if (!route) return;
 
+      // Lists Seerr spoke before the server was known replay here, after any
+      // cleanup, so a settings save cannot wipe them before their first use.
+      // Off-server events were never stashed, so everything here belongs here.
+      if (earlyApiEvents.length > 0) {
+        const queued = earlyApiEvents.splice(0, earlyApiEvents.length);
+        for (const queuedEvent of queued) handleObservedApiResponse(queuedEvent);
+      }
+
       if (isListRoute(route)) {
-        injectCardBadges();
-        injectSortFilterControls();
-        setupCardObserver();
+        // The stored title index identifies cards before Seerr's own lists
+        // arrive; wait for that read so the first pass already finds them.
+        loadPersistedRatings().catch(() => {}).finally(() => {
+          if (!isSeerrPage() || !isListRoute(detectRoute())) return;
+          hydrateCardsFromListItems();
+          injectCardBadges();
+          injectPlexCardButtons();
+          injectSortFilterControls();
+          setupCardObserver();
+        });
         setTimeout(() => injectCardBadges(), 2000); // retry for lazy-loaded cards
+        setTimeout(() => injectPlexCardButtons(), 2000);
       } else if (route.type === 'movie-detail' || route.type === 'tv-detail') {
         injectDetailRatings();
+        injectPlexWatchlistButton();
+        setTimeout(() => injectPlexWatchlistButton(), 2000); // detail header renders late
       }
     } finally {
       injectionInProgress = false;
@@ -1172,6 +1458,7 @@
       clearTimeout(cardObserverTimer);
       cardObserverTimer = setTimeout(() => {
         injectCardBadges();
+        injectPlexCardButtons();
         injectSortFilterControls();
       }, 250);
     });
@@ -1524,6 +1811,8 @@
     ensureCardIndexes(cards);
 
     if (bulkMode) {
+      // The selection checkboxes own the top-left corner while active.
+      removePlexCardButtons();
       cards.forEach(card => {
         if (card.querySelector('.seerr-select-checkbox')) return;
 
@@ -1561,6 +1850,7 @@
     } else {
       document.querySelectorAll('.seerr-select-checkbox').forEach(el => el.remove());
       hideBulkActionBar();
+      injectPlexCardButtons();
 
       const toggleBtn = document.querySelector('.seerr-toggle-select');
       if (toggleBtn) toggleBtn.textContent = 'Select titles';
@@ -1765,6 +2055,7 @@
           messages: observedStats.messages,
           items: observedStats.items,
           rejected: observedStats.rejected,
+          stashed: earlyApiEvents.length,
           lastAt: observedStats.lastAt,
           byPath: Object.fromEntries(observedStats.byUrl)
         },

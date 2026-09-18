@@ -86,6 +86,77 @@
   font-style: italic;
 }
 
+/* True Plex Watchlist action on Seerr detail pages. */
+.seerr-plex-watchlist-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 7px 14px;
+  border-radius: 8px;
+  border: 1px solid rgba(229, 160, 13, 0.55);
+  background: rgba(229, 160, 13, 0.12);
+  color: #f5c518;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.seerr-plex-watchlist-button:hover:not(:disabled) {
+  background: rgba(229, 160, 13, 0.22);
+}
+
+.seerr-plex-watchlist-button:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
+/* Per-card Plex action on grids. Small and quiet so a wall of posters still
+   scans; full strength on hover. Top-left, clear of Seerr's own top-right
+   status tick and of the bottom-edge hover controls. */
+.seerr-plex-card-button {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: 1px solid rgba(229, 160, 13, 0.6);
+  background: rgba(10, 12, 18, 0.82);
+  color: #f5c518;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 6;
+  opacity: 0.65;
+  padding: 0;
+  font-family: inherit;
+}
+
+.seerr-scored-card:hover .seerr-plex-card-button,
+.seerr-plex-card-button:hover,
+.seerr-plex-card-button:focus-visible {
+  opacity: 1;
+}
+
+.seerr-plex-card-button:hover:not(:disabled) {
+  background: rgba(229, 160, 13, 0.3);
+}
+
+.seerr-plex-card-button:disabled {
+  cursor: default;
+}
+
+.seerr-plex-card-button.is-added {
+  opacity: 1;
+  background: rgba(229, 160, 13, 0.3);
+}
+
 /* ─── Sort & Filter Bar ─── */
 
 .seerr-sort-filter-bar {

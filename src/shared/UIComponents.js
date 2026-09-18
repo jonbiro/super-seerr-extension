@@ -214,10 +214,21 @@ class UIComponents {
     ]);
     panel.appendChild(watchlistButton);
 
-    return { statusSection, button, statusIcon, statusText, watchlistButton };
+    // True Plex Watchlist: visible whenever a Plex token is configured,
+    // including for available titles where the Seerr button hides.
+    const plexButton = this.el('button', {
+      className: 'seerr-plex-button',
+      style: 'display:none'
+    }, [
+      this.svg('M17 12h-5v5h-2v-5H5v-2h5V5h2v5h5v2z', { size: 18 }),
+      this.el('span', { textContent: 'Add to Plex Watchlist' })
+    ]);
+    panel.appendChild(plexButton);
+
+    return { statusSection, button, statusIcon, statusText, watchlistButton, plexButton };
   }
 
-  updateFlyoutStatus(elements, statusData) {
+  updateFlyoutStatus(elements, statusData, options = {}) {
     const { statusIcon, statusText, button } = elements;
     
     if (statusIcon && statusText) {
@@ -235,6 +246,19 @@ class UIComponents {
     const showWatchlist = !statusData.action && (statusData.status === 'available' || statusData.buttonClass === 'request');
     if (elements.watchlistButton) {
       elements.watchlistButton.style.display = showWatchlist ? 'flex' : 'none';
+    }
+    // Plex is independent of Seerr status: an available title is exactly what
+    // the user wants to save to Plex. Only the token gates it, never the
+    // request state. Error/loading states hide it to avoid a dead click.
+    const plexReady = options.plexConfigured === true;
+    const plexBlocked = ['loading', 'error'].includes(statusData.status) || !!statusData.action;
+    if (elements.plexButton) {
+      elements.plexButton.style.display = plexReady && !plexBlocked ? 'flex' : 'none';
+      // Already there renders as state, not an action. Unknown keeps Add.
+      const plexOn = options.plexOnWatchlist === true;
+      const span = elements.plexButton.querySelector('span');
+      if (span) span.textContent = plexOn ? 'On Plex Watchlist ✓' : 'Add to Plex Watchlist';
+      elements.plexButton.disabled = plexOn;
     }
   }
 
@@ -695,6 +719,34 @@ class UIComponents {
       .seerr-watchlist-button:hover:not(:disabled) {
         background: rgba(139, 92, 246, 0.1);
         transform: translateY(-1px);
+      }
+
+      .seerr-plex-button {
+        width: 100%;
+        padding: 10px 20px;
+        background: transparent;
+        border: 2px solid #e5a00d;
+        color: #e5a00d;
+        border-radius: 0 0 0 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        transition: all 0.2s ease;
+        outline: none;
+      }
+
+      .seerr-plex-button:hover:not(:disabled) {
+        background: rgba(229, 160, 13, 0.12);
+        transform: translateY(-1px);
+      }
+
+      .seerr-plex-button:disabled {
+        opacity: 0.75;
+        cursor: default;
       }
 
       .seerr-in-library-badge {

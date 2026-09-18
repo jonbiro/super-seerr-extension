@@ -12,9 +12,12 @@ class OptionsManager {
     this.form = document.getElementById('settingsForm');
     this.serverUrlInput = document.getElementById('serverUrl');
     this.apiKeyInput = document.getElementById('apiKey');
+    this.plexTokenInput = document.getElementById('plexToken');
     this.testButton = document.getElementById('testConnection');
+    this.testPlexButton = document.getElementById('testPlexConnection');
     this.reloadButton = document.getElementById('reloadSettings');
     this.toggleButton = document.getElementById('toggleApiKey');
+    this.togglePlexButton = document.getElementById('togglePlexToken');
     this.statusDiv = document.getElementById('status');
     this.permissionWarning = document.getElementById('permissionWarning');
     this.debugLoggingInput = document.getElementById('debugLogging');
@@ -32,8 +35,10 @@ class OptionsManager {
     // Bind event listeners
     this.form?.addEventListener('submit', (e) => this.handleSave(e));
     this.testButton?.addEventListener('click', () => this.testConnection());
+    this.testPlexButton?.addEventListener('click', () => this.testPlexConnection());
     this.reloadButton?.addEventListener('click', () => this.reloadSettings());
     this.toggleButton?.addEventListener('click', () => this.toggleApiKeyVisibility());
+    this.togglePlexButton?.addEventListener('click', () => this.togglePlexTokenVisibility());
     this.grantButton?.addEventListener('click', () => this.grantOverlayAccess());
     this.clearCacheButton?.addEventListener('click', () => this.clearRatingsCache());
 
@@ -128,14 +133,15 @@ class OptionsManager {
 
   async loadSettings() {
     try {
-      // The URL and feature flags sync across devices; the key stays local.
+      // The URL and feature flags sync across devices; the keys stay local.
       const [settings, local] = await Promise.all([
         chrome.storage.sync.get(['seerrUrl', 'overlayFeatures']),
-        chrome.storage.local.get(['seerrApiKey', 'debugLogging'])
+        chrome.storage.local.get(['seerrApiKey', 'plexToken', 'debugLogging'])
       ]);
 
       this.serverUrlInput.value = settings.seerrUrl || '';
       this.apiKeyInput.value = local.seerrApiKey || '';
+      if (this.plexTokenInput) this.plexTokenInput.value = local.plexToken || '';
       if (this.debugLoggingInput) this.debugLoggingInput.checked = local.debugLogging === true;
       document.querySelectorAll('[data-overlay-feature]').forEach(input => {
         input.checked = settings.overlayFeatures?.[input.dataset.overlayFeature] !== false;
@@ -154,6 +160,7 @@ class OptionsManager {
   async saveSettings(showSuccess = true) {
     const serverUrl = this.serverUrlInput.value.trim();
     const apiKey = this.apiKeyInput.value.trim();
+    const plexToken = this.plexTokenInput ? this.plexTokenInput.value.trim() : '';
 
     // URL is required; API key is optional (ratings-only mode)
     if (!serverUrl) {
@@ -182,24 +189,30 @@ class OptionsManager {
     // Chrome requires. It resolves true without prompting when the origin is
     // already granted, so there is no pre-check to await the gesture away.
     const granted = await this.requestOverlayPermission(this.originPattern(serverUrl));
+    // Plex calls go to plex.tv hosts from the worker; request those too so the
+    // first watchlist add does not fail for a missing grant. Only when a token
+    // is actually being saved: no token, no prompt.
+    const plexGranted = plexToken ? await this.requestPlexPermission() : true;
 
     try {
-      // The key is a secret, so it stays on this device.
+      // The keys are secrets, so they stay on this device.
       await Promise.all([
         chrome.storage.sync.set({
           seerrUrl: serverUrl,
           overlayFeatures: Object.fromEntries(Array.from(document.querySelectorAll('[data-overlay-feature]'), input => [input.dataset.overlayFeature, input.checked]))
         }),
-        chrome.storage.local.set({ seerrApiKey: apiKey, debugLogging: this.debugLoggingInput?.checked === true })
+        chrome.storage.local.set({ seerrApiKey: apiKey, plexToken, debugLogging: this.debugLoggingInput?.checked === true })
       ]);
 
       // The worker re-registers off this storage change, so no nudge here.
       await this.refreshPermissionWarning();
 
       if (showSuccess) {
-        this.showStatus('success', granted
-          ? 'Settings saved successfully'
-          : 'Settings saved. Grant access to your Seerr server to enable the ratings overlay.');
+        this.showStatus('success', !granted
+          ? 'Settings saved. Grant access to your Seerr server to enable the ratings overlay.'
+          : plexToken && !plexGranted
+            ? 'Settings saved. The Plex host permission was declined, so Plex Watchlist actions will fail until it is granted.'
+            : 'Settings saved successfully');
       }
     } catch (error) {
       console.error('Error saving settings:', error);
@@ -288,6 +301,55 @@ class OptionsManager {
     const isPassword = this.apiKeyInput.type === 'password';
     this.apiKeyInput.type = isPassword ? 'text' : 'password';
     this.toggleButton.textContent = isPassword ? 'Hide' : 'Show';
+  }
+
+  togglePlexTokenVisibility() {
+    if (!this.plexTokenInput) return;
+    const isPassword = this.plexTokenInput.type === 'password';
+    this.plexTokenInput.type = isPassword ? 'text' : 'password';
+    if (this.togglePlexButton) this.togglePlexButton.textContent = isPassword ? 'Hide' : 'Show';
+  }
+
+  plexPermissionOrigins() {
+    return ['https://plex.tv/*', 'https://*.plex.tv/*'];
+  }
+
+  async requestPlexPermission() {
+    try {
+      return await chrome.permissions.request({ origins: this.plexPermissionOrigins() });
+    } catch (error) {
+      console.error('Plex permission request failed:', error);
+      return false;
+    }
+  }
+
+  async testPlexConnection() {
+    const plexToken = this.plexTokenInput ? this.plexTokenInput.value.trim() : '';
+    if (!plexToken) {
+      this.showStatus('error', 'Enter a Plex token before testing');
+      return;
+    }
+    if (!this.testPlexButton) return;
+    this.testPlexButton.disabled = true;
+    this.testPlexButton.textContent = 'Testing...';
+    this.showStatus('loading', 'Testing Plex connection...');
+    try {
+      const response = await chrome.runtime.sendMessage({
+        action: 'plexTestConnection',
+        data: { plexToken }
+      });
+      if (response && response.success) {
+        this.showStatus('success', `Plex connected as ${response.data.user}. Click Save Settings to apply.`);
+      } else {
+        this.showStatus('error', (response && response.error) || 'Plex connection test failed');
+      }
+    } catch (error) {
+      console.error('Plex connection test error:', error);
+      this.showStatus('error', `Plex connection failed: ${error.message}`);
+    } finally {
+      this.testPlexButton.disabled = false;
+      this.testPlexButton.textContent = 'Test Plex';
+    }
   }
 
   showStatus(type, message) {

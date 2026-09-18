@@ -48,7 +48,7 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="apiKey">API Key <small>(optional — needed for requests)</small></label>
+                    <label for="apiKey">Seerr API Key <small>(optional — needed for requests)</small></label>
                     <input 
                         type="password" 
                         id="apiKey" 
@@ -62,6 +62,24 @@
                     </small>
                 </div>
 
+                <div class="form-group">
+                    <label for="plexToken">Plex Token <small>(optional — needed for Plex Watchlist)</small></label>
+                    <input
+                        type="password"
+                        id="plexToken"
+                        placeholder="Your Plex X-Plex-Token (leave blank to disable)"
+                    >
+                    <small>
+                        Sign in at app.plex.tv, open DevTools Console (F12), run <code>localStorage.getItem('myPlexAccessToken')</code>, and paste the value.
+                        <button type="button" id="togglePlexToken" class="toggle-password">
+                            Show
+                        </button>
+                        <button type="button" id="testPlexConnection" class="button secondary">
+                            Test Plex
+                        </button>
+                    </small>
+                </div>
+
                 <fieldset class="overlay-options">
                     <legend>Seerr page enhancements</legend>
                     <label><input type="checkbox" data-overlay-feature="cardBadges" checked> Ratings on title cards</label>
@@ -69,6 +87,7 @@
                     <label><input type="checkbox" data-overlay-feature="preRequestSummary" checked> Review summary</label>
                     <label><input type="checkbox" data-overlay-feature="sortFilter" checked> Sort and filter controls</label>
                     <label><input type="checkbox" data-overlay-feature="bulkActions" checked> Bulk request selection</label>
+                    <label><input type="checkbox" data-overlay-feature="plexWatchlist" checked> Plex Watchlist buttons (detail pages and cards)</label>
                     <small>Click Save Settings to apply changes. Testing a connection does not save it.</small>
                 </fieldset>
 
@@ -120,6 +139,7 @@
                         <li>🔍 Automatic media matching using title, year, and TMDb ID</li>
                         <li>📊 Visual feedback for request status and monitoring</li>
                         <li>📺 Support for both movies and TV series</li>
+                        <li>⭐ Plex Watchlist button on Seerr detail pages and in the flyout (needs a Plex token)</li>
                     </ul>
                 </section>
         </main>

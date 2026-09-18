@@ -70,6 +70,9 @@ test('product names appear only in the lookup table, never in a message', () => 
     const mentions = lines.filter(line => line.includes(product));
     assert.ok(mentions.length > 0, `${product} should still be known`);
     for (const line of mentions) {
+      // Module wiring (the Plex Watchlist integration) is not a user message.
+      if (/^\s*import\s+['"]\.\/PlexWatchlist\.js['"]/.test(line)) continue;
+      if (line.includes('PlexWatchlist')) continue;
       assert.ok(line.includes('MEDIA_SERVER_NAMES'), `${product} is baked into: ${line.trim()}`);
     }
   }

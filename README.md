@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.1.60-blue)
+![Version](https://img.shields.io/badge/version-3.1.68-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -12,7 +12,7 @@ Request movies and TV shows from the pages where you discover them, and bring Ro
 2. In Chrome, open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose `dist/chrome`.
 3. Open Super Seerr’s **Settings**, enter your Seerr server URL, and click **Save Settings**.
 4. Approve the permission prompt for your Seerr server. Super Seerr only asks for the one origin you saved, and the ratings overlay cannot run until you approve it.
-5. Refresh Seerr. For request and watchlist actions, add a Seerr API key from Seerr Settings → General → API Key.
+5. Refresh Seerr. For request and Seerr-watchlist actions, add a Seerr API key from Seerr Settings → General → API Key. For the Plex Watchlist button, add a Plex token: sign in at app.plex.tv, open the DevTools Console (F12), run `localStorage.getItem('myPlexAccessToken')`, and paste the value.
 
 If you dismiss the permission prompt, your settings are still saved and the site integrations keep working; Settings then shows a standing notice with a **Grant access** button. Changing the server URL asks again for the new origin and drops the old one.
 
@@ -32,21 +32,21 @@ This has **not been validated against a running Firefox**. An opt-in `npm run te
 | --- | --- |
 | IMDb, Rotten Tomatoes, TMDB, Metacritic, Trakt, Filmweb | Movie/TV detection and a themed request flyout |
 | Letterboxd | Movie detection and a themed request flyout |
-| Your configured Seerr server | Ratings on cards and detail pages, quality summaries, sorting, filters, bulk review — on discover, search, requests, collections, people, the blocklist and your watchlist |
+| Your configured Seerr server | Ratings on cards and detail pages, quality summaries, sorting, filters, bulk review, and Plex Watchlist buttons on cards and movie/TV detail pages — on discover, search, requests, collections, people, the blocklist and your watchlist |
 
-The flyout reports request status, supports watchlisting, and links to your media server when Seerr supplies a playable URL. Seerr can be backed by Plex, Jellyfin or Emby; Super Seerr asks your server which one it uses and names it accordingly, or says simply “Watch” if it cannot tell. Those are separate products; their names and links are intentional.
+The flyout reports request status, supports Seerr watchlisting, offers a separate Plex Watchlist button when a Plex token is configured (visible even for available titles, where the Seerr button hides), and links to your media server when Seerr supplies a playable URL. Seerr can be backed by Plex, Jellyfin or Emby; Super Seerr asks your server which one it uses and names it accordingly, or says simply “Watch” if it cannot tell. Those are separate products; their names and links are intentional. Seerr's watchlist and Plex's Universal Watchlist are different lists: the extension writes the first via your Seerr server and the second via plex.tv with your Plex token.
 
 Requests only use a known TMDB ID or an unambiguous title/type/year match. If matching is uncertain, **Choose in Seerr** opens search so you can select the right title. Failed status lookups offer **Retry status**, not a media request. A lost response to a request is an unknown outcome: check Seerr before requesting again; the extension never automatically resends that POST.
 
 ### Ratings and sorting
 
-Seerr's title cards hide their link and title until you hover them, so Super Seerr reads the title lists Seerr has already fetched to identify the cards on screen. It watches only same-origin `/api/v1/` list responses on your server, never anything about your account or your issue threads, and forwards a fixed set of fields.
+Seerr's title cards hide their link and title until you hover them, so Super Seerr reads the title lists Seerr has already fetched to identify the cards on screen. It watches only same-origin `/api/v1/` list responses on your server, never anything about your account or your issue threads, and forwards a fixed set of fields. Lists that arrive before settings finish loading wait briefly and replay instead of being dropped.
 
 On a supported Seerr grid, choose **Sort titles → RT critics: highest first** or an audience, TMDB or IMDb option. Both directions are available. Unrated titles stay last; ties retain their original relative order. **Original order** restores the initial order; **Reset** also clears filters. Sorting updates as ratings arrive.
 
 Sorting and filtering apply to loaded cards in the grid associated with the controls, not to the entire server catalogue or pages that have not loaded. Separate carousels may not share one control bar. DOM layout changes in Seerr can affect card detection.
 
-Ratings you have already seen are cached on your device, so returning to Seerr does not look them up again. They do not expire. Scores move as reviews arrive, so the grid controls show when the loaded titles were cached and offer **Refresh scores**, which refetches just those titles. For everything at once, **Settings → Troubleshooting → Clear ratings cache** forces a fresh lookup, and takes effect in open Seerr tabs without a reload. Changing your server URL discards them automatically.
+Ratings you have already seen are cached on your device, so returning to Seerr does not look them up again. They do not expire. The title lists behind the cards persist too, so a cold load still identifies cards before Seerr's own lists arrive, and pending writes flush when the page unloads rather than dying with it. Scores move as reviews arrive, so the grid controls show when the loaded titles were cached and offer **Refresh scores**, which refetches just those titles. For everything at once, **Settings → Troubleshooting → Clear ratings cache** forces a fresh lookup, and takes effect in open Seerr tabs without a reload. Changing your server URL discards them automatically.
 
 Scores are partial data: missing values stay absent. An unrated or unreleased title shows no IMDb or TMDB score rather than zero, since those scales treat zero as “not rated”; a 0% from Rotten Tomatoes is shown, because there it is a real verdict. RT matches below the confidence threshold are hidden; approximate accepted matches have a `~` prefix. A score without `~` matched the title exactly in the expected year. Where a title is shared by more than one film and no year is known, no score is shown rather than a guess. Summary labels are heuristics, not official RT certification. External title matching can still be wrong, especially for remakes or missing years.
 

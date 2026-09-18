@@ -32,6 +32,12 @@ const RatingsConfig = {
 
   requestTimeoutMs: 10000,
 
+  // No single lookup may hold a card hostage: if the whole resolution has not
+  // settled by then, the title is treated as inconclusive (retried soon, never
+  // stored) and the late answer is dropped. Without this a hung message
+  // channel pins the coalesced promise forever and the badge never appears.
+  resolveTimeoutMs: 30000,
+
   // Two caches, bounded separately: they hold different-sized entries under
   // different expiry rules, and each persists as one rewritten blob, so the
   // cap is also what decides how large that write gets.
@@ -69,6 +75,10 @@ const RatingsConfig = {
   bulkScoreBatch: 6,
 
   overlayCacheMaxEntries: 5000,
+  // The persisted title index that lets a cold load identify cards before
+  // Seerr's own lists arrive. One entry is an id, a type, a title and a poster
+  // path, so a couple of thousand fit in a few hundred kilobytes.
+  listIndexMaxEntries: 2000,
   // Rotten Tomatoes lookups do expire, so this only bounds a browsing session.
   rtCacheMaxEntries: 5000,
   // Rotten Tomatoes sits behind bot protection and answers a burst of lookups

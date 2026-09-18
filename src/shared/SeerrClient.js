@@ -185,6 +185,44 @@ class SeerrClient {
     }
     throw new Error(response ? response.error : 'No response received');
   }
+
+  async plexAddToWatchlist(mediaData) {
+    const response = await this.sendMessage({
+      action: 'plexAddToWatchlist',
+      data: {
+        mediaType: mediaData.mediaType,
+        tmdbId: mediaData.tmdbId,
+        title: mediaData.title,
+        year: mediaData.year ?? null
+      }
+    });
+    if (response && response.success) return response.data;
+    throw new Error(response ? response.error : 'No response received');
+  }
+
+  // Read-only state for button labels. Never throws: unknown keeps the Add
+  // button, which reports already-on-watchlist if it turns out to be there.
+  async plexWatchlistState(mediaData) {
+    try {
+      const response = await this.sendMessage({
+        action: 'plexWatchlistState',
+        data: {
+          mediaType: mediaData.mediaType,
+          tmdbId: mediaData.tmdbId,
+          title: mediaData.title,
+          year: mediaData.year ?? null
+        }
+      });
+      if (response && response.success) return response.data;
+    } catch (_) {}
+    return { onWatchlist: false, unknown: true };
+  }
+
+  async plexTestConnection(plexToken) {
+    const response = await this.sendMessage({ action: 'plexTestConnection', data: { plexToken } });
+    if (response && response.success) return response.data;
+    throw new Error(response ? response.error : 'No response received');
+  }
 }
 
 // Export for use in content scripts

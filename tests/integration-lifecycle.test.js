@@ -71,3 +71,15 @@ test('a second instance still gets navigation detection when history is already 
   second.destroy();
   assert.equal(fixture.liveTimers(), 0);
 });
+
+test('navigating mid-request does not wedge the new page button shut', async t => {
+  const fixture = loadIntegration(); t.after(() => fixture.dom.window.close());
+  const integration = makeIntegration(fixture);
+  await integration.init();
+
+  // A request started on the old page is still in flight when navigation
+  // cleans up. The flag belongs to that attempt, not to the new page.
+  integration._requestInFlight = true;
+  integration.cleanupUI();
+  assert.equal(integration._requestInFlight, false, 'cleanup releases the in-flight guard');
+});

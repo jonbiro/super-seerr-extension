@@ -1,6 +1,6 @@
 // Per-tab ratings persistence, independent of DOM rendering.
 (function (root) {
-  root.createOverlayCache = function ({ Config, Model, log, getServer }) {
+  root.createOverlayCache = function ({ Config, Model, log, getServer, getListIndex, restoreListIndex }) {
     // key: `${mediaType}:${tmdbId}`, value: { bundle }. `pending:` keys hold the
     // in-flight promise instead, so serialisation skips them.
     const ratingsCache = new Map();
@@ -9,6 +9,11 @@
     // There is no expiry by design: entries live until the entry cap evicts them
     // or the user clears the cache from Settings.
     const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';
+    // Seerr withholds a card's link and title until it is hovered, so a cold
+    // load cannot identify cards from the DOM alone. The title lists Seerr
+    // already fetched persist alongside the scores, and the next load hydrates
+    // from them before any network answers. Tiny per title, bounded below.
+    const PERSISTED_LIST_INDEX_MAX_ENTRIES = Config.listIndexMaxEntries ?? 2000;
     // A cached bundle carries the confidence the matcher gave it, and a cache hit
     // never re-runs the matcher, so entries scored under superseded rules would
     // keep the old verdict forever. Config.matcherVersion is the stamp; see there.
@@ -30,6 +35,15 @@
           if (!stored || typeof stored !== 'object' || (stored.epoch ?? 0) !== epoch) return;
           // Entries belong to the server they were read from.
           if (stored.server !== getServer()?.href) return;
+          // The title index is Seerr's own catalogue data, not a matcher
+          // verdict, so it survives a matcher change that discards scores.
+          if (Array.isArray(stored.index) && typeof restoreListIndex === 'function') {
+            try {
+              restoreListIndex(stored.index);
+            } catch (error) {
+              log('Could not restore the stored title index:', error);
+            }
+          }
           // Scored under rules we no longer use: cheaper to look them up again
           // than to show every title a verdict the current matcher disagrees with.
           if (stored.matcher !== Config.matcherVersion) {
@@ -67,10 +81,15 @@
     }
 
     // Serialised so overlapping flushes cannot interleave their writes.
+    // Also coalesces a debounced write already waiting: flushing now covers it.
     function flushPersistedRatings() {
       const expected = generation;
       const server = getServer()?.href;
       const writeEpoch = epoch;
+      if (persistedRatingsFlushTimer !== null) {
+        clearTimeout(persistedRatingsFlushTimer);
+        persistedRatingsFlushTimer = null;
+      }
       persistedRatingsFlushing = (persistedRatingsFlushing ?? Promise.resolve()).then(async () => {
         try {
           const local = await chrome.storage.local.get(['ratingsCacheEpoch']);
@@ -88,8 +107,17 @@
             if (value.bundle && !Model.hasAnyScore(value.bundle)) continue;
             entries[key] = { bundle: value.bundle ?? null, cachedAt: value.cachedAt ?? null };
           }
+          let index = [];
+          if (typeof getListIndex === 'function') {
+            try {
+              const projected = getListIndex() || [];
+              index = projected.slice(-PERSISTED_LIST_INDEX_MAX_ENTRIES);
+            } catch (error) {
+              log('Could not project the title index:', error);
+            }
+          }
           await chrome.storage.local.set({
-            [PERSISTED_RATINGS_KEY]: { server, epoch: writeEpoch, matcher: Config.matcherVersion, entries }
+            [PERSISTED_RATINGS_KEY]: { server, epoch: writeEpoch, matcher: Config.matcherVersion, entries, index }
           });
         } catch (error) {
           log('Could not persist the ratings cache:', error);

@@ -6,6 +6,23 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [Unreleased]
+
+- Request lookup pages past the first hundred: older requests no longer read as unrequested (and re-requestable) on servers with long histories. Capped at ten pages.
+- A hung ratings lookup can no longer pin its card forever: resolution now races a 30s deadline, goes provisional, and retries, instead of awaiting a dead channel for the session.
+- Navigating away mid-request no longer wedges the next page's request button shut.
+
+- Ratings survive hard reloads onto the cards, not just into storage. The title index behind the cards now persists with the scores (bounded separately), so a cold load identifies un-hovered cards before Seerr's own lists arrive, and pending writes flush on unload instead of dying with the page. Cleared and server-switched the same way scores are.
+- Lists Seerr speaks before settings finish loading are stashed briefly and replayed once the server is known, instead of being dropped as unidentifiable.
+
+## [3.1.62]
+
+- Seerr grid cards gained a Plex Watchlist button: one small `＋` per identified card on discover, search, requests, watchlist and other title grids. It resolves by TMDB id against Plex Discover and refuses unresolvable cards rather than guessing. Bulk request selection stands the card buttons down while its checkboxes own the corner, then restores them.
+
+## [3.1.61]
+
+- True Plex Watchlist support, separate from Seerr's own watchlist. Save a Plex token in Settings (device-local, never synced) and a `＋ Add to Plex Watchlist` button appears on Seerr movie/TV detail pages and in the external-site flyout — including for available titles, where the Seerr watchlist button hides. Resolution confirms the TMDB GUID via Discover metadata and refuses ambiguous title-only matches; the add is a single PUT with already-on-watchlist reported distinctly.
+
 ## [3.1.60]
 
 - Score badges moved from the top right of a card to the bottom right. Seerr puts its own status badge there — the green tick on an available title — and ours sat on top of it. With two scores showing, the critics score now takes the upper position so the pair reads in the same order as the detail page.

@@ -77,9 +77,13 @@
     },
 
     // Serialised so overlapping flushes cannot interleave their writes.
+    // Also coalesces a debounced write already waiting: flushing now covers it.
     flushRtCache() {
       const generation = this.rtCacheGeneration;
-      this.rtCacheFlushing = (this.rtCacheFlushing ?? Promise.resolve()).then(async () => {
+      if (this.rtCacheFlushTimer !== null) {
+        clearTimeout(this.rtCacheFlushTimer);
+        this.rtCacheFlushTimer = null;
+      }      this.rtCacheFlushing = (this.rtCacheFlushing ?? Promise.resolve()).then(async () => {
         if (generation !== this.rtCacheGeneration) return;
         try {
           const now = Date.now();

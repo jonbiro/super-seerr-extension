@@ -328,3 +328,34 @@ test('a 500 from Seerr is not a verdict on the title, unlike a 404', async () =>
   await absent.getRatings(550, 'Fight Club', 1999, 'movie');
   assert.equal(absent.ratingsCache.get('movie:550').provisional, undefined, '404 is');
 });
+
+test('a hung lookup stops pinning its title after the resolve deadline', async () => {
+  const Config = require('../src/shared/RatingsConfig');
+  const overlay = loadOverlay({ settings });
+  const previous = Config.resolveTimeoutMs;
+  Config.resolveTimeoutMs = 30;
+  try {
+    overlay.setResolver(() => new Promise(() => {})); // never settles
+    const started = Date.now();
+    const pending = overlay.getRatings(550, 'Hung', 1999, 'movie');
+    // Let the lookup run past its storage reads to the race itself first.
+    for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+    // The overlay test VM records timers instead of running them, so fire
+    // the deadline the way a real event loop would.
+    overlay.runTimers(100);
+    const bundle = await pending;
+    assert.ok(Date.now() - started < 5000, 'returns via the deadline, not via the hung resolver');
+    assert.equal(bundle && bundle.rtCriticsScore, null);
+    assert.equal(overlay.ratingsCache.get('movie:550').provisional, true, 'a timeout is not a verdict');
+    assert.ok(!overlay.ratingsCache.has('pending:movie:550'), 'the slot clears for a later retry');
+
+    // Past the short window the title is asked about again, not re-awaited.
+    overlay.ratingsCache.set('movie:550', { ...overlay.ratingsCache.get('movie:550'), cachedAt: Date.now() - Config.inconclusiveRetryMs - 1000 });
+    const resolved = withResolver(overlay, scored);
+    const fresh = await overlay.getRatings(550, 'Hung', 1999, 'movie');
+    assert.equal(resolved.timesFor(550), 1, 'the retry resolves instead of rejoining the hung promise');
+    assert.equal(fresh.rtCriticsScore, 80);
+  } finally {
+    Config.resolveTimeoutMs = previous;
+  }
+});

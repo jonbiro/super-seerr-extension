@@ -6,6 +6,7 @@ import './MediaStatus.js';
 import './RtCache.js';
 import './RottenTomatoes.js';
 import './SeerrTransport.js';
+import './PlexWatchlist.js';
 const RatingsConfig = globalThis.RatingsConfig;
 const MediaValidation = globalThis.MediaValidation;
 
@@ -47,6 +48,7 @@ class SeerrAPI {
   constructor() {
     this.baseUrl = null;
     this.apiKey = null;
+    this.plexToken = null;
     this.debugLogging = false;
     this.mediaServerName = null;
     this.rtCache = new Map();
@@ -111,11 +113,12 @@ class SeerrAPI {
     try {
       const [synced, local] = await Promise.all([
         chrome.storage.sync.get(['seerrUrl']),
-        chrome.storage.local.get(['seerrApiKey', 'debugLogging', 'mediaServerName'])
+        chrome.storage.local.get(['seerrApiKey', 'plexToken', 'debugLogging', 'mediaServerName'])
       ]);
       if (generation !== this.settingsLoadGeneration) return;
       this.baseUrl = synced.seerrUrl;
       this.apiKey = local.seerrApiKey;
+      this.plexToken = local.plexToken || null;
       this.debugLogging = local.debugLogging === true;
       this.updateIconBadge();
       // Manifest V3 evicts this worker after seconds of idle, so re-fetching the
@@ -284,7 +287,28 @@ class SeerrAPI {
         // The overlay must never hold the API key, so it asks whether requests
         // are available rather than reading the secret itself.
         case 'getConfigState': {
-          sendResponse({ success: true, data: { apiConfigured: !!(this.baseUrl && this.apiKey), serverUrl: this.baseUrl ?? null } });
+          sendResponse({ success: true, data: { apiConfigured: !!(this.baseUrl && this.apiKey), serverUrl: this.baseUrl ?? null, plexConfigured: !!this.plexToken } });
+          break;
+        }
+
+        case 'plexTestConnection': {
+          // A throwaway client keeps the test from touching saved settings.
+          const plexClient = new SeerrAPI();
+          plexClient.plexToken = (request.data && request.data.plexToken) || this.plexToken;
+          const plexResult = await plexClient.plexTestConnection(request.data || null);
+          sendResponse({ success: true, data: plexResult });
+          break;
+        }
+
+        case 'plexAddToWatchlist': {
+          const plexWatchlistResult = await this.plexAddToWatchlist(request.data);
+          sendResponse({ success: true, data: plexWatchlistResult });
+          break;
+        }
+
+        case 'plexWatchlistState': {
+          const plexStateResult = await this.plexWatchlistState(request.data);
+          sendResponse({ success: true, data: plexStateResult });
           break;
         }
 
@@ -484,50 +508,60 @@ class SeerrAPI {
   async searchRequests(tmdbId, mediaType) {
     try {
       this.log(`📊 [Background] Searching requests for TMDB ID ${tmdbId} (${mediaType})`);
-      const response = await this.makeAPIRequest('GET', '/api/v1/request?take=100&skip=0');
-      this.log('📊 [Background] Requests API response:', response);
+      // Requests are newest-first and unpaginated reads stop at 100, so a
+      // long history hides older requests past the first page. Page until
+      // a match, a short page, or a sane cap — never unbounded.
+      const PAGE_SIZE = 100;
+      const MAX_PAGES = 10;
+      for (let page = 0; page < MAX_PAGES; page++) {
+        const response = await this.makeAPIRequest('GET', `/api/v1/request?take=${PAGE_SIZE}&skip=${page * PAGE_SIZE}`);
+        this.log('📊 [Background] Requests API response:', response);
 
-      const requests = response.results || response || [];
-      this.log(`📊 [Background] Found ${requests.length} total requests`);
+        const requests = response.results || response || [];
+        this.log(`📊 [Background] Found ${requests.length} total requests`);
 
-      if (requests.length > 0) {
-        this.log('📊 [Background] Sample requests:', requests.slice(0, 3).map(r => ({
-          id: r.id, type: r.type, status: r.status,
-          mediaId: r.media?.tmdbId || r.media?.id,
-          title: r.media?.title || r.media?.name
-        })));
-      }
+        if (requests.length > 0) {
+          this.log('📊 [Background] Sample requests:', requests.slice(0, 3).map(r => ({
+            id: r.id, type: r.type, status: r.status,
+            mediaId: r.media?.tmdbId || r.media?.id,
+            title: r.media?.title || r.media?.name
+          })));
+        }
 
-      const matchingRequest = requests.find(request => {
-        const requestMediaType = request.type === 'movie' ? 'movie' : 'tv';
-        const matchesType = requestMediaType === mediaType;
-        // Only tmdbId identifies the title. request.media.id is Seerr's own
-        // sequential row id, and comparing it here matched an unrelated
-        // request whenever some row's id happened to equal this TMDB id —
-        // which is common, since both are small integers.
-        const matchesTmdbId = Number(request.media?.tmdbId) === Number(tmdbId);
+        const matchingRequest = requests.find(request => {
+          const requestMediaType = request.type === 'movie' ? 'movie' : 'tv';
+          const matchesType = requestMediaType === mediaType;
+          // Only tmdbId identifies the title. request.media.id is Seerr's own
+          // sequential row id, and comparing it here matched an unrelated
+          // request whenever some row's id happened to equal this TMDB id —
+          // which is common, since both are small integers.
+          const matchesTmdbId = Number(request.media?.tmdbId) === Number(tmdbId);
 
-        this.log(`📊 [Background] Checking request:`, {
-          requestId: request.id, requestType: requestMediaType, matchesType,
-          tmdbId: request.media?.tmdbId, matchesTmdbId,
-          title: request.media?.title || request.media?.name
+          this.log(`📊 [Background] Checking request:`, {
+            requestId: request.id, requestType: requestMediaType, matchesType,
+            tmdbId: request.media?.tmdbId, matchesTmdbId,
+            title: request.media?.title || request.media?.name
+          });
+
+          return matchesType && matchesTmdbId;
         });
 
-        return matchesType && matchesTmdbId;
-      });
+        if (matchingRequest) {
+          this.log('📊 [Background] ✅ Found matching request:', {
+            id: matchingRequest.id, type: matchingRequest.type,
+            status: matchingRequest.status,
+            title: matchingRequest.media?.title || matchingRequest.media?.name
+          });
 
-      if (matchingRequest) {
-        this.log('📊 [Background] ✅ Found matching request:', {
-          id: matchingRequest.id, type: matchingRequest.type,
-          status: matchingRequest.status,
-          title: matchingRequest.media?.title || matchingRequest.media?.name
-        });
+          return {
+            ...matchingRequest,
+            media: matchingRequest.media,
+            mediaType: matchingRequest.type
+          };
+        }
 
-        return {
-          ...matchingRequest,
-          media: matchingRequest.media,
-          mediaType: matchingRequest.type
-        };
+        // A full page may hide the match on the next one; a short page ends it.
+        if (requests.length < PAGE_SIZE) break;
       }
 
       this.log('📊 [Background] ❌ No matching request found');
@@ -617,13 +651,14 @@ class SeerrAPI {
   updateSettings(settings) {
     this.baseUrl = settings.seerrUrl;
     this.apiKey = settings.seerrApiKey;
+    if (settings.plexToken !== undefined) this.plexToken = settings.plexToken || null;
     this.updateIconBadge();
   }
 }
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
 
-Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport);
+Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.PlexWatchlist);
 
 const seerrAPI = new SeerrAPI();
 let initializing = true;
@@ -632,7 +667,7 @@ let initializing = true;
 // The URL and feature flags sync across devices; the API key stays local.
 chrome.storage.onChanged.addListener((changes, namespace) => {
   const relevant = (namespace === 'sync' && changes.seerrUrl) ||
-    (namespace === 'local' && (changes.seerrApiKey || changes.debugLogging));
+    (namespace === 'local' && (changes.seerrApiKey || changes.plexToken || changes.debugLogging));
   if (!relevant || initializing) return;
   seerrAPI.log('🔄 [Background] Settings changed, reloading...');
   seerrAPI.loadSettings()

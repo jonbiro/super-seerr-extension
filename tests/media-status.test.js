@@ -87,3 +87,49 @@ test('a missing tmdbId falls back to search rather than querying garbage', async
     assert.ok(!calls.some(e => /\/api\/v1\/movie\/(null|undefined|NaN|0|-1|abc)/.test(e)), `${JSON.stringify(tmdbId)} must not be queried directly`);
   }
 });
+
+test('a request past the first page is still found', async () => {
+  const worker = loadWorker(CONFIGURED);
+  await worker.ready;
+  const filler = Array.from({ length: 100 }, (_, i) => ({
+    id: i + 1, type: 'movie', status: 5, media: { tmdbId: 900000 + i, title: `Filler ${i}` }
+  }));
+  const calls = withApi(worker, {
+    '/api/v1/request': endpoint => {
+      if (endpoint.includes('skip=100')) {
+        return { results: [{ id: 101, type: 'movie', status: 5, media: { tmdbId: 550, title: 'Fight Club' } }] };
+      }
+      return { results: filler };
+    }
+  });
+
+  const found = await worker.api.searchRequests(550, 'movie');
+  assert.ok(found, 'the match on page two must be returned');
+  assert.equal(found.media.tmdbId, 550);
+  assert.deepEqual(
+    calls.filter(e => e.startsWith('/api/v1/request')),
+    ['/api/v1/request?take=100&skip=0', '/api/v1/request?take=100&skip=100']);
+});
+
+test('a short page ends the request search without further pages', async () => {
+  const worker = loadWorker(CONFIGURED);
+  await worker.ready;
+  const calls = withApi(worker, {
+    '/api/v1/request': { results: [{ id: 1, type: 'movie', status: 5, media: { tmdbId: 1, title: 'Other' } }] }
+  });
+
+  assert.equal(await worker.api.searchRequests(550, 'movie'), null);
+  assert.equal(calls.filter(e => e.startsWith('/api/v1/request')).length, 1, 'one short page is the whole answer');
+});
+
+test('request paging is capped, never unbounded', async () => {
+  const worker = loadWorker(CONFIGURED);
+  await worker.ready;
+  const full = { results: Array.from({ length: 100 }, (_, i) => ({
+    id: i + 1, type: 'movie', status: 5, media: { tmdbId: 900000 + i, title: `Filler ${i}` }
+  })) };
+  const calls = withApi(worker, { '/api/v1/request': full });
+
+  assert.equal(await worker.api.searchRequests(550, 'movie'), null);
+  assert.equal(calls.filter(e => e.startsWith('/api/v1/request')).length, 10, 'ten full pages then stop');
+});

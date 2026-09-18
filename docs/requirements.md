@@ -21,7 +21,8 @@ These criteria describe the current product contract. They replace the historica
 - Letterboxd handles movies; other integrations support movies and TV where the site provides sufficient metadata.
 - Extract identity through layered selectors and fallbacks; prefer explicit media IDs where available.
 - Display request status and monitoring context. Use the media-server links supplied by Seerr for available media, naming the server from its reported type and staying neutral when that is unknown.
-- Offer watchlisting for requestable media.
+- Offer Seerr watchlisting for requestable media.
+- Offer Plex Universal Watchlist adds whenever a Plex token is configured, including for available media where the Seerr button hides. Resolve the Discover ratingKey by TMDB GUID when an id is known and refuse ambiguous title-only matches rather than guessing.
 - Avoid duplicate flyouts and duplicate submissions during navigation or repeated clicks.
 
 ## Ratings

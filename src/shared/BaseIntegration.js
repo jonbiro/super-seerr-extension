@@ -37,6 +37,7 @@ class BaseIntegration {
     this.currentUrl = window.location.href;
     this.navigationListener = null;
     this.currentStatusData = null; // Cache current status data for performance
+    this.plexConfigured = false;
 
     this.log('BaseIntegration initialized for', this.siteName);
   }
@@ -251,6 +252,11 @@ class BaseIntegration {
       elements.watchlistButton.addEventListener('click', () => this.handleWatchlistClick());
     }
 
+    // True Plex Watchlist: separate token, separate product.
+    if (elements.plexButton) {
+      elements.plexButton.addEventListener('click', () => this.handlePlexWatchlistClick());
+    }
+
     // Add flyout to page
     document.body.appendChild(flyout);
 
@@ -275,6 +281,22 @@ class BaseIntegration {
         this.ui.updateTabIcon(this.uiElements.tab, 'checking');
       }
 
+      // Plex token state is independent of Seerr status; the worker reports
+      // only whether a token exists, never the token itself.
+      try {
+        const config = await this.client.sendMessage({ action: 'getConfigState' });
+        this.plexConfigured = config?.success === true && config.data?.plexConfigured === true;
+      } catch (_) {
+        this.plexConfigured = false;
+      }
+
+      // Plex state resolves alongside the Seerr lookup, never ahead of
+      // rendering: a slow or failed lookup keeps the Add button rather than
+      // blocking the flyout.
+      const plexStatePromise = this.plexConfigured
+        ? this.client.plexWatchlistState(this.mediaData)
+        : Promise.resolve(null);
+
       // Get status from Seerr
       const statusData = await this.client.getMediaStatus(this.mediaData);
       this.log('Status received:', statusData);
@@ -282,9 +304,12 @@ class BaseIntegration {
       // Cache status data for instant access during button clicks
       this.currentStatusData = statusData;
 
+      const plexState = await plexStatePromise;
+      const plexOnWatchlist = plexState ? plexState.onWatchlist === true : false;
+
       // Update UI based on theme
       if (this.uiTheme === 'flyout') {
-        this.ui.updateFlyoutStatus(this.uiElements, statusData);
+        this.ui.updateFlyoutStatus(this.uiElements, statusData, { plexConfigured: this.plexConfigured, plexOnWatchlist });
         this.ui.updateTabIcon(this.uiElements.tab, statusData.status, statusData);
 
         if (this.uiElements.panel) {
@@ -311,7 +336,7 @@ class BaseIntegration {
       this.log('Determined error status:', errorStatus);
 
       if (this.uiTheme === 'flyout') {
-        this.ui.updateFlyoutStatus(this.uiElements, errorStatus);
+        this.ui.updateFlyoutStatus(this.uiElements, errorStatus, { plexConfigured: this.plexConfigured });
         
         // Only update tab icon to error if it's actually a server connection error
         // Otherwise, default to 'available' status
@@ -499,6 +524,38 @@ class BaseIntegration {
     }
   }
 
+  async handlePlexWatchlistClick() {
+    if (!this.mediaData) {
+      this.ui.createNotification('Error', 'Could not extract media information', 'error');
+      return;
+    }
+    const plexButton = this.uiElements.plexButton;
+    const label = plexButton ? plexButton.querySelector('span') : null;
+    const original = label ? label.textContent : null;
+    try {
+      if (label) label.textContent = 'Adding to Plex…';
+      if (plexButton) plexButton.disabled = true;
+      const result = await this.client.plexAddToWatchlist(this.mediaData);
+      this.ui.createNotification(
+        result && result.already ? 'Already on Plex Watchlist' : 'Added to Plex Watchlist',
+        result && result.already
+          ? `${this.mediaData.title} is already on your Plex Watchlist`
+          : `${this.mediaData.title} has been added to your Plex Watchlist`,
+        'success'
+      );
+      if (label) label.textContent = result && result.already ? 'On Plex Watchlist' : 'Added to Plex ✓';
+    } catch (err) {
+      this.ui.createNotification(
+        'Plex Watchlist Failed',
+        err.message || 'Failed to add to Plex Watchlist',
+        'error'
+      );
+      if (label && original) label.textContent = original;
+    } finally {
+      if (plexButton) plexButton.disabled = false;
+    }
+  }
+
   /**
    * Set UI to loading state
    */
@@ -522,7 +579,7 @@ class BaseIntegration {
    */
   updateUIFromStatus(statusData) {
     if (this.uiTheme === 'flyout') {
-      this.ui.updateFlyoutStatus(this.uiElements, statusData);
+      this.ui.updateFlyoutStatus(this.uiElements, statusData, { plexConfigured: this.plexConfigured });
     } else {
       this.ui.updateButtonStatus(this.uiElements.button, statusData);
     }
@@ -729,6 +786,9 @@ class BaseIntegration {
     this.uiElements = {};
     this.mediaData = null;
     this.currentStatusData = null;
+    // A request in flight belongs to the old page: navigating mid-request
+    // must not wedge the new page's button shut forever.
+    this._requestInFlight = false;
   }
 
   /**
