@@ -35,7 +35,7 @@ test('Property 4: SeerrClient error message references Seerr not Jellyseerr', ()
   const path = require('path');
   const content = fs.readFileSync(path.join(__dirname, '..', 'src', 'shared', 'SeerrClient.js'), 'utf-8');
 
-  assert.ok(content.includes('Cannot connect to Seerr server'), 'Error message should reference Seerr');
+  assert.ok(content.includes('Check Seerr before requesting again'), 'Error message should reference Seerr');
   assert.ok(!content.includes('Cannot connect to Jellyseerr server'), 'Error message should NOT reference Jellyseerr');
 });
 

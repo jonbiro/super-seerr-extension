@@ -1,18 +1,20 @@
 // Background service worker for Seerr integration
 import '../shared/RatingsConfig.js';
+import '../shared/MediaValidation.js';
+import './SeerrMatching.js';
+import './MediaStatus.js';
+import './RtCache.js';
+import './RottenTomatoes.js';
+import './SeerrTransport.js';
 const RatingsConfig = globalThis.RatingsConfig;
-
-// Persisted RT cache lives under one storage.local key so a whole grid of
-// lookups collapses into a single debounced write.
-const RT_CACHE_STORAGE_KEY = 'rtCacheV1';
-const RT_CACHE_FLUSH_DELAY_MS = 500;
+const MediaValidation = globalThis.MediaValidation;
 
 // The Seerr server is self-hosted, so its origin is only known at runtime and
 // cannot be a static content_scripts match. The overlay is registered against
 // the saved origin instead, once the user grants that optional host permission.
 const OVERLAY_SCRIPT_ID = 'seerr-overlay';
 const OVERLAY_SCRIPT_FILES = {
-  js: ['src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/seerr-integration.js'],
+  js: ['src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/OverlayCache.js', 'src/content/RatingsPresentation.js', 'src/content/SeerrSession.js', 'src/content/seerr-integration.js'],
   css: ['src/content/seerr-overlay.css']
 };
 
@@ -52,6 +54,10 @@ class SeerrAPI {
     this.rtCacheReady = null;
     this.rtCacheFlushTimer = null;
     this.rtCacheFlushing = null;
+    this.rtCacheGeneration = 0;
+    this.cacheClearPending = null;
+    this.settingsGeneration = 0;
+    this.settingsLoadGeneration = 0;
   }
 
   // Verbose tracing is opt-in; errors always surface.
@@ -97,16 +103,25 @@ class SeerrAPI {
   }
 
   async loadSettings() {
+    const generation = ++this.settingsLoadGeneration;
     try {
       const [synced, local] = await Promise.all([
         chrome.storage.sync.get(['seerrUrl']),
-        chrome.storage.local.get(['seerrApiKey', 'debugLogging'])
+        chrome.storage.local.get(['seerrApiKey', 'debugLogging', 'mediaServerName'])
       ]);
+      if (generation !== this.settingsLoadGeneration) return;
       this.baseUrl = synced.seerrUrl;
       this.apiKey = local.seerrApiKey;
       this.debugLogging = local.debugLogging === true;
       this.updateIconBadge();
-      await this.loadMediaServerName();
+      // Manifest V3 evicts this worker after seconds of idle, so re-fetching the
+      // media server on every restart left the first status of each session
+      // labelled generically: a bare "Watch" rather than one naming the server.
+      // The last answer for this server is used immediately and refreshed behind
+      // it, so cosmetic metadata still never holds up messages or readiness.
+      const remembered = local.mediaServerName;
+      this.mediaServerName = remembered?.url === this.baseUrl ? remembered.name ?? null : null;
+      this.mediaServerReady = this.loadMediaServerName();
     } catch (error) {
       console.error('Error loading Seerr settings:', error);
     }
@@ -167,10 +182,16 @@ class SeerrAPI {
   // Which media server Seerr is configured against, so the flyout can name it.
   // /settings/public needs no API key, so this also works in ratings-only mode.
   async loadMediaServerName() {
-    this.mediaServerName = null;
-    if (!this.baseUrl) return;
+    const generation = ++this.settingsGeneration;
+    const baseUrl = this.baseUrl;
+    // The remembered name is set by loadSettings and belongs to this baseUrl;
+    // clearing it here would undo that on every restart.
+    if (!baseUrl) {
+      this.mediaServerName = null;
+      return;
+    }
     try {
-      const url = `${this.baseUrl.replace(/\/$/, '')}/api/v1/settings/public`;
+      const url = `${baseUrl.replace(/\/$/, '')}/api/v1/settings/public`;
       const response = await fetch(url, {
         method: 'GET',
         redirect: 'error',
@@ -179,7 +200,9 @@ class SeerrAPI {
       });
       if (!response.ok) return;
       const settings = await response.json();
+      if (generation !== this.settingsGeneration) return;
       this.mediaServerName = MEDIA_SERVER_NAMES[settings?.mediaServerType] ?? null;
+      await chrome.storage.local.set({ mediaServerName: { url: baseUrl, name: this.mediaServerName } });
       this.log('📺 [Background] Media server:', this.mediaServerName ?? 'not identified');
     } catch (error) {
       // Naming is a nicety; neutral wording is always correct.
@@ -267,6 +290,12 @@ class SeerrAPI {
           break;
         }
 
+        case 'clearRatingsCache': {
+          await this.clearRatingsCache();
+          sendResponse({ success: true });
+          break;
+        }
+
         case 'getRottenTomatoesRatings': {
           const rtResult = await this.getRottenTomatoesRatings(request.data || {});
           sendResponse({ success: true, data: rtResult });
@@ -283,6 +312,7 @@ class SeerrAPI {
   }
 
   async requestMedia(mediaData) {
+    mediaData = MediaValidation.media(mediaData);
     if (!this.baseUrl || !this.apiKey) {
       throw new Error('Seerr server URL and API key are required. Please configure them in the extension options.');
     }
@@ -290,40 +320,15 @@ class SeerrAPI {
     this.log('🎬 [Background] Requesting media:', mediaData);
 
     // Use TMDB ID directly if provided — skip search entirely
-    let tmdbId = mediaData.tmdbId ? parseInt(mediaData.tmdbId) : null;
+    let tmdbId = mediaData.tmdbId;
     if (tmdbId && !isNaN(tmdbId)) {
       this.log('✅ [Background] Using provided TMDB ID:', tmdbId);
     } else {
-      // No TMDB ID provided — do a title search
-      const searchTerms = this.generateSearchTerms(mediaData.title);
-      this.log('🔍 [Background] Generated search terms:', searchTerms);
-
-      let searchResults = [];
-      let bestMatch = null;
-
-      for (const searchTerm of searchTerms) {
-        try {
-          this.log('🔍 [Background] Searching for:', searchTerm, 'type:', mediaData.mediaType);
-          searchResults = await this.searchMedia(searchTerm, mediaData.mediaType);
-          this.log('🔍 [Background] Search results for "' + searchTerm + '":', searchResults.length, 'items');
-
-          bestMatch = this.findBestMatch(searchResults, { ...mediaData, title: searchTerm });
-          this.log('🎯 [Background] Best match for "' + searchTerm + '":', bestMatch);
-
-          if (bestMatch) {
-            tmdbId = parseInt(bestMatch.id);
-            this.log('✅ [Background] Using TMDB ID:', tmdbId, 'from search term:', searchTerm);
-            break;
-          }
-        } catch (searchError) {
-          this.warn('⚠️ [Background] Search failed for "' + searchTerm + '":', searchError);
-          continue;
-        }
-      }
-
+      const bestMatch = await this.resolveMediaMatch(mediaData);
       if (!bestMatch) {
-        throw new Error(`Could not find "${mediaData.title}" in Seerr database. Tried search terms: ${searchTerms.join(', ')}`);
+        throw new Error(`No unambiguous match for "${mediaData.title}". Choose this title in Seerr before requesting.`);
       }
+      tmdbId = MediaValidation.tmdbId(bestMatch.id);
     }
 
     if (!tmdbId || isNaN(tmdbId)) {
@@ -347,148 +352,6 @@ class SeerrAPI {
       status: response.status,
       title: mediaData.title
     };
-  }
-
-  generateSearchTerms(originalTitle) {
-    this.log('🔍 [Background] generateSearchTerms called with:', originalTitle);
-    const terms = [originalTitle];
-
-    // Digit/word swaps target standalone numerals such as "Toy Story 2".
-    // Without the word boundaries these rewrote digits inside numbers, turning
-    // "Blade Runner 2049" into "Blade Runner Two0Four9" — a wasted request that
-    // could also fuzzy-match the wrong title.
-    const numberWords = [['2', 'Two'], ['3', 'Three'], ['4', 'Four']];
-    const variations = [
-      originalTitle.replace(/Se7en/gi, 'Seven'),
-      originalTitle.replace(/Seven/gi, 'Se7en'),
-      ...numberWords.flatMap(([digit, word]) => [
-        originalTitle.replace(new RegExp(`\\b${digit}\\b`, 'g'), word),
-        originalTitle.replace(new RegExp(`\\b${word}\\b`, 'gi'), digit)
-      ]),
-      originalTitle.replace(/[^a-zA-Z0-9\s]/g, ''),
-      originalTitle.replace(/^(The|A|An)\s+/i, ''),
-      originalTitle.split(':')[0].trim(),
-      originalTitle.split(' - ')[0].trim(),
-      originalTitle.split(' –')[0].trim(),
-      originalTitle.replace(/\s*\(\d{4}\)\s*$/, ''),
-      originalTitle.replace(/'/g, "'"),
-      originalTitle.replace(/′/g, "'"),  // prime → straight quote (TMDb specific)
-      originalTitle.replace(/\s+for\s+/gi, ' '),
-      originalTitle.replace(/\s+(for|of|the|and|in|on|at|to)\s+/gi, ' ').replace(/\s+/g, ' ').trim()
-    ];
-
-    this.log('🔍 [Background] Initial variations generated:', variations.length);
-
-    variations.forEach((variation, index) => {
-      const cleaned = variation.trim();
-      this.log(`🔍 [Background] Variation ${index}: "${variation}" -> cleaned: "${cleaned}"`);
-      if (cleaned && cleaned !== originalTitle && !terms.includes(cleaned)) {
-        terms.push(cleaned);
-        this.log('🔍 [Background] Added variation:', cleaned);
-      }
-    });
-
-    this.log('🔍 [Background] Final search terms:', terms);
-    return terms;
-  }
-
-  findBestMatch(searchResults, mediaData) {
-    if (!searchResults || searchResults.length === 0) {
-      return null;
-    }
-
-    const typeFiltered = searchResults.filter(result => result.mediaType === mediaData.mediaType);
-    const candidateResults = typeFiltered.length > 0 ? typeFiltered : searchResults;
-
-    const searchTitle = mediaData.title.toLowerCase();
-
-    let exactMatch = candidateResults.find(result => {
-      const titles = [
-        result.title?.toLowerCase(),
-        result.originalTitle?.toLowerCase(),
-        result.name?.toLowerCase(),
-        result.originalName?.toLowerCase()
-      ].filter(Boolean);
-
-      return titles.some(title => title === searchTitle);
-    });
-
-    if (exactMatch) {
-      if (mediaData.year) {
-        const releaseYear = this.extractYear(exactMatch.releaseDate || exactMatch.firstAirDate);
-        if (releaseYear && Math.abs(releaseYear - mediaData.year) <= 1) {
-          return exactMatch;
-        }
-      } else {
-        return exactMatch;
-      }
-    }
-
-    const partialMatch = candidateResults.find(result => {
-      const titles = [
-        result.title?.toLowerCase(),
-        result.originalTitle?.toLowerCase(),
-        result.name?.toLowerCase(),
-        result.originalName?.toLowerCase()
-      ].filter(Boolean);
-
-      return titles.some(title => {
-        return title.includes(searchTitle) || searchTitle.includes(title) ||
-               this.areTitlesSimilar(title, searchTitle);
-      });
-    });
-
-    if (partialMatch) {
-      if (mediaData.year) {
-        const releaseYear = this.extractYear(partialMatch.releaseDate || partialMatch.firstAirDate);
-        if (releaseYear && Math.abs(releaseYear - mediaData.year) <= 2) {
-          return partialMatch;
-        }
-      } else {
-        return partialMatch;
-      }
-    }
-
-    if (mediaData.year) {
-      const yearMatches = candidateResults.filter(result => {
-        const releaseYear = this.extractYear(result.releaseDate || result.firstAirDate);
-        return releaseYear && Math.abs(releaseYear - mediaData.year) <= 1;
-      });
-
-      if (yearMatches.length > 0) {
-        return yearMatches[0];
-      }
-    }
-
-    return candidateResults[0];
-  }
-
-  areTitlesSimilar(title1, title2) {
-    const normalize = (str) => str.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
-    const norm1 = normalize(title1);
-    const norm2 = normalize(title2);
-
-    if (norm1 === norm2) return true;
-
-    const substitutions = [
-      ['seven', 'se7en'], ['two', '2'], ['three', '3'], ['four', '4'],
-      ['five', '5'], ['six', '6'], ['eight', '8'], ['nine', '9'], ['ten', '10']
-    ];
-
-    for (const [word, num] of substitutions) {
-      if ((norm1.includes(word) && norm2.includes(num)) ||
-          (norm1.includes(num) && norm2.includes(word))) {
-        return true;
-      }
-    }
-
-    return false;
-  }
-
-  extractYear(dateString) {
-    if (!dateString) return null;
-    const year = parseInt(dateString.substring(0, 4));
-    return isNaN(year) ? null : year;
   }
 
   async searchMedia(query, mediaType = 'movie') {
@@ -529,6 +392,7 @@ class SeerrAPI {
   }
 
   async getMediaStatus(mediaData) {
+    mediaData = MediaValidation.media(mediaData);
     this.log('📊 [Background] Getting media status for:', mediaData);
     this.log('📊 [Background] API Config - baseUrl:', this.baseUrl, 'apiKey:', this.apiKey ? '[SET]' : '[NOT SET]');
 
@@ -541,59 +405,26 @@ class SeerrAPI {
       // The page usually already knows the TMDB id. Trust it rather than
       // running up to 19 fuzzy title searches that can resolve to the wrong
       // title — requestMedia has always taken this shortcut.
-      const knownTmdbId = parseInt(mediaData.tmdbId, 10);
+      const knownTmdbId = mediaData.tmdbId;
       if (Number.isInteger(knownTmdbId) && knownTmdbId > 0) {
         this.log('📊 [Background] Using provided TMDB ID, skipping search:', knownTmdbId);
         const details = await this.getMediaDetails(knownTmdbId, mediaData.mediaType);
         return this.formatMediaStatus(details, mediaData.mediaType);
       }
 
-      this.log('📊 [Background] Starting search for title:', mediaData.title, 'type:', mediaData.mediaType);
-      const searchTerms = this.generateSearchTerms(mediaData.title);
-      this.log('📊 [Background] Generated search terms:', searchTerms);
-      let bestMatch = null;
-      let searchResults = [];
-
-      for (let i = 0; i < searchTerms.length; i++) {
-        const searchTerm = searchTerms[i];
-        try {
-          this.log(`📊 [Background] Searching term ${i + 1}/${searchTerms.length}: "${searchTerm}"`);
-          searchResults = await this.searchMedia(searchTerm, mediaData.mediaType);
-          this.log(`📊 [Background] Search results for "${searchTerm}":`, searchResults.length, 'items');
-
-          if (searchResults.length > 0) {
-            this.log('📊 [Background] First few results:', searchResults.slice(0, 3).map(r => ({
-              id: r.id, title: r.title || r.name, year: r.releaseDate || r.firstAirDate, mediaType: r.mediaType
-            })));
-          }
-
-          bestMatch = this.findBestMatch(searchResults, { ...mediaData, title: searchTerm });
-          this.log(`📊 [Background] Best match for "${searchTerm}":`, bestMatch ? {
-            id: bestMatch.id, title: bestMatch.title || bestMatch.name, mediaType: bestMatch.mediaType
-          } : 'none');
-
-          if (bestMatch) {
-            this.log('📊 [Background] ✅ Found best match, breaking search loop');
-            break;
-          }
-        } catch (error) {
-          this.warn(`📊 [Background] Search failed for "${searchTerm}":`, error.message);
-          continue;
-        }
-      }
-
+      const bestMatch = await this.resolveMediaMatch(mediaData);
       if (!bestMatch) {
-        this.log('📊 [Background] ❌ No media found after trying all search terms');
-        this.log('📊 [Background] Returning available status (not in database)');
+        this.log('📊 [Background] No unambiguous match; asking the user to choose in Seerr');
         return {
-          status: 'available',
-          message: 'Ready to request',
-          buttonText: 'Request on Seerr',
-          buttonClass: 'request'
+          status: 'unmatched',
+          message: 'No unambiguous match. Choose this title in Seerr.',
+          buttonText: 'Choose in Seerr',
+          buttonClass: 'request',
+          action: 'choose'
         };
       }
 
-      const tmdbId = parseInt(bestMatch.id);
+      const tmdbId = MediaValidation.tmdbId(bestMatch.id);
       this.log('📊 [Background] ✅ Found media with TMDB ID:', tmdbId);
 
       this.log('📊 [Background] Fetching detailed status...');
@@ -610,14 +441,17 @@ class SeerrAPI {
       console.error('📊 [Background] Error stack:', error.stack);
       return {
         status: 'error',
-        message: 'Connection issue',
-        buttonText: 'Request on Seerr',
-        buttonClass: 'request'
+        message: error.message || 'Status lookup failed',
+        buttonText: 'Retry status',
+        buttonClass: 'error',
+        action: 'retryStatus'
       };
     }
   }
 
   async getMediaDetails(tmdbId, mediaType) {
+    tmdbId = MediaValidation.tmdbId(tmdbId);
+    mediaType = MediaValidation.mediaType(mediaType);
     this.log(`📊 [Background] Getting media details for TMDB ID ${tmdbId} (${mediaType})`);
 
     this.log('📊 [Background] Checking requests first for accurate status...');
@@ -639,7 +473,7 @@ class SeerrAPI {
 
     } catch (error) {
       this.log(`📊 [Background] Direct lookup failed (${error.message})`);
-      return null;
+      throw error;
     }
   }
 
@@ -696,648 +530,13 @@ class SeerrAPI {
       return null;
     } catch (error) {
       console.error('📊 [Background] Could not search requests:', error);
-      return null;
+      throw error;
     }
-  }
-
-  formatMediaStatus(mediaDetails, mediaType) {
-    if (!mediaDetails) {
-      return {
-        status: 'available',
-        message: 'Ready to request',
-        buttonText: 'Request on Seerr',
-        buttonClass: 'request'
-      };
-    }
-
-    this.log('📊 [Background] Raw mediaDetails for status formatting:');
-    this.log('📊 [Background] mediaDetails.status:', mediaDetails.status);
-    this.log('📊 [Background] mediaDetails.media:', mediaDetails.media ? {
-      status: mediaDetails.media.status,
-      tmdbId: mediaDetails.media.tmdbId,
-      mediaUrl: mediaDetails.media.mediaUrl ? '[HAS_URL]' : null,
-      seasons: mediaDetails.media.seasons ? mediaDetails.media.seasons.length : null,
-      episodeCount: mediaDetails.media.episodeCount,
-      inProduction: mediaDetails.media.inProduction,
-      firstAirDate: mediaDetails.media.firstAirDate,
-      lastAirDate: mediaDetails.media.lastAirDate,
-      status: mediaDetails.media.status
-    } : null);
-    this.log('📊 [Background] mediaDetails.mediaInfo:', mediaDetails.mediaInfo ? {
-      status: mediaDetails.mediaInfo.status,
-      inProduction: mediaDetails.mediaInfo.inProduction,
-      seasons: mediaDetails.mediaInfo.seasons
-    } : null);
-    this.log('📊 [Background] mediaDetails.requests:', mediaDetails.requests ? mediaDetails.requests.length + ' requests' : null);
-
-    this.log('📊 [Background] Full object keys for monitoring detection:', Object.keys(mediaDetails));
-    if (mediaDetails.seasons) {
-      this.log('📊 [Background] Seasons data available:', mediaDetails.seasons.length);
-    }
-
-    let status = null;
-    let mediaUrl = null;
-    let serviceUrl = null;
-    // Seerr has two status enums. A request carries MediaRequestStatus
-    // (pending/approved/declined/failed/completed) while media carries
-    // MediaStatus (unknown/pending/processing/partial/available/
-    // blocklisted/deleted). The same number means different things.
-    let statusKind = 'media';
-
-    if (mediaDetails.status !== undefined && mediaDetails.media) {
-      status = mediaDetails.status;
-      statusKind = 'request';
-      mediaUrl = mediaDetails.media.mediaUrl;
-      serviceUrl = mediaDetails.media.serviceUrl;
-      this.log('📊 [Background] Found REQUEST object with status:', status);
-      this.log('📊 [Background] Media has status', mediaDetails.media.status, 'but using request status', status);
-    } else if (mediaDetails.requests && mediaDetails.requests.length > 0) {
-      const latestRequest = mediaDetails.requests[0];
-      status = latestRequest.status;
-      statusKind = 'request';
-      if (latestRequest.media) {
-        mediaUrl = latestRequest.media.mediaUrl;
-        serviceUrl = latestRequest.media.serviceUrl;
-      }
-      this.log('📊 [Background] Found status in requests array:', status);
-    } else if (mediaDetails.mediaInfo && mediaDetails.mediaInfo.status !== undefined) {
-      status = mediaDetails.mediaInfo.status;
-      mediaUrl = mediaDetails.mediaInfo.mediaUrl;
-      serviceUrl = mediaDetails.mediaInfo.serviceUrl;
-      this.log('📊 [Background] Found status in mediaInfo:', status);
-    } else if (mediaDetails.media && mediaDetails.media.status !== undefined) {
-      status = mediaDetails.media.status;
-      mediaUrl = mediaDetails.media.mediaUrl;
-      serviceUrl = mediaDetails.media.serviceUrl;
-      this.log('📊 [Background] Found status in media object:', status);
-    } else if (mediaDetails.status !== undefined) {
-      status = mediaDetails.status;
-      this.log('📊 [Background] Found direct status:', status);
-    }
-
-    this.log('📊 [Background] Final extracted status:', status);
-    this.log('📊 [Background] Media URLs - mediaUrl:', mediaUrl, 'serviceUrl:', serviceUrl);
-
-    if (status === null || status === undefined) {
-      this.log('📊 [Background] No status found, returning available for request');
-      return {
-        status: 'available',
-        message: 'Not requested',
-        buttonText: 'Request on Seerr',
-        buttonClass: 'request'
-      };
-    }
-
-    let result = {
-      tmdbId: mediaDetails.id || mediaDetails.tmdbId,
-      title: mediaDetails.name || mediaDetails.title || 'Unknown Title',
-      status: 'unknown',
-      message: 'Status unknown',
-      buttonText: 'Request on Seerr',
-      buttonClass: 'request'
-    };
-
-    if (mediaUrl) result.watchUrl = mediaUrl;
-    if (serviceUrl) result.serviceUrl = serviceUrl;
-
-    this.log('📊 [Background] Mapping', statusKind, 'status:', status, '(type:', typeof status, ') to UI format');
-    this.log('📊 [Background] Raw status value for debugging:', JSON.stringify(status));
-
-    const numericStatus = parseInt(status);
-    if (isNaN(numericStatus)) {
-      this.warn('📊 [Background] Unparseable status value:', status, 'treating as unknown');
-      result.status = 'unknown';
-      result.message = 'Status unavailable';
-      result.buttonText = 'Request on Seerr';
-      result.buttonClass = 'request';
-      this.log('📊 [Background] Formatted status:', result);
-      return result;
-    }
-    this.log('📊 [Background] Numeric status:', numericStatus);
-
-    if (statusKind === 'request') this.applyRequestStatus(result, numericStatus, mediaUrl);
-    else this.applyMediaStatus(result, numericStatus, mediaUrl, mediaDetails);
-
-    const monitoringInfo = this.detectMonitoringStatus(mediaDetails, mediaType);
-    if (monitoringInfo) {
-      result.monitoring = monitoringInfo;
-      this.log('📊 [Background] Monitoring info:', monitoringInfo);
-    }
-
-    this.log('📊 [Background] Formatted status:', result);
-    return result;
-  }
-
-  // MediaRequestStatus: 1 pending, 2 approved, 3 declined, 4 failed,
-  // 5 completed. These describe the request, not whether media exists.
-  applyRequestStatus(result, status, mediaUrl) {
-    switch (status) {
-      case 1:
-        result.status = 'pending';
-        result.message = 'Request awaiting approval';
-        result.buttonText = 'Request Pending';
-        result.buttonClass = 'pending';
-        break;
-
-      case 2:
-        result.status = 'pending';
-        result.message = 'Request approved';
-        result.buttonText = 'Request Approved';
-        result.buttonClass = 'pending';
-        break;
-
-      case 3:
-        result.status = 'declined';
-        result.message = 'Request declined';
-        result.buttonText = 'Request Declined';
-        result.buttonClass = 'error';
-        break;
-
-      case 4:
-        // Offer a retry: a failed request is the one case where requesting
-        // again is the useful action.
-        result.status = 'failed';
-        result.message = 'Request failed';
-        result.buttonText = 'Try Again';
-        result.buttonClass = 'request';
-        break;
-
-      case 5:
-        result.status = 'available_watch';
-        result.message = this.availableMessage();
-        result.buttonText = 'Available';
-        result.buttonClass = 'available';
-        if (mediaUrl) {
-          result.watchUrl = mediaUrl;
-          result.buttonText = this.watchButtonText();
-          result.buttonClass = 'watch';
-        }
-        break;
-
-      default:
-        this.log('📊 [Background] Unknown request status:', status, 'treating as requestable');
-        result.status = 'available';
-        result.message = 'Ready to request';
-        result.buttonText = 'Request on Seerr';
-        result.buttonClass = 'request';
-        break;
-    }
-    return result;
-  }
-
-  // MediaStatus: 1 unknown, 2 pending, 3 processing, 4 partially available,
-  // 5 available, 6 blocklisted, 7 deleted.
-  applyMediaStatus(result, status, mediaUrl, mediaDetails) {
-    switch (status) {
-      case 1:
-        // Seerr treats UNKNOWN as "not requested" and offers the request.
-        result.status = 'available';
-        result.message = 'Ready to request';
-        result.buttonText = 'Request on Seerr';
-        result.buttonClass = 'request';
-        break;
-
-      case 2:
-        result.status = 'pending';
-        result.message = 'Request monitoring';
-        result.buttonText = 'Request Pending';
-        result.buttonClass = 'pending';
-        break;
-
-      case 3: {
-        result.status = 'downloading';
-        result.message = 'Processing download';
-        result.buttonText = 'Processing...';
-        result.buttonClass = 'downloading';
-
-        const progress = this.extractDownloadProgress(mediaDetails);
-        Object.assign(result, progress);
-        if (progress.progress !== undefined) {
-          result.message = `Download in progress (${progress.progress}%)`;
-          result.buttonText = `Downloading ${progress.progress}%`;
-        }
-        break;
-      }
-
-      case 4:
-        result.status = 'partial';
-        result.message = 'Partially ready';
-        result.buttonText = 'Partially Available';
-        result.buttonClass = 'partial';
-        if (mediaUrl) {
-          result.message = this.availableMessage();
-          result.watchUrl = mediaUrl;
-          result.buttonText = this.watchButtonText();
-          result.buttonClass = 'watch';
-        }
-        break;
-
-      case 5:
-        result.status = 'available_watch';
-        result.message = this.availableMessage();
-        result.buttonText = 'Available';
-        result.buttonClass = 'available';
-        if (mediaUrl) {
-          result.watchUrl = mediaUrl;
-          result.buttonText = this.watchButtonText();
-          result.buttonClass = 'watch';
-        }
-        break;
-
-      case 6:
-        // Blocklisted on the server; requesting it cannot succeed.
-        result.status = 'blocklisted';
-        result.message = 'Blocklisted on Seerr';
-        result.buttonText = 'Blocklisted';
-        result.buttonClass = 'error';
-        break;
-
-      case 7:
-        // Removed from the library, so requesting it again is the right offer.
-        result.status = 'available';
-        result.message = 'Ready to request';
-        result.buttonText = 'Request on Seerr';
-        result.buttonClass = 'request';
-        break;
-
-      default:
-        this.log('📊 [Background] Unknown media status:', status, 'treating as available');
-        result.status = 'available';
-        result.message = 'Ready to request';
-        result.buttonText = 'Request on Seerr';
-        result.buttonClass = 'request';
-        break;
-    }
-    return result;
-  }
-
-  // Seerr does not document download progress fields, so these are probed.
-  extractDownloadProgress(mediaDetails) {
-    const found = {};
-    if (!mediaDetails) return found;
-    const groups = {
-      progress: ['progress', 'percentage', 'downloadProgress', 'completion', 'percent'],
-      downloadSpeed: ['speed', 'downloadSpeed', 'rate', 'transferRate'],
-      eta: ['eta', 'timeRemaining', 'estimatedCompletion', 'remainingTime'],
-      downloadClient: ['downloadClient', 'downloader', 'client']
-    };
-    for (const [key, fields] of Object.entries(groups)) {
-      for (const field of fields) {
-        if (mediaDetails[field] !== undefined) found[key] = mediaDetails[field];
-      }
-    }
-    return found;
-  }
-
-  detectMonitoringStatus(mediaDetails, mediaType) {
-    if (!mediaDetails) return null;
-
-    if (mediaType === 'tv') {
-      const media = mediaDetails.media || mediaDetails.mediaInfo || mediaDetails;
-
-      if (media.inProduction === true) {
-        return { type: 'future_episodes', message: 'Monitoring new episodes', indicator: '📡' };
-      }
-
-      if (media.seasons && Array.isArray(media.seasons)) {
-        const incompleteSeasons = media.seasons.filter(season => season.status !== 5);
-        if (incompleteSeasons.length > 0) {
-          return { type: 'future_seasons', message: `Monitoring ${incompleteSeasons.length} season(s)`, indicator: '📡' };
-        }
-      }
-    }
-
-    if (mediaType === 'movie') {
-      const media = mediaDetails.media || mediaDetails.mediaInfo || mediaDetails;
-      if (media.belongsToCollection && media.inProduction) {
-        return { type: 'future_collection', message: 'Monitoring collection', indicator: '📡' };
-      }
-    }
-
-    return null;
-  }
-
-  // Titles are matched against Rotten Tomatoes by text, so what survives here
-  // decides whether a score can be found. Restricting to a-z turned an accent
-  // into a space, splitting the word it sat in, and reduced a title in any
-  // non-Latin script to an empty string that could never match anything.
-  normalizeTitleForMatch(title = '') {
-    return String(title)
-      .toLowerCase()
-      .replace(/&amp;/g, '&')
-      // Latin letters carrying no combining mark, so NFD leaves them alone.
-      .replace(/ß/g, 'ss').replace(/æ/g, 'ae').replace(/œ/g, 'oe')
-      .replace(/ł/g, 'l').replace(/ø/g, 'o').replace(/đ/g, 'd').replace(/ð/g, 'd').replace(/þ/g, 'th')
-      // Split the rest into base letter plus mark, then drop the marks.
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-      // Keep letters of any script rather than only a-z.
-      .replace(/[^\p{L}\p{N}]+/gu, ' ')
-      .replace(/\b(the|a|an)\b/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-
-  decodeHtml(text = '') {
-    return String(text)
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&apos;/g, "'")
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
-  }
-
-  parseRtSearchResults(html, mediaType) {
-    const rows = [];
-    const rowRe = /<search-page-media-row\b([\s\S]*?)<\/search-page-media-row>/gi;
-    let match;
-
-    while ((match = rowRe.exec(html))) {
-      const row = match[0];
-      const attrs = match[1] || '';
-      const hrefMatch = row.match(/<a[^>]+data-qa="info-name"[^>]+href="([^"]+)"/i) ||
-        row.match(/<a[^>]+href="([^"]+)"[^>]+data-qa="info-name"/i);
-      const titleMatch = row.match(/<a[^>]+data-qa="info-name"[^>]*>([\s\S]*?)<\/a>/i);
-      const yearMatch = attrs.match(/(?:release-year|start-year)="(\d{4})"/i);
-      const criticsMatch = attrs.match(/tomatometer-score="(\d{1,3})"/i);
-
-      if (!hrefMatch || !titleMatch) continue;
-
-      const href = this.decodeHtml(hrefMatch[1]);
-      const resultType = href.includes('/tv/') ? 'tv' : 'movie';
-      if (mediaType && resultType !== mediaType) continue;
-
-      rows.push({
-        href,
-        title: this.decodeHtml(titleMatch[1].replace(/<[^>]*>/g, '')).trim(),
-        year: yearMatch ? parseInt(yearMatch[1], 10) : null,
-        mediaType: resultType,
-        rtCriticsScore: criticsMatch ? this.parseRtPercent(criticsMatch[1]) : null
-      });
-    }
-
-    return rows;
-  }
-
-  scoreRtSearchResult(result, requested) {
-    const requestedTitle = this.normalizeTitleForMatch(requested.title);
-    const resultTitle = this.normalizeTitleForMatch(result.title);
-    if (!requestedTitle || !resultTitle) return 0;
-
-    let score;
-    if (requestedTitle === resultTitle) {
-      score = 0.8;
-    } else if (requestedTitle.includes(resultTitle) || resultTitle.includes(requestedTitle)) {
-      score = 0.6;
-    } else {
-      const requestedWords = new Set(requestedTitle.split(' ').filter(Boolean));
-      const resultWords = new Set(resultTitle.split(' ').filter(Boolean));
-      const overlap = [...requestedWords].filter(word => resultWords.has(word)).length;
-      score = overlap / Math.max(requestedWords.size, resultWords.size) * 0.6;
-    }
-
-    // An exact title in the right year is as sure as this method gets, so it
-    // reaches 1. While the ceiling was below 1 every score ever shown was
-    // marked approximate, which told the reader nothing.
-    // No year to check against. The title tiers above all sit below 1 by
-    // design, so a match nothing corroborates can never come back certain.
-    if (!requested.year || !result.year) return Math.max(0, score);
-
-    const delta = Math.abs(requested.year - result.year);
-    if (delta === 0) score += 0.2;
-    else if (delta === 1) score += 0.1;
-    else if (delta >= 3) score -= 0.3;
-
-    return Math.max(0, Math.min(1, score));
-  }
-
-  // Whether another candidate is as good a match as the best one, which means
-  // the choice between them rests on Rotten Tomatoes' own ordering.
-  rtMatchIsAmbiguous(candidates, best) {
-    return candidates.some(candidate =>
-      candidate !== best &&
-      candidate.confidence >= best.confidence &&
-      this.normalizeTitleForMatch(candidate.title) === this.normalizeTitleForMatch(best.title));
-  }
-
-  parseRtScorecard(html) {
-    const scriptMatch = html.match(/<script[^>]+id="media-scorecard-json"[^>]*>([\s\S]*?)<\/script>/i);
-    if (!scriptMatch) return {};
-
-    try {
-      const data = JSON.parse(scriptMatch[1].trim());
-      return {
-        rtCriticsScore: this.parseRtPercent(data.criticsScore?.score),
-        rtAudienceScore: this.parseRtPercent(data.audienceScore?.score)
-      };
-    } catch (error) {
-      this.warn('Could not parse Rotten Tomatoes scorecard:', error);
-      return {};
-    }
-  }
-
-  parseRtPercent(value) {
-    if (value === null || value === undefined || String(value).trim() === '') return null;
-    const score = Number(String(value).replace(/%$/, ''));
-    return Number.isFinite(score) && score >= 0 && score <= 100 ? Math.round(score) : null;
-  }
-
-  async fetchRtHtml(url) {
-    const target = new URL(url, 'https://www.rottentomatoes.com');
-    if (target.origin !== 'https://www.rottentomatoes.com' || target.username || target.password) {
-      throw new Error('Rotten Tomatoes URL is outside the allowed origin');
-    }
-    const response = await fetch(target.href, {
-      redirect: 'error',
-      signal: AbortSignal.timeout(RatingsConfig.requestTimeoutMs),
-      credentials: 'omit',
-      headers: {
-        Accept: 'text/html,application/xhtml+xml'
-      }
-    });
-    if (!response.ok) {
-      throw new Error(`Rotten Tomatoes returned HTTP ${response.status}`);
-    }
-    return response.text();
-  }
-
-  cacheRottenTomatoesResult(key, value, ttl) {
-    this.rtCache.delete(key);
-    while (this.rtCache.size >= RatingsConfig.rtCacheMaxEntries) this.rtCache.delete(this.rtCache.keys().next().value);
-    this.rtCache.set(key, { value, expiresAt: Date.now() + ttl });
-    this.scheduleRtCacheFlush();
-  }
-
-  // ── Persisted RT cache ──
-  // The worker is evicted after seconds of idle, so an in-memory Map alone can
-  // never honour rtCacheTtlMs. storage.local carries entries across restarts.
-
-  loadRtCache() {
-    this.rtCacheReady ??= (async () => {
-      try {
-        const stored = (await chrome.storage.local.get([RT_CACHE_STORAGE_KEY]))[RT_CACHE_STORAGE_KEY];
-        if (!stored || typeof stored !== 'object') return;
-        // A stored result carries the confidence its match earned. Scored under
-        // rules we no longer use, it would keep that verdict for a full day
-        // after the rules changed, however the matcher would judge it now.
-        if (stored.matcher !== RatingsConfig.matcherVersion) {
-          this.log('The title-matching rules have changed; discarding cached Rotten Tomatoes results');
-          return;
-        }
-        const now = Date.now();
-        for (const [key, entry] of Object.entries(stored.entries || {})) {
-          // A live in-memory entry is newer than anything on disk.
-          if (this.rtCache.has(key)) continue;
-          if (!entry || typeof entry !== 'object' || typeof entry.expiresAt !== 'number') continue;
-          if (now >= entry.expiresAt) continue;
-          this.rtCache.set(key, { value: entry.value ?? null, expiresAt: entry.expiresAt });
-        }
-      } catch (error) {
-        console.error('Could not read the persisted Rotten Tomatoes cache:', error);
-      }
-    })();
-    return this.rtCacheReady;
-  }
-
-  scheduleRtCacheFlush() {
-    if (this.rtCacheFlushTimer !== null) return;
-    this.rtCacheFlushTimer = setTimeout(() => {
-      this.rtCacheFlushTimer = null;
-      this.flushRtCache();
-    }, RT_CACHE_FLUSH_DELAY_MS);
-  }
-
-  // Serialised so overlapping flushes cannot interleave their writes.
-  flushRtCache() {
-    this.rtCacheFlushing = (this.rtCacheFlushing ?? Promise.resolve()).then(async () => {
-      try {
-        const now = Date.now();
-        const payload = {};
-        for (const [key, entry] of this.rtCache) {
-          if (now < entry.expiresAt) payload[key] = entry;
-        }
-        await chrome.storage.local.set({
-          [RT_CACHE_STORAGE_KEY]: { matcher: RatingsConfig.matcherVersion, entries: payload }
-        });
-      } catch (error) {
-        console.error('Could not persist the Rotten Tomatoes cache:', error);
-      }
-    });
-    return this.rtCacheFlushing;
-  }
-
-  async getRottenTomatoesRatings(data) {
-    const title = typeof data?.title === 'string' ? data.title.trim() : '';
-    if (!title) return null;
-    const refresh = data?.refresh === true;
-    const originalTitle = typeof data?.originalTitle === 'string' ? data.originalTitle.trim() : null;
-    const normalized = { ...data, title, originalTitle, mediaType: data.mediaType || 'movie', refresh };
-    // A refresh coalesces with other refreshes but must not join an ordinary
-    // lookup already in flight, which would hand back the stale value.
-    const key = `${refresh ? 'refresh:' : ''}${normalized.mediaType}:${title}:${normalized.year || ''}`;
-    if (this.rtPending.has(key)) return this.rtPending.get(key);
-    const pending = this.resolveRottenTomatoesRatings(normalized);
-    this.rtPending.set(key, pending);
-    try { return await pending; }
-    finally { this.rtPending.delete(key); }
-  }
-
-  // The queries worth trying, in order. Rotten Tomatoes lists most films under
-  // their English title, so where Seerr gives a localised one the original is
-  // the way back. Deduped by the same normalisation used for matching, so a
-  // title identical to its original is only searched once.
-  rtQueryTitles(title, originalTitle) {
-    const queries = [];
-    for (const candidate of [title, originalTitle]) {
-      const trimmed = typeof candidate === 'string' ? candidate.trim() : '';
-      if (!trimmed) continue;
-      const normalized = this.normalizeTitleForMatch(trimmed);
-      if (!normalized) continue;
-      if (queries.some(existing => this.normalizeTitleForMatch(existing) === normalized)) continue;
-      queries.push(trimmed);
-    }
-    return queries;
-  }
-
-  // The best candidate for one query, or null when there is none worth having.
-  // Candidates are scored against every title we know the film by, not against
-  // the query: searching a localised title returns the film under its English
-  // one, and judging that result by the query would reject the right answer.
-  async rtBestMatchFor(query, titles, year, mediaType) {
-    const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(query)}`;
-    const candidates = this.parseRtSearchResults(await this.fetchRtHtml(searchUrl), mediaType)
-      .map(result => ({
-        ...result,
-        confidence: Math.max(...titles.map(title => this.scoreRtSearchResult(result, { title, year })))
-      }))
-      .sort((a, b) => b.confidence - a.confidence);
-
-    const best = candidates[0];
-    if (!best) return null;
-    // Several films can share a title exactly. With no year to choose between
-    // them, taking whichever Rotten Tomatoes ranked first is a guess, and a
-    // wrong score presented as fact is worse than none. Another query may
-    // still be unambiguous.
-    if (!year && this.rtMatchIsAmbiguous(candidates, best)) {
-      this.log(`Rotten Tomatoes has more than one "${best.title}" and no year was known; not guessing`);
-      return null;
-    }
-    return best.confidence >= RatingsConfig.confidenceThreshold ? best : null;
-  }
-
-  async resolveRottenTomatoesRatings({ title, originalTitle = null, year = null, mediaType = 'movie', refresh = false }) {
-    if (!title) return null;
-
-    await this.loadRtCache();
-
-    const cacheKey = `${mediaType}:${title}:${year || ''}`;
-    // Scores move as reviews arrive, so a refresh discards what we hold and
-    // refetches; the new value then becomes the cached one.
-    if (refresh) this.rtCache.delete(cacheKey);
-    const cached = this.rtCache.get(cacheKey);
-    if (cached && Date.now() < cached.expiresAt) return cached.value;
-
-    // Bound the worker cache during long browsing sessions. Insertion enforces
-    // the hard limit; this only clears entries that have already expired.
-    for (const [key, entry] of this.rtCache) if (Date.now() >= entry.expiresAt) this.rtCache.delete(key);
-    const queries = this.rtQueryTitles(title, originalTitle);
-    let best = null;
-    for (const query of queries) {
-      best = await this.rtBestMatchFor(query, queries, year, mediaType);
-      if (best) break;
-    }
-
-    if (!best) {
-      const empty = null;
-      this.cacheRottenTomatoesResult(cacheKey, empty, RatingsConfig.rtNegativeCacheTtlMs);
-      return empty;
-    }
-
-    let detailScores = {};
-    try {
-      detailScores = this.parseRtScorecard(await this.fetchRtHtml(best.href));
-    } catch (error) {
-      this.warn('Could not fetch Rotten Tomatoes detail page:', error);
-    }
-
-    const result = {
-      rtCriticsScore: detailScores.rtCriticsScore ?? best.rtCriticsScore ?? null,
-      rtAudienceScore: detailScores.rtAudienceScore ?? null,
-      confidence: best.confidence,
-      source: 'rotten-tomatoes',
-      url: best.href,
-      matchedTitle: best.title,
-      matchedYear: best.year
-    };
-
-    const ttl = result.rtCriticsScore === null && result.rtAudienceScore === null
-      ? RatingsConfig.rtNegativeCacheTtlMs : RatingsConfig.rtCacheTtlMs;
-    this.cacheRottenTomatoesResult(cacheKey, result, ttl);
-    return result;
   }
 
   async debugAPI(tmdbId, mediaType) {
+    tmdbId = MediaValidation.tmdbId(tmdbId);
+    mediaType = MediaValidation.mediaType(mediaType);
     this.log(`🛠️ [Background] Debugging API endpoints for TMDB ID ${tmdbId} (${mediaType})`);
     const results = {};
 
@@ -1394,6 +593,7 @@ class SeerrAPI {
   }
 
   async addToWatchlist(data) {
+    data = MediaValidation.media(data, { requireId: true });
     if (!this.baseUrl || !this.apiKey) {
       throw new Error('Seerr server URL and API key are required');
     }
@@ -1401,55 +601,13 @@ class SeerrAPI {
     // mediaType; see server/interfaces/api/watchlistCreate.ts. We were sending
     // mediaId, which that schema has no field for, so every add was rejected.
     // title is optional and is what Seerr's own front end sends.
-    const tmdbId = Number(data.tmdbId);
-    if (!Number.isFinite(tmdbId)) throw new Error('A TMDB id is required to add to the watchlist');
+    const tmdbId = data.tmdbId;
     const response = await this.makeAPIRequest('POST', '/api/v1/watchlist', {
       tmdbId,
       mediaType: data.mediaType,
       ...(data.title ? { title: String(data.title) } : {})
     });
     return response;
-  }
-
-  async makeAPIRequest(method, endpoint, data = null) {
-    if (!this.baseUrl || !this.apiKey) {
-      throw new Error('Server URL and API key must be configured');
-    }
-
-    const url = `${this.baseUrl.replace(/\/$/, '')}${endpoint}`;
-    const options = {
-      method,
-      redirect: 'error',
-      signal: AbortSignal.timeout(RatingsConfig.requestTimeoutMs),
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': this.apiKey
-      }
-    };
-
-    if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-      options.body = JSON.stringify(data);
-    }
-
-    try {
-      const response = await fetch(url, options);
-
-      if (!response.ok) {
-        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-        try {
-          const errorData = await response.json();
-          if (errorData.message) errorMessage = errorData.message;
-        } catch (_) {}
-        throw new Error(errorMessage);
-      }
-
-      return response.status === 204 ? null : await response.json();
-    } catch (error) {
-      if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-        throw new Error('Could not connect to Seerr server. Please check the URL and your network connection.');
-      }
-      throw error;
-    }
   }
 
   updateSettings(settings) {
@@ -1461,14 +619,17 @@ class SeerrAPI {
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
 
+Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport);
+
 const seerrAPI = new SeerrAPI();
+let initializing = true;
 
 // Synchronous listener registration (guaranteed before worker considers itself ready)
 // The URL and feature flags sync across devices; the API key stays local.
 chrome.storage.onChanged.addListener((changes, namespace) => {
   const relevant = (namespace === 'sync' && changes.seerrUrl) ||
     (namespace === 'local' && (changes.seerrApiKey || changes.debugLogging));
-  if (!relevant) return;
+  if (!relevant || initializing) return;
   seerrAPI.log('🔄 [Background] Settings changed, reloading...');
   seerrAPI.loadSettings()
     .then(() => seerrAPI.syncOverlayRegistration())
@@ -1497,8 +658,7 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 // Async init — runs migration and loads settings after listeners are registered
 const settingsReady = (async () => {
-  await seerrAPI.loadSettings();
   await seerrAPI.migrateStorage();
   await seerrAPI.loadSettings();
   await seerrAPI.syncOverlayRegistration();
-})();
+})().finally(() => { initializing = false; });

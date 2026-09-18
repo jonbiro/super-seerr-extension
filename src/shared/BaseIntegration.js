@@ -307,6 +307,7 @@ class BaseIntegration {
 
       // Handle errors appropriately - be more specific about error types
       const errorStatus = this.getErrorStatus(err);
+      this.currentStatusData = errorStatus;
       this.log('Determined error status:', errorStatus);
 
       if (this.uiTheme === 'flyout') {
@@ -352,12 +353,26 @@ class BaseIntegration {
 
     this.log('Button analysis:', { buttonText, isWatchButton });
 
-    if (isWatchButton) {
-      await this.handleWatchButtonClick();
-    } else {
-      await this.handleRequestButtonClick();
+    try {
+      if (this.currentStatusData?.action === 'retryStatus') {
+        await this.updateStatus();
+      } else if (this.currentStatusData?.action === 'choose') {
+        const response = await this.client.sendMessage({ action: 'getConfigState' });
+        const server = new URL(response?.data?.serverUrl);
+        if (!['http:', 'https:'].includes(server.protocol)) throw new Error('Invalid Seerr URL');
+        server.pathname = `${server.pathname.replace(/\/$/, '')}/search`;
+        server.search = new URLSearchParams({ query: this.mediaData.title }).toString();
+        window.open(server.href, '_blank', 'noopener,noreferrer');
+      } else if (isWatchButton) {
+        await this.handleWatchButtonClick();
+      } else {
+        await this.handleRequestButtonClick();
+      }
+    } catch (error) {
+      this.ui.createNotification('Seerr', error.message, 'error');
+    } finally {
+      this._requestInFlight = false;
     }
-    this._requestInFlight = false;
   }
 
   /**
@@ -389,16 +404,11 @@ class BaseIntegration {
       this.error('Failed to get watch URL from API:', err);
     }
 
-    // If we get here, something went wrong
-    this.ui.createNotification(
-        'Watch URL Not Available',
-        'Could not find a watch URL. Trying to request instead...',
-        'warning',
-        4000
-    );
-
-    // Fall through to regular request handling
-    await this.handleRequestButtonClick();
+    // A watch click is not permission to create a request. A failed status
+    // read or a missing playback URL must remain a read-only failure.
+    this.currentStatusData = this.getErrorStatus(new Error('Watch URL unavailable. Retry the status lookup.'));
+    this.updateUIFromStatus(this.currentStatusData);
+    this.ui.createNotification('Watch URL Not Available', this.currentStatusData.message, 'warning', 4000);
   }
 
   /**
@@ -522,29 +532,13 @@ class BaseIntegration {
    * Get error status for UI updates
    */
   getErrorStatus(error) {
-    const isServerError = error.message && (
-        error.message.includes('connect') ||
-        error.message.includes('Server URL and API key') ||
-        error.message.includes('Connection failed') ||
-        error.message.includes('not responding') ||
-        error.message.toLowerCase().includes('cors')
-    );
-
-    if (isServerError) {
-      return {
-        status: 'error',
-        buttonText: 'Server Error',
-        buttonClass: 'error',
-        message: 'Cannot connect to Seerr server'
-      };
-    } else {
-      return {
-        status: 'available',
-        buttonText: 'Request on Seerr',
-        buttonClass: 'request',
-        message: 'Ready to request'
-      };
-    }
+    return {
+      status: 'error',
+      buttonText: 'Retry status',
+      buttonClass: 'error',
+      message: error.message || 'Status lookup failed',
+      action: 'retryStatus'
+    };
   }
 
   /**

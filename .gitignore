@@ -15,3 +15,7 @@ dist/
 
 # Dependencies
 node_modules/
+
+# Browser test output
+test-results/
+playwright-report/

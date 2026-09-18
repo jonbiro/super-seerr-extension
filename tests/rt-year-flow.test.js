@@ -30,6 +30,7 @@ function grid(items) {
   };
   window.fetch = async () => ({ ok: true, json: async () => ({ results: [] }) });
   for (const f of ['RatingsModel', 'RatingsConfig']) window.eval(fs.readFileSync(`src/shared/${f}.js`, 'utf8'));
+  require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(fs.readFileSync('src/content/seerr-integration.js', 'utf8'));
   return {
     dom, window, sent,

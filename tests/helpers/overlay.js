@@ -88,6 +88,7 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local
     },
     window: { RatingsModel: Model, RatingsConfig: Config, location: { pathname, search: '', origin: 'https://seerr.example', href: `https://seerr.example${pathname}` }, addEventListener() {} }
   });
+  require('./overlay-modules').loadOverlayModulesInContext(context);
   const source = fs.readFileSync(path.join(__dirname, '../../src/content/seerr-integration.js'), 'utf8');
   // Expose closure functions in the test VM only; execute the real production code.
   vm.runInContext(source.replace(/\}\)\(\);\s*$/, `globalThis.overlay = {

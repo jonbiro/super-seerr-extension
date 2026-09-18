@@ -2,6 +2,16 @@
 // Shared by the worker behaviour suites.
 const fs = require('node:fs');
 const vm = require('node:vm');
+const path = require('node:path');
+
+// Execute side-effect modules in the same realm, just as the MV3 worker does.
+function workerSource(file = 'src/background/background.js', seen = new Set()) {
+  file = path.resolve(file);
+  if (seen.has(file)) return '';
+  seen.add(file);
+  return fs.readFileSync(file, 'utf8').replace(/^import '([^']+)';/gm,
+    (_, dependency) => `(function () {\n${workerSource(path.resolve(path.dirname(file), dependency), seen)}\n})();`);
+}
 const Config = require('../../src/shared/RatingsConfig');
 
 function loadWorker({
@@ -62,9 +72,8 @@ function loadWorker({
   });
   // Simulate a browser that does not expose an API the worker reaches for.
   for (const api of omitApis) delete context.chrome[api];
-  const source = fs.readFileSync('src/background/background.js', 'utf8');
-  vm.runInContext(source.replace("import '../shared/RatingsConfig.js';", '') + '\nglobalThis.worker = seerrAPI; globalThis.ready = settingsReady;', context);
-  return { api: context.worker, ready: context.ready, listeners, writes, removals, localStore, localWrites, localRemovals, registrations, logs };
+  vm.runInContext(workerSource() + '\nglobalThis.worker = seerrAPI; globalThis.ready = settingsReady;', context);
+  return { context, api: context.worker, ready: context.ready, listeners, writes, removals, localStore, localWrites, localRemovals, registrations, logs };
 }
 
-module.exports = { loadWorker };
+module.exports = { loadWorker, workerSource };

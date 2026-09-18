@@ -5,6 +5,7 @@ const RATINGS_CACHE_KEY = 'overlayRatingsV1';
 // The overlay's record of which ratings endpoints this server does not serve.
 // Clearing the cache means "ask again", so this goes with it.
 const RATINGS_UNAVAILABLE_KEY = 'seerrRatingsUnavailableV1';
+const RT_CACHE_KEY = 'rtCacheV1';
 
 class OptionsManager {
   constructor() {
@@ -45,21 +46,23 @@ class OptionsManager {
     if (!this.cacheCount) return;
     let held = 0;
     try {
-      const stored = (await chrome.storage.local.get([RATINGS_CACHE_KEY]))[RATINGS_CACHE_KEY];
-      held = Object.keys(stored?.entries || {}).length;
+      const stored = await chrome.storage.local.get([RATINGS_CACHE_KEY, RT_CACHE_KEY, RATINGS_UNAVAILABLE_KEY]);
+      held = Object.keys(stored[RATINGS_CACHE_KEY]?.entries || {}).length +
+        Object.keys(stored[RT_CACHE_KEY]?.entries || {}).length;
+      this.hasRatingsAvailability = !!stored[RATINGS_UNAVAILABLE_KEY];
     } catch (_) {
       held = 0;
     }
     this.cacheCount.textContent = held === 0
       ? 'No ratings cached'
       : `${held} title${held === 1 ? '' : 's'} cached`;
-    if (this.clearCacheButton) this.clearCacheButton.disabled = held === 0;
+    if (this.clearCacheButton) this.clearCacheButton.disabled = held === 0 && !this.hasRatingsAvailability;
   }
 
   async clearRatingsCache() {
     try {
-      // Removing the key is what open Seerr tabs watch for; a write is not a clear.
-      await chrome.storage.local.remove([RATINGS_UNAVAILABLE_KEY, RATINGS_CACHE_KEY]);
+      const response = await chrome.runtime.sendMessage({ action: 'clearRatingsCache' });
+      if (!response?.success) throw new Error(response?.error || 'Cache clear failed');
       this.showStatus('success', 'Ratings cache cleared');
     } catch (error) {
       console.error('Could not clear the ratings cache:', error);

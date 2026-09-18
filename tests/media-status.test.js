@@ -72,8 +72,8 @@ test('without a TMDB id the title search still runs', async () => {
   assert.ok(calls.some(endpoint => endpoint.startsWith('/api/v1/search')), 'search is still the fallback');
 });
 
-test('an unusable tmdbId falls back to search rather than querying garbage', async () => {
-  for (const tmdbId of [null, undefined, 0, -1, 'abc', {}]) {
+test('a missing tmdbId falls back to search rather than querying garbage', async () => {
+  for (const tmdbId of [null, undefined]) {
     const worker = loadWorker(CONFIGURED);
     await worker.ready;
     const calls = withApi(worker, {

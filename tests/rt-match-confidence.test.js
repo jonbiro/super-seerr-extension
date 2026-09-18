@@ -110,7 +110,7 @@ test('no title tier alone can reach certainty', () => {
   // A yearless match returns its title tier unchanged, so if any tier were
   // raised to 1 an uncorroborated guess would be shown as fact.
   const worker = loadWorker();
-  const source = require('node:fs').readFileSync('src/background/background.js', 'utf8');
+  const source = require('./helpers/worker').workerSource();
   const fn = source.slice(source.indexOf('scoreRtSearchResult(result, requested)'));
   const tiers = [...fn.slice(0, fn.indexOf('if (!requested.year')).matchAll(/score = ([\d.]+)/g)]
     .map(m => parseFloat(m[1]));

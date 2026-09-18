@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.56]
+
+- Fixed “Clear ratings cache” being undone by a lookup running at the same time. The clear empties memory and then removes storage, and a read starting in between restored the entries it was deleting, which the next write then put back on disk. A read now waits for a clear already under way.
+- The media server is named again on the first status after the worker restarts. Manifest V3 evicts that worker after seconds of idle, and the name was re-fetched each time without being waited for, so the flyout regularly fell back to a bare “Watch”. The last answer for a server is remembered and used immediately, then refreshed behind it — still without holding up any message.
+
 ## [3.1.54]
 
 - A lookup that could not complete is now held for two minutes in memory rather than retried on every pass. Not remembering failures at all, as the previous build did, meant a page re-asked about the same titles each time badges were injected. The hold never reaches storage and never outlives the page, so a server coming back is picked up at once.

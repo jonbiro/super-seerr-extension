@@ -41,7 +41,12 @@ function openOptions({ granted = true, synced = {}, local = {} } = {}) {
       contains: async () => granted,
       request: async ({ origins }) => { order.push('permissions.request'); requested.push(...origins); return granted; }
     },
-    runtime: { sendMessage: async () => ({ success: true }) }
+    runtime: { sendMessage: async message => {
+      if (message.action === 'clearRatingsCache') {
+        await window.chrome.storage.local.remove(['rtCacheV1', 'seerrRatingsUnavailableV1', 'overlayRatingsV1']);
+      }
+      return { success: true };
+    } }
   };
   window.eval(fs.readFileSync('src/options/options.js', 'utf8'));
   return { dom, window, syncWrites, localWrites, localRemovals, requested, order };
@@ -158,7 +163,7 @@ test('Settings reports how many ratings are cached and clears them', async t => 
   // Flatten: the arrays come from the page realm.
   // The record of endpoints this server does not serve goes with the cache:
   // clearing is the user saying "try again", which includes those.
-  assert.deepEqual(ctx.localRemovals.map(keys => [...keys]), [['seerrRatingsUnavailableV1', 'overlayRatingsV1']]);
+  assert.deepEqual(ctx.localRemovals.map(keys => [...keys]), [['rtCacheV1', 'seerrRatingsUnavailableV1', 'overlayRatingsV1']]);
   assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /No ratings cached/);
   assert.equal(ctx.window.document.getElementById('clearRatingsCache').disabled, true, 'nothing left to clear');
 });

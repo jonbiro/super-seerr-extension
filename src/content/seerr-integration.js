@@ -8,7 +8,7 @@
 
   const Model = window.RatingsModel;
   const Config = window.RatingsConfig;
-  if (!Model || !Config) return;
+  if (!Model || !Config || !window.createOverlayCache || !window.createRatingsPresentation || !window.createSeerrSession) return;
   window.__seerr_overlay_installed = true;
 
   let debugMode = false;
@@ -55,8 +55,14 @@
   chrome.storage.onChanged.addListener((changes, namespace) => {
     // Settings clears the cache by removing the key. Our own flushes always
     // write a value, so only a removal counts as a clear.
-    if (namespace === 'local' && changes[PERSISTED_RATINGS_KEY] && changes[PERSISTED_RATINGS_KEY].newValue === undefined) {
+    if (namespace === 'local' && (changes.ratingsCacheEpoch ||
+        (changes[PERSISTED_RATINGS_KEY] && changes[PERSISTED_RATINGS_KEY].newValue === undefined))) {
       forgetPersistedRatings();
+      pageRatingsByTmdbId.clear();
+      pageMetadataByTmdbId.clear();
+      embeddedRatingsByTmdbId.clear();
+      pageRatingsFetches.clear();
+      embeddedRatingsIndexed = false;
       // Clearing the cache is also a request to retry endpoints we had
       // written off, in case the server has gained a ratings backend since.
       resetSeerrRatings();
@@ -69,97 +75,11 @@
     if (relevant) checkApiConfig().then(() => { cleanupOverlay(); injectOverlay(); });
   });
 
-  // key: `${mediaType}:${tmdbId}`, value: { bundle }. `pending:` keys hold the
-  // in-flight promise instead, so serialisation skips them.
-  const ratingsCache = new Map();
-
-  // Resolved bundles persist so a page reload does not re-resolve every card.
-  // There is no expiry by design: entries live until the entry cap evicts them
-  // or the user clears the cache from Settings.
   const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';
-  // A cached bundle carries the confidence the matcher gave it, and a cache hit
-  // never re-runs the matcher, so entries scored under superseded rules would
-  // keep the old verdict forever. Config.matcherVersion is the stamp; see there.
-  const PERSISTED_RATINGS_FLUSH_MS = 500;
-  let persistedRatingsReady = null;
-  let persistedRatingsFlushTimer = null;
-  let persistedRatingsFlushing = null;
-
-  function loadPersistedRatings() {
-    persistedRatingsReady ??= (async () => {
-      try {
-        const stored = (await chrome.storage.local.get([PERSISTED_RATINGS_KEY]))[PERSISTED_RATINGS_KEY];
-        if (!stored || typeof stored !== 'object') return;
-        // Entries belong to the server they were read from.
-        if (stored.server !== configuredServer?.href) return;
-        // Scored under rules we no longer use: cheaper to look them up again
-        // than to show every title a verdict the current matcher disagrees with.
-        if (stored.matcher !== Config.matcherVersion) {
-          log('The ratings matcher has changed since these were cached; resolving them again');
-          return;
-        }
-        if (!stored.entries || typeof stored.entries !== 'object') return;
-        for (const [key, entry] of Object.entries(stored.entries)) {
-          // A live entry from this session is fresher than anything stored.
-          if (ratingsCache.has(key) || !entry || typeof entry !== 'object') continue;
-          const bundle = entry.bundle;
-          const cachedAt = typeof entry.cachedAt === 'number' ? entry.cachedAt : null;
-          if (!bundle) {
-            // A remembered "nothing", worth keeping only while it is current.
-            if (cachedAt === null || Date.now() - cachedAt >= Config.unratedRetryMs) continue;
-            ratingsCache.set(key, { bundle: null, cachedAt });
-            continue;
-          }
-          if (typeof bundle !== 'object') continue;
-          ratingsCache.set(key, { bundle: Model.createRatingsBundle(bundle), cachedAt });
-        }
-      } catch (error) {
-        log('Could not read the stored ratings cache:', error);
-      }
-    })();
-    return persistedRatingsReady;
-  }
-
-  function schedulePersistedRatingsFlush() {
-    if (persistedRatingsFlushTimer !== null) return;
-    persistedRatingsFlushTimer = setTimeout(() => {
-      persistedRatingsFlushTimer = null;
-      flushPersistedRatings();
-    }, PERSISTED_RATINGS_FLUSH_MS);
-  }
-
-  // Serialised so overlapping flushes cannot interleave their writes.
-  function flushPersistedRatings() {
-    persistedRatingsFlushing = (persistedRatingsFlushing ?? Promise.resolve()).then(async () => {
-      try {
-        if (!configuredServer) return;
-        const entries = {};
-        for (const [key, value] of ratingsCache) {
-          if (key.startsWith('pending:') || !value) continue;
-          // A failed lookup is remembered only for this page, never on disk.
-          if (value.provisional) continue;
-          // A null bundle is a remembered "nothing knows this title", and it is
-          // kept: that is what stops the same lookups running on every visit.
-          // Every one carries the timestamp that lets it expire, because the
-          // only two ways into this cache set one, and the loader refuses an
-          // absence that has none.
-          if (value.bundle && !Model.hasAnyScore(value.bundle)) continue;
-          entries[key] = { bundle: value.bundle ?? null, cachedAt: value.cachedAt ?? null };
-        }
-        await chrome.storage.local.set({
-          [PERSISTED_RATINGS_KEY]: { server: configuredServer.href, matcher: Config.matcherVersion, entries }
-        });
-      } catch (error) {
-        log('Could not persist the ratings cache:', error);
-      }
+  const { ratingsCache, loadPersistedRatings, schedulePersistedRatingsFlush,
+    flushPersistedRatings, forgetPersistedRatings } = window.createOverlayCache({
+      Config, Model, log, getServer: () => configuredServer
     });
-    return persistedRatingsFlushing;
-  }
-
-  function forgetPersistedRatings() {
-    ratingsCache.clear();
-    persistedRatingsReady = null;
-  }
   const embeddedRatingsByTmdbId = new Map();
   const pageRatingsByTmdbId = new Map();
   const pageMetadataByTmdbId = new Map();
@@ -290,99 +210,8 @@
 
   // ──────────────── Ratings Resolution ────────────────
 
-  function parseScore(value, max) {
-    if (typeof value !== 'number' && typeof value !== 'string') return null;
-    if (typeof value === 'string' && !value.trim()) return null;
-    const number = typeof value === 'number' ? value : Number(value.trim().replace(/%$/, ''));
-    return Number.isFinite(number) && number >= 0 && number <= max ? number : null;
-  }
-
-  function parsePercentScore(value) {
-    const score = parseScore(value, 100);
-    return score === null ? null : Math.round(score);
-  }
-
-  // TMDB and IMDb both report 0 for a title nobody has rated, and neither
-  // scale can otherwise reach 0 — their votes start at 1. So a zero here means
-  // "no rating", and showing it as 0/10 would read as a damning score and sort
-  // below genuine low ratings. A Rotten Tomatoes 0% is a real verdict and is
-  // handled by parsePercentScore, which keeps it.
-  function parseTenPointScore(value) {
-    const score = parseScore(value, 10);
-    if (score === null || score === 0) return null;
-    return Math.round(score * 10) / 10;
-  }
-
-  function firstParsedScore(obj, keys, parser) {
-    for (const key of keys) {
-      if (obj && Object.prototype.hasOwnProperty.call(obj, key)) {
-        const parsed = parser(obj[key]);
-        if (parsed !== null) return parsed;
-      }
-    }
-    return null;
-  }
-
-  function bundleFromRatingObject(obj, source = 'seerr-native') {
-    if (!obj || typeof obj !== 'object') return null;
-
-    const bundle = {};
-    const rt = obj.rt || obj.rottenTomatoes || obj.rottenTomatoesRatings || {};
-    const imdb = obj.imdb || obj.imdbRatings || {};
-    const mediaInfo = obj.mediaInfo || obj.media || {};
-
-    const critics = firstParsedScore(obj, ['rtCriticsScore', 'rtScore', 'criticsScore', 'criticScore', 'tomatometerScore'], parsePercentScore)
-      ?? firstParsedScore(rt, ['rtCriticsScore', 'rtScore', 'criticsScore', 'criticScore', 'tomatometerScore'], parsePercentScore);
-    const audience = firstParsedScore(obj, ['rtAudienceScore', 'audienceScore', 'audienceRatingScore', 'popcornScore'], parsePercentScore)
-      ?? firstParsedScore(rt, ['rtAudienceScore', 'audienceScore', 'audienceRatingScore', 'popcornScore'], parsePercentScore);
-    const imdbRating = firstParsedScore(obj, ['imdbRating', 'imdbScore'], parseTenPointScore)
-      ?? firstParsedScore(imdb, ['imdbRating', 'imdbScore', 'criticsScore', 'score'], parseTenPointScore);
-    const tmdbRating = firstParsedScore(obj, ['tmdbRating', 'tmdbScore', 'voteAverage'], parseTenPointScore)
-      ?? firstParsedScore(mediaInfo, ['tmdbRating', 'tmdbScore', 'voteAverage'], parseTenPointScore);
-
-    if (critics !== null) bundle.rtCriticsScore = critics;
-    if (audience !== null) bundle.rtAudienceScore = audience;
-    if (imdbRating !== null) bundle.imdbRating = imdbRating;
-    if (tmdbRating !== null) bundle.tmdbRating = tmdbRating;
-
-    if (Object.keys(bundle).length === 0) return null;
-    return Model.createRatingsBundle({
-      ...bundle,
-      confidence: 1.0,
-      source,
-      lastUpdated: Date.now()
-    });
-  }
-
-  const SCORE_FIELDS = ['rtCriticsScore', 'rtAudienceScore', 'imdbRating', 'tmdbRating'];
-
-  // A bundle no further source can improve; nothing left to fill in.
-  function isBundleComplete(bundle) {
-    return !!bundle && SCORE_FIELDS.every(field => bundle[field] !== null);
-  }
-
-  function mergeBundles(primary, secondary) {
-    if (!primary) return secondary || null;
-    if (!secondary) return primary;
-    // Confidence belongs to the RT fields actually retained. A trusted TMDB
-    // rating must not turn an approximate RT title match into a certain one.
-    const rtSources = [];
-    for (const field of ['rtCriticsScore', 'rtAudienceScore']) {
-      if (primary[field] !== null) rtSources.push(primary);
-      else if (secondary[field] !== null) rtSources.push(secondary);
-    }
-    return Model.createRatingsBundle({
-      rtCriticsScore: primary.rtCriticsScore ?? secondary.rtCriticsScore,
-      rtAudienceScore: primary.rtAudienceScore ?? secondary.rtAudienceScore,
-      imdbRating: primary.imdbRating ?? secondary.imdbRating,
-      tmdbRating: primary.tmdbRating ?? secondary.tmdbRating,
-      confidence: rtSources.length
-        ? Math.min(...rtSources.map(bundle => bundle.confidence || 0))
-        : Math.max(primary.confidence || 0, secondary.confidence || 0),
-      source: primary.source || secondary.source,
-      lastUpdated: Math.max(primary.lastUpdated || 0, secondary.lastUpdated || 0) || Date.now()
-    });
-  }
+  const { parsePercentScore, parseTenPointScore, bundleFromRatingObject,
+    isBundleComplete, mergeBundles, buildSummary } = window.createRatingsPresentation({ Model, Config });
 
   function objectTmdbId(obj) {
     if (!obj || typeof obj !== 'object') return null;
@@ -479,179 +308,9 @@
     return embeddedRatingsByTmdbId.get(ratingKey(tmdbId, type)) || null;
   }
 
-  async function fetchJsonFromSeerr(endpoint) {
-    const basePath = configuredServer?.pathname.replace(/\/+$/, '') || '';
-    const url = new URL(`${basePath}${endpoint}`, window.location.origin);
-    const response = await fetch(url.toString(), {
-      method: 'GET',
-      signal: AbortSignal.timeout(Config.requestTimeoutMs),
-      credentials: 'include',
-      headers: { Accept: 'application/json' }
-    });
-
-    if (!response.ok) {
-      log(`Seerr ratings endpoint ${endpoint} returned ${response.status}`);
-      return { ok: false, status: response.status, data: null };
-    }
-
-    return { ok: true, status: response.status, data: await response.json() };
-  }
-
-  // What each endpoint can contribute. Asking one whose fields are all known
-  // spends a request to learn nothing, and on a grid that is once per card.
-  const SESSION_ENDPOINT_FIELDS = {
-    ratingscombined: ['rtCriticsScore', 'rtAudienceScore', 'imdbRating'],
-    ratings: ['rtCriticsScore', 'rtAudienceScore'],
-    detail: ['tmdbRating']
-  };
-
-  // Seerr serves /ratings and /ratingscombined from one backend, so where that
-  // is unreachable both 404 for every title, costing a request and a console
-  // error apiece for data that will not arrive. They are given up on together:
-  // dropping only the combined endpoint simply moved every failure onto
-  // /ratings, because the skip for it depended on combined failing first.
-  const seerrRatingsFailures = { ratings: 0, ratingscombined: 0 };
-  // Every ratings request this overlay has actually issued. Seerr's own front
-  // end asks the same endpoints for the same missing data, so a console full of
-  // 404s says nothing about who caused them; this does. It counts attempts, not
-  // failures, and is never reset.
-  const seerrRatingsRequests = { ratings: 0, ratingscombined: 0 };
-  const RATINGS_ENDPOINTS = new Set(['ratings', 'ratingscombined']);
-
-  // Counted per endpoint, because the two fail independently: Seerr answers
-  // /ratingscombined with 200 when it holds either source, so a server with
-  // IMDb but no Rotten Tomatoes succeeds there and 404s on /ratings for every
-  // card. One shared counter would be reset by those successes and never trip.
-  //
-  // The implication runs one way. A combined 404 means neither source exists,
-  // so /ratings cannot succeed either and both are dropped. A /ratings 404
-  // says nothing about IMDb, so combined keeps going.
-  function seerrRatingsGivenUp(kind) {
-    if (seerrRatingsFailures.ratingscombined >= Config.seerrRatingsFailureLimit) return true;
-    return seerrRatingsFailures[kind] >= Config.seerrRatingsFailureLimit;
-  }
-
-  // Giving up only lasts as long as the page does, so every reload re-learns
-  // the same answer at a cost of twelve failed requests and twelve red console
-  // lines per endpoint. A server with no ratings backend configured pays that
-  // on every navigation. Remember the verdict instead, per server.
-  const RATINGS_UNAVAILABLE_KEY = 'seerrRatingsUnavailableV1';
-  // How long the verdict stands before it is worth testing again. Turning the
-  // ratings backend on is a deliberate change on the server, so a day of not
-  // asking costs little; "Refresh scores" clears it immediately for anyone who
-  // does not want to wait.
-  const RATINGS_RECHECK_MS = 24 * 60 * 60 * 1000;
-  let ratingsAvailabilityReady = null;
-
-  function loadRatingsAvailability() {
-    ratingsAvailabilityReady ??= (async () => {
-      try {
-        const stored = (await chrome.storage.local.get([RATINGS_UNAVAILABLE_KEY]))[RATINGS_UNAVAILABLE_KEY];
-        if (!stored || typeof stored !== 'object') return;
-        if (stored.server !== configuredServer?.href) return;
-        for (const kind of RATINGS_ENDPOINTS) {
-          const recordedAt = stored.kinds?.[kind];
-          if (typeof recordedAt !== 'number') continue;
-          // Inside the window, start given up: no request at all. Past it, sit
-          // one short of the limit, so a single 404 re-trips rather than
-          // another full dozen.
-          seerrRatingsFailures[kind] = Date.now() - recordedAt < RATINGS_RECHECK_MS
-            ? Config.seerrRatingsFailureLimit
-            : Config.seerrRatingsFailureLimit - 1;
-        }
-      } catch (error) {
-        log('Could not read which ratings endpoints were unavailable:', error);
-      }
-    })();
-    return ratingsAvailabilityReady;
-  }
-
-  async function rememberRatingsUnavailable(kind) {
-    try {
-      if (!configuredServer) return;
-      const stored = (await chrome.storage.local.get([RATINGS_UNAVAILABLE_KEY]))[RATINGS_UNAVAILABLE_KEY];
-      const kinds = stored?.server === configuredServer.href && stored?.kinds ? { ...stored.kinds } : {};
-      kinds[kind] = Date.now();
-      await chrome.storage.local.set({ [RATINGS_UNAVAILABLE_KEY]: { server: configuredServer.href, kinds } });
-    } catch (error) {
-      log('Could not record that ratings are unavailable:', error);
-    }
-  }
-
-  function resetSeerrRatings() {
-    seerrRatingsFailures.ratings = 0;
-    seerrRatingsFailures.ratingscombined = 0;
-    ratingsAvailabilityReady = null;
-    chrome.storage.local.remove([RATINGS_UNAVAILABLE_KEY]).catch(() => {});
-  }
-
-  function endpointCanHelp(bundle, fields) {
-    return !bundle || fields.some(field => bundle[field] === null || bundle[field] === undefined);
-  }
-
-  async function fetchSeerrSessionRatings(tmdbId, mediaType, known = null, outcome = {}) {
-    if (!tmdbId || !mediaType) return null;
-
-    const all = mediaType === 'tv'
-      ? [[`/api/v1/tv/${tmdbId}/ratings`, 'ratings'], [`/api/v1/tv/${tmdbId}`, 'detail']]
-      : [[`/api/v1/movie/${tmdbId}/ratingscombined`, 'ratingscombined'],
-         [`/api/v1/movie/${tmdbId}/ratings`, 'ratings'],
-         [`/api/v1/movie/${tmdbId}`, 'detail']];
-    const endpoints = all
-      .filter(([, kind]) => endpointCanHelp(known, SESSION_ENDPOINT_FIELDS[kind]))
-      .filter(([, kind]) => !(RATINGS_ENDPOINTS.has(kind) && seerrRatingsGivenUp(kind)))
-      .map(([endpoint]) => endpoint);
-
-    let bundle = null;
-    let ratingsAreAbsent = false;
-    for (const endpoint of endpoints) {
-      // Seerr answers /ratingscombined with 404 only when it has neither RT
-      // nor IMDb, and /ratings with 404 when it has no RT. So once combined
-      // has 404ed, /ratings cannot succeed; asking is a guaranteed second
-      // failure and a second red line in the page console.
-      if (ratingsAreAbsent && endpoint.endsWith('/ratings')) {
-        log(`Skipping ${endpoint}; the combined endpoint already reported no ratings`);
-        continue;
-      }
-      try {
-        const kind = endpoint.endsWith('/ratingscombined') ? 'ratingscombined'
-          : endpoint.endsWith('/ratings') ? 'ratings' : null;
-        if (kind) seerrRatingsRequests[kind]++;
-        const result = await fetchJsonFromSeerr(endpoint);
-        if (kind) {
-          if (result.ok) seerrRatingsFailures[kind] = 0;
-          else if (result.status === 404) {
-            seerrRatingsFailures[kind]++;
-            if (seerrRatingsGivenUp(kind)) {
-              log(`Seerr has answered ${seerrRatingsFailures[kind]} ${kind} requests with 404; not asking again`);
-              rememberRatingsUnavailable(kind);
-            }
-          }
-        }
-        if (!result.ok) {
-          if (result.status === 404 && endpoint.endsWith('/ratingscombined')) ratingsAreAbsent = true;
-          // 404 is Seerr saying it has nothing. A 500 or a 401 is Seerr failing
-          // to say anything, and must not be recorded as "this title is unrated".
-          else if (result.status !== 404) outcome.conclusive = false;
-          continue;
-        }
-        const next = bundleFromRatingObject(result.data, endpoint.includes('ratings') ? 'seerr-ratings-api' : 'seerr-details-api');
-        bundle = mergeBundles(bundle, next);
-      } catch (error) {
-        // A 404 is Seerr answering; a throw means we never got an answer.
-        outcome.conclusive = false;
-        log(`Seerr ratings fetch failed for ${endpoint}:`, error);
-      }
-      // These run once per card. Walking the remaining endpoints when there is
-      // nothing left to fill multiplies load on a self-hosted server for free.
-      if (isBundleComplete(bundle)) {
-        log(`Seerr ratings complete after ${endpoint}; skipping remaining endpoints`);
-        break;
-      }
-    }
-
-    return bundle && Model.hasAnyScore(bundle) ? bundle : null;
-  }
+  const { fetchJsonFromSeerr, loadRatingsAvailability, resetSeerrRatings, fetchSeerrSessionRatings, seerrRatingsFailures, seerrRatingsRequests, seerrRatingsGivenUp } = window.createSeerrSession({
+    Config, Model, log, getServer: () => configuredServer, bundleFromRatingObject, mergeBundles, isBundleComplete
+  });
 
   function getListRatingsEndpoint(route) {
     const search = window.location.search || '';
@@ -1086,26 +745,7 @@
 
   // ──────────────── Quality Summary ────────────────
 
-  function buildSummary(bundle) {
-    if (bundle.confidence < Config.confidenceThreshold) return null;
-    const c = bundle.rtCriticsScore;
-    const a = bundle.rtAudienceScore;
-    if (c === null) return null;
 
-    const cfg = Config.summary;
-    if (c >= cfg.criticsCertifiedFresh) {
-      if (a !== null && a - c >= Config.audienceCriticsDelta) {
-        return 'Audience loves it even more than critics';
-      }
-      return 'Critics love it';
-    }
-    if (c >= cfg.criticsStrong)  return 'Strong reviews';
-    if (c >= cfg.criticsMixed)   return 'Mixed reviews';
-    if (a !== null && a - c >= Config.audienceCriticsDelta) {
-      return 'Audience likes it more than critics';
-    }
-    return 'Mostly negative reviews';
-  }
 
   // Seerr's own routes are /movie/:id and /tv/:id, but that path shape is not
   // unique to this server. A detail page's external-links row points at
@@ -1204,6 +844,8 @@
   // ──────────────── Injection ────────────────
 
   function injectCardBadges() {
+    // Delayed lazy-card retries may outlive the route that scheduled them.
+    if (!isSeerrPage() || !isListRoute(detectRoute())) return;
     if (!FEATURE_FLAGS.cardBadges && !FEATURE_FLAGS.sortFilter) return;
 
     // Find media cards on discover/search pages
@@ -2024,7 +1666,7 @@
         }))
       };
     },
-    clearCache:   () => { forgetPersistedRatings(); resetSeerrRatings(); chrome.storage.local.remove([PERSISTED_RATINGS_KEY]); },
+    clearCache:   () => chrome.runtime.sendMessage({ action: 'clearRatingsCache' }),
     inject:       () => { cleanupOverlay(); injectOverlay(); },
     reInject:     () => { cleanupOverlay(); injectOverlay(); }
   };

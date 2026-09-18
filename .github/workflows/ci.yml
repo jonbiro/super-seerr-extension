@@ -19,6 +19,17 @@ jobs:
         run: npm run check
       - name: Run tests
         run: npm test
+      - name: Install Chromium for extension smoke tests
+        run: npx playwright install --with-deps chromium
+      - name: Run real-browser extension smoke tests
+        run: npm run test:browser
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: browser-test-results
+          path: test-results/
+          if-no-files-found: ignore
       - name: Build both browser targets
         run: make build
       - name: Fail if the build touched anything beyond the version bump

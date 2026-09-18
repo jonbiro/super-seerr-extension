@@ -8,7 +8,7 @@ const seerrIntegration = fs.readFileSync(
   path.join(__dirname, '..', 'src', 'content', 'seerr-integration.js'),
   'utf-8'
 );
-const background = fs.readFileSync(path.join(__dirname, '..', 'src', 'background', 'background.js'), 'utf-8');
+const background = require('./helpers/worker').workerSource();
 const manifest = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'manifest.base.json'), 'utf-8'));
 
 test('Seerr list filtering operates on media cards, not overlay badge elements', () => {

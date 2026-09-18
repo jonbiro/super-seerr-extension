@@ -81,3 +81,42 @@ test('the watch button is recognised by its class, not its label', () => {
   assert.ok(!integration.includes("=== 'Watch on Jellyfin'"), 'no exact-label comparison');
   assert.ok(/classList\.contains\('watch'\)/.test(integration), 'the class is what identifies it');
 });
+
+test('a restarted worker names the media server before the lookup answers', async () => {
+  // Manifest V3 evicts the worker after seconds of idle, so this is the common
+  // case rather than a cold-start edge: settings load without waiting for
+  // /settings/public, and the first status is answered immediately. Without the
+  // remembered name that status is labelled generically every time.
+  const worker = loadWorker({
+    get: async () => ({ seerrUrl: 'https://seerr.example' }),
+    local: { seerrApiKey: 'k', mediaServerName: { url: 'https://seerr.example', name: 'Jellyfin' } },
+    fetch: () => new Promise(() => {})  // the lookup never answers
+  });
+  await worker.ready;
+
+  assert.equal(worker.api.watchButtonText(), 'Watch on Jellyfin');
+  assert.equal(worker.api.availableMessage(), 'Available on Jellyfin');
+});
+
+test('a name remembered for another server is not reused', async () => {
+  const worker = loadWorker({
+    get: async () => ({ seerrUrl: 'https://new.example' }),
+    local: { mediaServerName: { url: 'https://old.example', name: 'Jellyfin' } },
+    fetch: () => new Promise(() => {})
+  });
+  await worker.ready;
+
+  assert.equal(worker.api.watchButtonText(), 'Watch', 'the previous server says nothing about this one');
+});
+
+test('the identified server is remembered for the next restart', async () => {
+  const worker = loadWorker({
+    get: async () => ({ seerrUrl: 'https://seerr.example' }),
+    fetch: async () => ({ ok: true, json: async () => ({ mediaServerType: 2 }) })
+  });
+  await worker.ready;
+  await worker.api.mediaServerReady;
+
+  assert.deepEqual({ ...worker.localStore.mediaServerName },
+    { url: 'https://seerr.example', name: 'Jellyfin' });
+});

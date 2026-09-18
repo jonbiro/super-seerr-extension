@@ -34,24 +34,23 @@ test('every definite rejection is surfaced as-is, once', async () => {
   }
 });
 
-test('a failed round trip is still retried', async () => {
-  // The worker never answered, so nothing reached Seerr: resending is safe.
+test('a lost response never resends a potentially successful POST', async () => {
+  // The server may have committed the write before the message port closed.
   const { instance, sent } = client([
     new Error('Could not establish connection'),
     new Error('Could not establish connection'),
     { success: true, data: { id: 1 } }
   ]);
-  const result = await instance.requestMedia({ tmdbId: 550 });
-  assert.equal(result.id, 1);
-  assert.equal(requests(sent), 3, 'transport failures are worth retrying');
+  await assert.rejects(instance.requestMedia({ tmdbId: 550 }), /outcome unknown.*Check Seerr/);
+  assert.equal(requests(sent), 1, 'an unknown outcome must not cause another POST');
 });
 
-test('retries give up after the configured attempts', async () => {
+test('write safety is independent of the configured read retry count', async () => {
   const { instance, sent } = client([
     new Error('offline'), new Error('offline'), new Error('offline'), new Error('offline')
   ]);
   await assert.rejects(instance.requestMedia({ tmdbId: 550 }), /offline/);
-  assert.equal(requests(sent), 3);
+  assert.equal(requests(sent), 1);
 });
 
 test('a successful request is sent exactly once', async () => {

@@ -17,7 +17,7 @@ test('a zero delay actually means no waiting', async () => {
   client.sendMessage = async () => { calls++; throw new Error('offline'); };
 
   const started = Date.now();
-  await assert.rejects(client.requestMedia({ tmdbId: 550 }), /offline/);
+  await assert.rejects(client.getMediaStatus({ tmdbId: 550 }), /offline/);
   assert.equal(calls, 3);
   assert.ok(Date.now() - started < 500, `retries should not sleep, took ${Date.now() - started}ms`);
 });

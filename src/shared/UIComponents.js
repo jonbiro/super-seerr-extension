@@ -91,7 +91,7 @@ class UIComponents {
   updateButtonStatus(button, statusData) {
     if (!button) return;
 
-    button.classList.remove('loading', 'success', 'error', 'pending', 'available', 'downloading');
+    button.classList.remove('loading', 'success', 'error', 'pending', 'available', 'downloading', 'watch', 'request', 'partial');
     button.classList.add(statusData.buttonClass || 'request');
     
     button.disabled = statusData.disabled || 
@@ -232,7 +232,7 @@ class UIComponents {
     
     if (button) this.updateButtonStatus(button, statusData);
 
-    const showWatchlist = statusData.status === 'available' || statusData.buttonClass === 'request';
+    const showWatchlist = !statusData.action && (statusData.status === 'available' || statusData.buttonClass === 'request');
     if (elements.watchlistButton) {
       elements.watchlistButton.style.display = showWatchlist ? 'flex' : 'none';
     }

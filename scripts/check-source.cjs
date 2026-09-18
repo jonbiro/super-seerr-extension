@@ -6,7 +6,14 @@ function visit(dir) {
   for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const file = path.join(dir, entry.name);
     if (entry.isDirectory()) visit(file);
-    else if (file.endsWith('.js')) execFileSync(process.execPath, ['--check', '--input-type=module'], { input: fs.readFileSync(file), stdio: ['pipe', 'pipe', 'pipe'] });
+    else if (file.endsWith('.js')) {
+      const source = fs.readFileSync(file, 'utf8');
+      execFileSync(process.execPath, ['--check', '--input-type=module'], { input: source, stdio: ['pipe', 'pipe', 'pipe'] });
+      for (const [, dependency] of source.matchAll(/^import\s+(?:[^'"\n]+from\s+)?['"]([^'"]+)['"]/gm)) {
+        const target = path.resolve(path.dirname(file), dependency);
+        if (!dependency.startsWith('.') || !fs.existsSync(target)) throw new Error(`${file}: missing local module ${dependency}`);
+      }
+    }
   }
 }
 visit(path.join(root, 'src'));
@@ -40,4 +47,4 @@ for (const browser of ['chrome', 'firefox']) {
   const wildcard = (manifest.host_permissions || []).filter(pattern => /^https?:\/\/\*\/\*$/.test(pattern));
   if (wildcard.length > 0) throw new Error(`${browser}: all-sites host permission should be optional, found ${wildcard.join(', ')}`);
 }
-console.log('Source syntax and manifest paths verified.');
+console.log('Source syntax, module imports, and manifest paths verified.');

@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.1.54-blue)
+![Version](https://img.shields.io/badge/version-3.1.56-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -24,7 +24,7 @@ After rebuilding, reload the extension in Chrome and refresh the pages using it.
 
 `make build` also produces `dist/firefox`. Its manifest now uses the `background.scripts` module configuration [Mozilla documents for Firefox](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background) instead of the `service_worker` entry Firefox ignores, so the previously known-broken background configuration is fixed.
 
-This has **not been validated against a running Firefox**. The manifest is correct in principle; nobody has yet loaded the package in Firefox and exercised requests, the overlay, or dynamic script registration. Packaging success is not proof of Firefox compatibility. Treat Firefox as untested until someone reports otherwise.
+This has **not been validated against a running Firefox**. An opt-in `npm run test:firefox` harness is available, but local validation is currently blocked by Firefox startup/profile initialization failures before the extension loads. Packaging success is not proof of Firefox compatibility. See [Firefox verification](docs/development.md#firefox-verification-opt-in) for prerequisites, artifacts, and the remaining coverage gap.
 
 ## What it does
 
@@ -35,6 +35,8 @@ This has **not been validated against a running Firefox**. The manifest is corre
 | Your configured Seerr server | Ratings on cards and detail pages, quality summaries, sorting, filters, bulk review — on discover, search, requests, collections, people, the blocklist and your watchlist |
 
 The flyout reports request status, supports watchlisting, and links to your media server when Seerr supplies a playable URL. Seerr can be backed by Plex, Jellyfin or Emby; Super Seerr asks your server which one it uses and names it accordingly, or says simply “Watch” if it cannot tell. Those are separate products; their names and links are intentional.
+
+Requests only use a known TMDB ID or an unambiguous title/type/year match. If matching is uncertain, **Choose in Seerr** opens search so you can select the right title. Failed status lookups offer **Retry status**, not a media request. A lost response to a request is an unknown outcome: check Seerr before requesting again; the extension never automatically resends that POST.
 
 ### Ratings and sorting
 
@@ -62,6 +64,9 @@ Settings includes separate switches for card badges, detail ratings, summaries, 
 npm ci                 # Install the locked development dependencies
 npm run check          # Parse source scripts and verify manifest file paths
 npm test               # Unit, property, worker, DOM, and build tests
+npx playwright install chromium  # One-time browser download
+npm run test:browser   # Real Chromium extension smoke tests (no version bump)
+npm run test:firefox   # Opt-in Firefox harness; requires Firefox and geckodriver
 make build             # Increment version; build both unpacked variants
 make build-chrome      # Increment version; build Chrome only
 make build-firefox     # Increment version; build Firefox only
@@ -73,7 +78,7 @@ Each Make build invocation increments the patch version once. A combined or para
 
 Release files are `super-seerr-v<version>-chrome.zip` and `super-seerr-v<version>-firefox.xpi`. A generated XPI is not a signed or approved store release.
 
-Runtime scripts are plain JavaScript; no bundler or provider API subscription is required. `SeerrClient.js` sends messages to the background worker. jsdom and fast-check are development-only dependencies and are not packaged.
+Runtime scripts are plain JavaScript; no bundler or provider API subscription is required. `SeerrClient.js` sends messages to the background worker. jsdom, fast-check, and Playwright are development-only dependencies and are not packaged. See [runtime modules and browser testing](docs/development.md) for the module boundaries and smoke-test scope.
 
 See [architecture](docs/design.md), [requirements and limits](docs/requirements.md), [verification workflow](docs/tasks.md), and [troubleshooting](docs/troubleshooting.md).
 

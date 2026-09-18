@@ -1,9 +1,9 @@
 // Shared Seerr API Client
 // Handles all communication with background script and Seerr API
 
-// A definite answer from the worker: the round trip completed and Seerr (or
-// the worker) rejected the operation. Retrying cannot change the outcome, and
-// for a non-idempotent POST it risks creating duplicates.
+// An explicit error reply from the worker, not a broken message channel.
+// Read retries are reserved for messaging failures. Writes are never retried
+// automatically, regardless of whether an error reply arrives.
 class SeerrResponseError extends Error {
   constructor(message) {
     super(message);
@@ -16,7 +16,7 @@ class SeerrClient {
   constructor(options = {}) {
     this.debug = options.debug || false;
     // ?? not ||, so a caller's 0 survives. At least one attempt, or the
-    // retry loop would never run and requestMedia would return undefined.
+    // read retry loop would never run and getMediaStatus would return undefined.
     this.retryAttempts = Math.max(1, options.retryAttempts ?? 3);
     this.retryDelay = Math.max(0, options.retryDelay ?? 1000);
     this.siteName = options.siteName || 'UNKNOWN';
@@ -75,15 +75,9 @@ class SeerrClient {
    * Get media status from Seerr
    */
   async getMediaStatus(mediaData) {
-    // Pre-flight checks — only run once, not per retry
+    // Pre-flight check — only run once, not per retry
     const extensionOk = await this.testExtensionConnection();
     if (!extensionOk) throw new Error('Extension background script not responding');
-
-    const serverOk = await this.testServerConnection();
-    this.log('Server connection test result:', serverOk);
-    if (!serverOk) {
-      throw new Error('Cannot connect to Seerr server. Please check your server URL and API key in extension settings.');
-    }
 
     for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
       try {
@@ -110,42 +104,23 @@ class SeerrClient {
    * Request media on Seerr
    */
   async requestMedia(mediaData) {
-    // Pre-flight check — only run once, not per retry
+    // A failed ping is safe: no media write has been sent yet.
     const extensionOk = await this.testExtensionConnection();
     if (!extensionOk) {
       throw new Error('Could not connect to extension background script. Please reload the extension and try again.');
     }
 
-    for (let attempt = 1; attempt <= this.retryAttempts; attempt++) {
-      try {
-        this.log(`Attempting to send message (attempt ${attempt}/${this.retryAttempts})`);
-
-        const response = await this.sendMessage({
-          action: 'requestMedia',
-          data: mediaData
-        });
-
-        if (response && response.success) {
-          this.log('Request successful:', response.data);
-          return response.data;
-        }
-
-        const errorMsg = response ? response.error : 'Unknown error';
-        this.error('Request failed:', errorMsg);
-        // A reply means the POST reached Seerr and was answered. Resending it
-        // cannot help and can create a duplicate request; only a failed round
-        // trip is worth retrying.
-        throw response ? new SeerrResponseError(errorMsg) : new Error(errorMsg);
-
-      } catch (err) {
-        this.error(`Error on attempt ${attempt}:`, err);
-        if (err.definite || attempt === this.retryAttempts) {
-          throw err;
-        }
-        this.warn(`Retrying in ${this.retryDelay}ms...`);
-        await new Promise(resolve => setTimeout(resolve, this.retryDelay));
-      }
+    // A lost reply is an unknown outcome, not proof that the POST failed.
+    // Without server-side idempotency, never automatically resend a write.
+    let response;
+    try {
+      response = await this.sendMessage({ action: 'requestMedia', data: mediaData });
+    } catch (error) {
+      throw new Error(`Request outcome unknown. Check Seerr before requesting again. (${error.message})`);
     }
+    if (!response) throw new Error('Request outcome unknown. Check Seerr before requesting again.');
+    if (!response.success) throw new SeerrResponseError(response.error || 'Request failed');
+    return response.data;
   }
 
   /**

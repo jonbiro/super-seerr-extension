@@ -48,6 +48,7 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
     window.document.head.append(script);
   }
   for (const file of ['RatingsModel', 'RatingsConfig']) window.eval(source(`src/shared/${file}.js`));
+  require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(source('src/content/seerr-integration.js').replace(/\}\)\(\);\s*$/, `window.testOverlay = { injectCardBadges, injectSortFilterControls, handleRouteChange, extractSeerrNativeRatings }; })();`));
   return { dom, window, messages, urls, storage, change: changes => storageListener(changes, 'sync') };
 }
