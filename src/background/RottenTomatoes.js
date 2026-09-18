@@ -128,21 +128,39 @@
       return Number.isFinite(score) && score >= 0 && score <= 100 ? Math.round(score) : null;
     },
 
+    // At most rtMaxConcurrent page fetches are in flight at once; the rest wait
+    // their turn rather than arriving together.
+    async withRtSlot(run) {
+      while (this.rtInFlight >= RatingsConfig.rtMaxConcurrent) {
+        await new Promise(resolve => this.rtWaiting.push(resolve));
+      }
+      this.rtInFlight++;
+      try {
+        return await run();
+      } finally {
+        this.rtInFlight--;
+        this.rtWaiting.shift()?.();
+      }
+    },
+
     async fetchRtHtml(url) {
       const target = new URL(url, 'https://www.rottentomatoes.com');
       if (target.origin !== 'https://www.rottentomatoes.com' || target.username || target.password) {
         throw new Error('Rotten Tomatoes URL is outside the allowed origin');
       }
-      const response = await fetch(target.href, {
+      const response = await this.withRtSlot(() => fetch(target.href, {
         redirect: 'error',
         signal: AbortSignal.timeout(RatingsConfig.requestTimeoutMs),
         credentials: 'omit',
         headers: {
           Accept: 'text/html,application/xhtml+xml'
         }
-      });
+      }));
       if (!response.ok) {
-        throw new Error(`Rotten Tomatoes returned HTTP ${response.status}`);
+        // Which page was refused decides what to do about it: the search page
+        // and a title's own page are protected differently, and without the
+        // path every refusal reads the same in the error log.
+        throw new Error(`Rotten Tomatoes returned HTTP ${response.status} for ${target.pathname}${target.search}`);
       }
       return response.text();
     },

@@ -56,6 +56,8 @@ class SeerrAPI {
     this.rtCacheFlushing = null;
     this.rtCacheGeneration = 0;
     this.rtTransportFailures = 0;
+    this.rtInFlight = 0;
+    this.rtWaiting = [];
     this.rtBackoffUntil = 0;
     this.cacheClearPending = null;
     this.settingsGeneration = 0;

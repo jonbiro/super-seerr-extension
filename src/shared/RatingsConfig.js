@@ -64,6 +64,11 @@ const RatingsConfig = {
   // whole block, which cannot succeed and invites a longer one, so stop after a
   // run of transport failures and let it recover. Nothing is cached as unrated
   // meanwhile: a refused request is not a verdict on the title.
+  // One card's lookup is one or two page fetches, and a grid resolves fifty
+  // cards at once. Fifty simultaneous requests is the shape bot protection is
+  // built to notice, and nothing here is urgent enough to need them all at
+  // once, so they queue.
+  rtMaxConcurrent: 3,
   rtFailureLimit: 5,
   rtBackoffMs: 5 * 60 * 1000,
 

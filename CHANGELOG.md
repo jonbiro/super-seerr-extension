@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.58]
+
+- Rotten Tomatoes page fetches now queue, at most three at a time. A grid resolves fifty cards at once and each is one or two page fetches, so they all arrived together — the shape bot protection is built to notice, and a real session was answered with HTTP 403. Nothing here is urgent enough to need them all at once.
+- A refusal now names the page that was refused. “Rotten Tomatoes returned HTTP 403” alone cannot tell the search page apart from a title's own page, and they are protected differently.
+
 ## [3.1.57]
 
 - Fixed an uncaught DataCloneError from the diagnostics bridge. The report crosses a postMessage, which structure-clones it, and it included the card's matched anchor element — a DOM node cannot be cloned, so the report never arrived and the caller timed out blaming an overlay that was running fine. Only the identity fields are sent now, and a failure to send is reported rather than thrown away.

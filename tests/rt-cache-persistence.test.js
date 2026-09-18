@@ -179,3 +179,38 @@ test('a single refusal is an error, not an answer of "no ratings"', async () => 
   await assert.rejects(() => worker.api.getRottenTomatoesRatings({ title: 'Fight Club', year: 1999 }), /403/);
   assert.equal(worker.api.rtCache.has('movie:Fight Club:1999'), false, 'and nothing is cached');
 });
+
+// Bounded so a limiter that never releases its waiters fails the suite rather
+// than hanging it — which is exactly how that mutation behaved.
+test('Rotten Tomatoes page fetches queue instead of arriving all at once', { timeout: 15000 }, async () => {
+  // A grid resolves fifty cards at once, and each is one or two page fetches.
+  // Arriving together is the shape bot protection notices, and a real session
+  // was answered with 403.
+  const worker = loadWorker();
+  let inFlight = 0, peak = 0;
+  worker.context.fetch = async () => {
+    inFlight++;
+    peak = Math.max(peak, inFlight);
+    // Every lookup allowed to start has started before any finishes, so the
+    // peak is real. Nothing here needs releasing by hand: a limiter that never
+    // frees its waiters times this test out instead of stalling the runner.
+    await new Promise(resolve => setTimeout(resolve, 5));
+    inFlight--;
+    return { ok: true, text: async () => '' };
+  };
+
+  await Promise.all(Array.from({ length: 12 }, (_, i) => worker.api.fetchRtHtml(`/m/title${i}`)));
+
+  assert.equal(peak, Config.rtMaxConcurrent,
+    `expected at most ${Config.rtMaxConcurrent} page fetches at once, saw ${peak}`);
+});
+
+test('a refusal names the page that was refused', async () => {
+  // "Rotten Tomatoes returned HTTP 403" alone cannot tell the search page apart
+  // from a title's own page, and they are protected differently.
+  const worker = loadWorker();
+  worker.context.fetch = async () => ({ ok: false, status: 403 });
+
+  await assert.rejects(() => worker.api.fetchRtHtml('/search?search=Moana'), /403 for \/search\?search=Moana/);
+  await assert.rejects(() => worker.api.fetchRtHtml('/m/moana_2'), /403 for \/m\/moana_2/);
+});
