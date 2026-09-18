@@ -224,10 +224,26 @@
       // the hard limit; this only clears entries that have already expired.
       for (const [key, entry] of this.rtCache) if (Date.now() >= entry.expiresAt) this.rtCache.delete(key);
       const queries = this.rtQueryTitles(title, originalTitle);
+      // Refusing to ask is still a failure to answer, so this throws rather
+      // than returning null: a null would be cached as "this title is unrated".
+      if (Date.now() < this.rtBackoffUntil) {
+        throw new Error('Rotten Tomatoes refused recent requests; not asking again yet');
+      }
       let best = null;
-      for (const query of queries) {
-        best = await this.rtBestMatchFor(query, queries, year, mediaType);
-        if (best) break;
+      try {
+        for (const query of queries) {
+          best = await this.rtBestMatchFor(query, queries, year, mediaType);
+          if (best) break;
+        }
+        this.rtTransportFailures = 0;
+        this.rtBackoffUntil = 0;
+      } catch (error) {
+        this.rtTransportFailures++;
+        if (this.rtTransportFailures >= RatingsConfig.rtFailureLimit) {
+          this.rtBackoffUntil = Date.now() + RatingsConfig.rtBackoffMs;
+          console.warn(`Rotten Tomatoes has refused ${this.rtTransportFailures} requests; pausing lookups`);
+        }
+        throw error;
       }
 
       if (!best) {

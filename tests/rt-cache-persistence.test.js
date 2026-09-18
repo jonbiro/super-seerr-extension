@@ -124,3 +124,58 @@ test('results scored under superseded matching rules are not served', async () =
   assert.equal(rt.fetches, 2, 'a stale verdict is looked up again rather than served');
   assert.equal(result.rtCriticsScore, 80);
 });
+
+test('a run of refusals pauses Rotten Tomatoes lookups instead of hammering it', async () => {
+  // Rotten Tomatoes sits behind bot protection and answered a real session with
+  // HTTP 403. A grid of fifty cards would keep asking through the whole block.
+  const worker = loadWorker();
+  let fetches = 0;
+  worker.api.fetchRtHtml = async () => { fetches++; throw new Error('Rotten Tomatoes returned HTTP 403'); };
+
+  for (let i = 0; i < Config.rtFailureLimit + 10; i++) {
+    await worker.api.getRottenTomatoesRatings({ title: `Title ${i}` }).catch(() => null);
+  }
+
+  assert.equal(fetches, Config.rtFailureLimit, 'it stops asking once the run is established');
+  assert.ok(worker.api.rtBackoffUntil > Date.now(), 'and holds off for a while');
+});
+
+test('a paused lookup is reported as a failure, never as an unrated title', async () => {
+  // The distinction matters: a null answer is cached as "nothing knows this
+  // title", which would hide a real score for as long as that entry lives.
+  const worker = loadWorker();
+  worker.api.fetchRtHtml = async () => { throw new Error('Rotten Tomatoes returned HTTP 403'); };
+  for (let i = 0; i < Config.rtFailureLimit; i++) {
+    await worker.api.getRottenTomatoesRatings({ title: `Title ${i}` }).catch(() => null);
+  }
+
+  await assert.rejects(() => worker.api.getRottenTomatoesRatings({ title: 'Fight Club', year: 1999 }),
+    /not asking again yet/);
+  assert.equal(worker.api.rtCache.has('movie:Fight Club:1999'), false, 'nothing may be cached as unrated');
+});
+
+test('one success clears the pause', async () => {
+  const worker = loadWorker();
+  let refuse = true;
+  worker.api.fetchRtHtml = async () => { if (refuse) throw new Error('HTTP 403'); return ''; };
+  worker.api.parseRtSearchResults = () => [];
+  for (let i = 0; i < Config.rtFailureLimit - 1; i++) {
+    await worker.api.getRottenTomatoesRatings({ title: `Title ${i}` }).catch(() => null);
+  }
+  refuse = false;
+  await worker.api.getRottenTomatoesRatings({ title: 'Recovered' });
+
+  assert.equal(worker.api.rtTransportFailures, 0, 'a working service is not held against');
+  assert.equal(worker.api.rtBackoffUntil, 0);
+});
+
+test('a single refusal is an error, not an answer of "no ratings"', async () => {
+  // Below the pause threshold the lookup must still fail loudly. Resolving to
+  // null instead would reach the overlay as a conclusive "nothing knows this
+  // title", and be remembered as unrated while the service was merely refusing.
+  const worker = loadWorker();
+  worker.api.fetchRtHtml = async () => { throw new Error('Rotten Tomatoes returned HTTP 403'); };
+
+  await assert.rejects(() => worker.api.getRottenTomatoesRatings({ title: 'Fight Club', year: 1999 }), /403/);
+  assert.equal(worker.api.rtCache.has('movie:Fight Club:1999'), false, 'and nothing is cached');
+});

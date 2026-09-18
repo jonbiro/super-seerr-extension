@@ -431,3 +431,34 @@ test('selection is not signalled by colour alone', async t => {
   assert.equal(box.getAttribute('aria-checked'), 'true', 'and the state is exposed to assistive tech');
   assert.ok(box.classList.contains('checked'));
 });
+
+test('the diagnostic report survives the postMessage that carries it', async t => {
+  // diagnose() runs in the isolated world and its report reaches the page
+  // through postMessage, which structure-clones. sampleCards used to include
+  // getCardMediaInfo() whole, and that holds the anchor element it matched on,
+  // so the clone threw DataCloneError: an uncaught error in the content script,
+  // and a caller left to time out blaming an overlay that was running fine.
+  const fixture = createOverlay();
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+
+  const report = fixture.window.seerr_debug.ratings.diagnose();
+  assert.ok(report.sampleCards.length > 0, 'there must be a card to report on');
+  assert.ok(report.sampleCards.some(card => card.media?.tmdbId), 'and it must still carry its identity');
+
+  // structuredClone is not a faithful stand-in here: jsdom's elements are
+  // ordinary objects that Node will happily clone, so the bug survives it. The
+  // invariant that actually matters is that no DOM node appears in the report.
+  const { Element } = fixture.window;
+  const findElement = (value, path = 'report') => {
+    if (value instanceof Element) return path;
+    if (!value || typeof value !== 'object') return null;
+    for (const [key, child] of Object.entries(value)) {
+      const found = findElement(child, `${path}.${key}`);
+      if (found) return found;
+    }
+    return null;
+  };
+
+  assert.equal(findElement(report), null, 'a DOM node in the report cannot cross postMessage');
+});

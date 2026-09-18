@@ -59,6 +59,14 @@ const RatingsConfig = {
   overlayCacheMaxEntries: 5000,
   // Rotten Tomatoes lookups do expire, so this only bounds a browsing session.
   rtCacheMaxEntries: 5000,
+  // Rotten Tomatoes sits behind bot protection and answers a burst of lookups
+  // with 403 for a while. A grid of fifty cards would keep asking through the
+  // whole block, which cannot succeed and invites a longer one, so stop after a
+  // run of transport failures and let it recover. Nothing is cached as unrated
+  // meanwhile: a refused request is not a verdict on the title.
+  rtFailureLimit: 5,
+  rtBackoffMs: 5 * 60 * 1000,
+
   rtNegativeCacheTtlMs: 60 * 60 * 1000,
   rtCacheTtlMs: 24 * 60 * 60 * 1000,
 };

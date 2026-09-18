@@ -55,6 +55,8 @@ class SeerrAPI {
     this.rtCacheFlushTimer = null;
     this.rtCacheFlushing = null;
     this.rtCacheGeneration = 0;
+    this.rtTransportFailures = 0;
+    this.rtBackoffUntil = 0;
     this.cacheClearPending = null;
     this.settingsGeneration = 0;
     this.settingsLoadGeneration = 0;

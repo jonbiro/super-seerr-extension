@@ -394,6 +394,13 @@
   // Why a given card has no identity yet. Distinguishes "Seerr has not mounted
   // the link" from "nothing we observed matches this poster" from "the poster
   // matches more than one title, so resolving it would be a guess".
+  // The identity fields only: getCardMediaInfo also holds the live anchor.
+  function plainMediaInfo(info) {
+    if (!info) return null;
+    const { href, mediaType, tmdbId, title } = info;
+    return { href, mediaType, tmdbId, title };
+  }
+
   function explainUnresolvedCards(limit = 5) {
     return getMediaCards()
       .filter(card => !getCardMediaInfo(card))
@@ -498,8 +505,19 @@
     } catch (error) {
       report = { error: String(error && error.message ? error.message : error) };
     }
-    // Structured-clone safe: the report is plain data.
-    window.postMessage({ channel: 'super-seerr:diagnosed', id: event.data.id, report }, window.location.origin);
+    // postMessage structure-clones this, and anything holding a DOM node throws
+    // DataCloneError — which used to surface as an uncaught error here and leave
+    // the caller to time out blaming a missing overlay. The report is built as
+    // plain data; this catch keeps a future slip diagnosable rather than silent.
+    try {
+      window.postMessage({ channel: 'super-seerr:diagnosed', id: event.data.id, report }, window.location.origin);
+    } catch (error) {
+      window.postMessage({
+        channel: 'super-seerr:diagnosed',
+        id: event.data.id,
+        report: { error: `The report could not be sent: ${error && error.message ? error.message : error}` }
+      }, window.location.origin);
+    }
   });
 
   async function indexCurrentListRatings() {
@@ -1658,7 +1676,9 @@
         cachedTitles: resolvedCacheSize(),
         unresolvedCards: explainUnresolvedCards(),
         sampleCards: cards.slice(0, 5).map(card => ({
-          media: getCardMediaInfo(card),
+          // getCardMediaInfo carries the anchor element it matched on, and this
+          // report crosses a postMessage, where a DOM node cannot be cloned.
+          media: plainMediaInfo(getCardMediaInfo(card)),
           critics: getCardScore(card),
           audience: getCardAudienceScore(card),
           tmdb: getCardTmdbScore(card),

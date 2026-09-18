@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.57]
+
+- Fixed an uncaught DataCloneError from the diagnostics bridge. The report crosses a postMessage, which structure-clones it, and it included the card's matched anchor element — a DOM node cannot be cloned, so the report never arrived and the caller timed out blaming an overlay that was running fine. Only the identity fields are sent now, and a failure to send is reported rather than thrown away.
+- Rotten Tomatoes lookups now pause after a run of refusals. It sits behind bot protection and answered a real session with HTTP 403; a grid of fifty cards would keep asking through the whole block, which cannot succeed and invites a longer one. Nothing is cached as unrated meanwhile — a refused request is not a verdict on the title.
+
 ## [3.1.56]
 
 - Fixed “Clear ratings cache” being undone by a lookup running at the same time. The clear empties memory and then removes storage, and a read starting in between restored the entries it was deleting, which the next write then put back on disk. A read now waits for a clear already under way.
