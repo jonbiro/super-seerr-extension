@@ -239,12 +239,14 @@
 
 /* The two actions that reach the network or change mode carry the accent. */
 .seerr-refresh-scores,
+.seerr-load-all,
 .seerr-toggle-select {
   border-color: rgba(139, 92, 246, 0.45);
   color: #cdbcfb;
 }
 
 .seerr-refresh-scores:hover,
+.seerr-load-all:hover,
 .seerr-toggle-select:hover {
   background: rgba(139, 92, 246, 0.16);
   border-color: rgba(139, 92, 246, 0.7);

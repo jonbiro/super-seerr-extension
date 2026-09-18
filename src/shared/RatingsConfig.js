@@ -56,6 +56,18 @@ const RatingsConfig = {
   // restarting. It never reaches storage and never outlives the page.
   inconclusiveRetryMs: 2 * 60 * 1000,
 
+  // "Load 500 more" asks Seerr for this many further cards before scoring them.
+  // Seerr paginates twenty at a time and only in response to a real scroll
+  // event, so this is a target and not a guarantee: a shorter list ends the run
+  // early. The overlay cache holds 5000 entries, so a few runs fit comfortably.
+  bulkLoadTarget: 500,
+  // How long to wait for a scroll to produce more cards before deciding the
+  // list has ended. Seerr debounces the scroll handler and then fetches.
+  bulkLoadWaitMs: 4000,
+  // Scoring runs in batches, so a self-hosted Seerr is not asked about five
+  // hundred titles at once. Rotten Tomatoes has its own smaller limit.
+  bulkScoreBatch: 6,
+
   overlayCacheMaxEntries: 5000,
   // Rotten Tomatoes lookups do expire, so this only bounds a browsing session.
   rtCacheMaxEntries: 5000,

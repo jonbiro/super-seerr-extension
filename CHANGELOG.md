@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.59]
+
+- Added a “Load 500 more” button to the filter bar. Sorting can only order what is rendered, so a grid you have scrolled a third of the way through sorts a third of the results. The button pulls in up to five hundred further titles and scores them, after which sorting and the score filters cover the whole grid. Scores land in the ordinary cache, so a second visit is instant.
+- The run reports progress on the button itself and stops when clicked again. It ends early when the list runs out, and scores in batches so a self-hosted Seerr is not asked about five hundred titles at once.
+
 ## [3.1.58]
 
 - Rotten Tomatoes page fetches now queue, at most three at a time. A grid resolves fifty cards at once and each is one or two page fetches, so they all arrived together — the shape bot protection is built to notice, and a real session was answered with HTTP 403. Nothing here is urgent enough to need them all at once.

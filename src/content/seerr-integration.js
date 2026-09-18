@@ -652,6 +652,69 @@
       .filter(info => info && info.tmdbId);
   }
 
+  // ──────────────── Load the rest of the grid ────────────────
+  // Sorting can only order what is rendered, so a grid you have scrolled a
+  // third of the way through sorts a third of the results. This pulls the rest
+  // in and scores it, after which the whole grid sorts and filters as one.
+  //
+  // Seerr renders more only in response to a real scroll event landing within
+  // 200px of the bottom (its useVerticalScroll hook), so loading more means
+  // scrolling there and waiting, not calling an endpoint: the cards have to
+  // exist in the DOM for sorting to reach them.
+  let bulkRun = null;
+
+  function waitForMoreCards(previous, run) {
+    return new Promise(resolve => {
+      const deadline = Date.now() + Config.bulkLoadWaitMs;
+      const poll = () => {
+        if (run.cancelled) return resolve(false);
+        if (getMediaCards().length > previous) return resolve(true);
+        if (Date.now() >= deadline) return resolve(false);
+        setTimeout(poll, 150);
+      };
+      setTimeout(poll, 150);
+    });
+  }
+
+  async function loadMoreCards(run, onProgress) {
+    const startCount = getMediaCards().length;
+    // Returning the reader to where they were: this scrolls the page for real.
+    const restoreX = window.scrollX, restoreY = window.scrollY;
+    let previous = startCount;
+    try {
+      while (!run.cancelled && getMediaCards().length - startCount < Config.bulkLoadTarget) {
+        window.scrollTo(0, document.documentElement.scrollHeight);
+        // No new cards means the list has ended; there is nothing more to ask for.
+        if (!await waitForMoreCards(previous, run)) break;
+        previous = getMediaCards().length;
+        onProgress(previous - startCount);
+      }
+    } finally {
+      window.scrollTo(restoreX, restoreY);
+    }
+    return getMediaCards().length - startCount;
+  }
+
+  async function scoreAllCards(run, onProgress) {
+    const titles = getMediaCards()
+      .filter(card => getCardAnyScore(card) === null)
+      .map(card => getCardMediaInfo(card))
+      .filter(info => info && info.tmdbId);
+    let done = 0;
+    for (let index = 0; index < titles.length; index += Config.bulkScoreBatch) {
+      if (run.cancelled) break;
+      const batch = titles.slice(index, index + Config.bulkScoreBatch);
+      await Promise.all(batch.map(info =>
+        getRatings(info.tmdbId, info.title, info.year ?? null, info.mediaType).catch(() => null)));
+      done += batch.length;
+      onProgress(done, titles.length);
+      // Paints whatever the batch resolved; cards already carrying a badge are
+      // skipped, so calling this per batch stays cheap.
+      injectCardBadges();
+    }
+    return done;
+  }
+
   // A threshold above zero is narrowing the grid, so show which ones are live.
   function markActiveFilters(bar) {
     bar.querySelectorAll('.seerr-filter-field[data-score]').forEach(field => {
@@ -1259,6 +1322,7 @@
         <input type="number" class="seerr-min-imdb" min="0" max="10" step="0.5" value="0"></span>
       <button class="seerr-reset-sort">Reset</button>
       <button class="seerr-refresh-scores" title="Refetch scores for the titles loaded on this page">Refresh scores</button>
+      <button class="seerr-load-all" title="Load up to ${Config.bulkLoadTarget} more titles and score them, so sorting covers the whole grid. Click again to stop.">Load ${Config.bulkLoadTarget} more</button>
       ${FEATURE_FLAGS.bulkActions && apiConfigured ? '<button class="seerr-toggle-select" data-seerr-overlay="true">Select titles</button>' : ''}
     `;
 
@@ -1326,6 +1390,31 @@
     ensureCardIndexes(cards);
 
     // ── Refresh ──
+    bar.querySelector('.seerr-load-all').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      // A run takes minutes, so the same button stops it rather than hiding the
+      // only way out behind a second control.
+      if (bulkRun) {
+        bulkRun.cancelled = true;
+        button.textContent = 'Stopping...';
+        return;
+      }
+      const run = bulkRun = { cancelled: false };
+      const label = button.textContent;
+      try {
+        await loadMoreCards(run, added => { button.textContent = `Loaded ${added}...`; });
+        await scoreAllCards(run, (done, total) => { button.textContent = `Scored ${done}/${total}...`; });
+      } catch (error) {
+        log('Loading the rest of the grid failed:', error);
+      } finally {
+        bulkRun = null;
+        button.textContent = label;
+        injectCardBadges();
+        updateCoverage();
+        applyScoreFilters(grid);
+      }
+    });
+
     bar.querySelector('.seerr-refresh-scores').addEventListener('click', async event => {
       const button = event.currentTarget;
       if (button.disabled) return;

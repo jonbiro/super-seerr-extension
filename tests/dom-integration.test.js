@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
+const Config = require('../src/shared/RatingsConfig');
 
 const source = file => fs.readFileSync(file, 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
@@ -49,7 +50,7 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
   }
   for (const file of ['RatingsModel', 'RatingsConfig']) window.eval(source(`src/shared/${file}.js`));
   require('./helpers/overlay-modules').loadOverlayModules(window);
-  window.eval(source('src/content/seerr-integration.js').replace(/\}\)\(\);\s*$/, `window.testOverlay = { injectCardBadges, injectSortFilterControls, handleRouteChange, extractSeerrNativeRatings }; })();`));
+  window.eval(source('src/content/seerr-integration.js').replace(/\}\)\(\);\s*$/, `window.testOverlay = { injectCardBadges, injectSortFilterControls, handleRouteChange, extractSeerrNativeRatings, loadMoreCards, scoreAllCards }; })();`));
   return { dom, window, messages, urls, storage, change: changes => storageListener(changes, 'sync') };
 }
 
@@ -461,4 +462,138 @@ test('the diagnostic report survives the postMessage that carries it', async t =
   };
 
   assert.equal(findElement(report), null, 'a DOM node in the report cannot cross postMessage');
+});
+
+// Sorting can only order what is rendered, so a grid scrolled a third of the
+// way through sorts a third of the results. These cover pulling the rest in.
+
+// Seerr adds cards only when a real scroll event lands near the bottom, so the
+// fixture grows the grid on scrollTo exactly as Seerr's pagination would.
+// The harness evaluates RatingsConfig inside the jsdom window, so the overlay
+// reads that copy and not the one this file requires. Tuning must go through
+// the window, or it changes nothing and the run uses the shipped values.
+function tune(fixture, values) {
+  const config = fixture.window.RatingsConfig;
+  assert.ok(config, 'the overlay must expose the config this tunes');
+  Object.assign(config, values);
+}
+
+// Detecting the end of the list means waiting out bulkLoadWaitMs, so the tests
+// shorten it rather than spending four seconds each.
+function withFastPaging(fixture, ms = 250) {
+  tune(fixture, { bulkLoadWaitMs: ms });
+}
+
+function paginate(fixture, { pages = 3, perPage = 2 } = {}) {
+  const { window } = fixture;
+  const grid = window.document.getElementById('grid');
+  // jsdom lays nothing out, so scrollHeight is 0 and "scroll to the bottom"
+  // would be indistinguishable from restoring the reader to the top.
+  Object.defineProperty(window.document.documentElement, 'scrollHeight', { value: 5000, configurable: true });
+  let served = 0;
+  const scrolls = [];
+  window.scrollTo = (x, y) => {
+    scrolls.push([x, y]);
+    // Only a scroll toward the bottom pages; restoring position must not.
+    if (y === 0 || served >= pages) return;
+    served++;
+    for (let i = 0; i < perPage; i++) {
+      const id = 100 + served * 10 + i;
+      grid.insertAdjacentHTML('beforeend',
+        `<article data-testid="title-card" data-id="${id}"><a href="/movie/${id}"><h2>Extra ${id}</h2></a></article>`);
+    }
+  };
+  return { scrolls, cards: () => window.document.querySelectorAll('[data-testid="title-card"]').length };
+}
+
+test('loading the rest of the grid scrolls until the list runs out', { timeout: 20000 }, async t => {
+  const fixture = createOverlay();
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  withFastPaging(fixture);
+  const page = paginate(fixture, { pages: 3, perPage: 2 });
+  const before = page.cards();
+
+  const added = await fixture.window.testOverlay.loadMoreCards({ cancelled: false }, () => {});
+
+  assert.equal(added, 6, 'three pages of two');
+  assert.equal(page.cards(), before + 6);
+  // A scroll that adds nothing is how the end of the list is detected, and the
+  // reader is put back where they were rather than left at the bottom.
+  assert.deepEqual(page.scrolls.at(-1), [0, 0], 'the scroll position is restored');
+});
+
+test('loading stops at the configured target rather than running forever', { timeout: 20000 }, async t => {
+  const fixture = createOverlay();
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  withFastPaging(fixture);
+  const page = paginate(fixture, { pages: 1000, perPage: 2 });
+
+  tune(fixture, { bulkLoadTarget: 5 });
+
+  const added = await fixture.window.testOverlay.loadMoreCards({ cancelled: false }, () => {});
+
+  assert.ok(added >= 5 && added <= 6, `expected to stop around the target, added ${added}`);
+  assert.ok(page.cards() < 100, 'a thousand available pages must not all be pulled in');
+});
+
+test('cancelling stops the run instead of finishing it', { timeout: 20000 }, async t => {
+  const fixture = createOverlay();
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  withFastPaging(fixture);
+  const page = paginate(fixture, { pages: 1000, perPage: 2 });
+
+  const run = { cancelled: false };
+  const loading = fixture.window.testOverlay.loadMoreCards(run, added => { if (added >= 2) run.cancelled = true; });
+  const added = await loading;
+
+  assert.ok(added <= 4, `a cancelled run must stop promptly, added ${added}`);
+  assert.ok(page.cards() < 1000, 'and nowhere near the whole list');
+});
+
+test('scoring the grid resolves the cards that lazy loading left unscored', { timeout: 20000 }, async t => {
+  // The point of the button: after it runs, sorting and the score filters
+  // operate over the whole grid rather than the part that happened to resolve.
+  const fixture = createOverlay();
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  withFastPaging(fixture);
+  paginate(fixture, { pages: 2, perPage: 3 });
+  await fixture.window.testOverlay.loadMoreCards({ cancelled: false }, () => {});
+
+  const unscored = () => [...fixture.window.document.querySelectorAll('[data-testid="title-card"]')]
+    .filter(card => !card.querySelector('[class*="card-badge"]')).length;
+  const before = unscored();
+  assert.ok(before > 0, 'the newly loaded cards start without scores');
+
+  const progress = [];
+  const done = await fixture.window.testOverlay.scoreAllCards({ cancelled: false }, (...args) => progress.push(args));
+  await settle();
+
+  assert.equal(done, before, 'every unscored card is resolved, not just the visible ones');
+  assert.ok(progress.length > 0, 'and the run reports what it is doing');
+  assert.equal(progress.at(-1)[1], before, 'against the full total, so the label cannot mislead');
+});
+
+test('cancelling during scoring stops the remaining batches', { timeout: 20000 }, async t => {
+  // Scoring five hundred titles takes minutes, so stopping has to take effect
+  // between batches rather than at the end of the run.
+  const fixture = createOverlay();
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  withFastPaging(fixture);
+  paginate(fixture, { pages: 4, perPage: 5 });
+  await fixture.window.testOverlay.loadMoreCards({ cancelled: false }, () => {});
+
+  const unscored = [...fixture.window.document.querySelectorAll('[data-testid="title-card"]')]
+    .filter(card => !card.querySelector('[class*="card-badge"]')).length;
+  assert.ok(unscored > fixture.window.RatingsConfig.bulkScoreBatch * 2, 'there must be several batches to stop');
+
+  const run = { cancelled: false };
+  const done = await fixture.window.testOverlay.scoreAllCards(run, () => { run.cancelled = true; });
+
+  assert.equal(done, fixture.window.RatingsConfig.bulkScoreBatch, 'it stops after the batch that cancelled it');
+  assert.ok(done < unscored, 'leaving the rest untouched');
 });
