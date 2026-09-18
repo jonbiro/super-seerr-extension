@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.1.60]
+
+- Score badges moved from the top right of a card to the bottom right. Seerr puts its own status badge there — the green tick on an available title — and ours sat on top of it. With two scores showing, the critics score now takes the upper position so the pair reads in the same order as the detail page.
+- The scores fade out while a card is hovered. The bottom edge is where Seerr puts the Request button on a title you do not have, so they step aside rather than covering it.
+
 ## [3.1.59]
 
 - Added a “Load 500 more” button to the filter bar. Sorting can only order what is rendered, so a grid you have scrolled a third of the way through sorts a third of the results. The button pulls in up to five hundred further titles and scores them, after which sorting and the score filters cover the whole grid. Scores land in the ordinary cache, so a second visit is instant.

@@ -8,7 +8,7 @@ const source = file => fs.readFileSync(file, 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 async function settle() { for (let i = 0; i < 12; i++) await flush(); }
 
-function createOverlay({ settings = {}, path = '/search?query=test', embedded = null, listItems = [], linkless = false, wrapped = false, posters = false } = {}) {
+function createOverlay({ settings = {}, path = '/search?query=test', embedded = null, listItems = [], linkless = false, wrapped = false, posters = false, audience = false } = {}) {
   const dom = new JSDOM(`<main><div id="grid">${['Low', 'High', 'Unknown'].map((title, index) => `<article data-testid="title-card" data-id="${index + 1}"><a href="/movie/${index + 1}"><h2>${title}</h2></a></article>`).join('')}</div></main>`, { url: `https://seerr.example${path}`, runScripts: 'outside-only' });
   const { window } = dom;
   if (posters) window.document.querySelectorAll('[data-testid="title-card"]').forEach((card, index) => {
@@ -38,7 +38,12 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
       if (message.action === 'getConfigState') {
         return { success: true, data: { apiConfigured: !!storage.seerrApiKey, serverUrl: storage.seerrUrl ?? null } };
       }
-      return { success: true, data: message.action === 'getRottenTomatoesRatings' ? { rtCriticsScore: { Low: 30, High: 95 }[message.data.title] ?? null, confidence: 0.9 } : {} };
+      return { success: true, data: message.action === 'getRottenTomatoesRatings' ? {
+        rtCriticsScore: { Low: 30, High: 95 }[message.data.title] ?? null,
+        // Opt-in, so the cards in every other test keep a single badge.
+        ...(audience ? { rtAudienceScore: 88 } : {}),
+        confidence: 0.9
+      } : {} };
     } }
   };
   window.fetch = async url => { urls.push(url); return { ok: true, json: async () => ({ results: url.includes('/search?') ? listItems : [] }) }; };
@@ -403,10 +408,15 @@ test('the stacked badge offset lives with the styles that determine it', async t
   const source = require('node:fs').readFileSync('src/content/seerr-integration.js', 'utf8');
   assert.ok(!source.includes("style.top = '28px'"), 'no magic offset in the script');
 
-  const stacked = fixture.window.document.querySelector('.seerr-card-badge-stacked');
-  if (stacked) assert.ok(stacked.classList.contains('seerr-card-badge'), 'it is still a badge');
-  const css = require('node:fs').readFileSync('src/content/seerr-overlay.css', 'utf8');
-  assert.match(css, /\.seerr-card-badge-stacked\s*\{[^}]*top:/, 'the offset is defined in CSS');
+  const upper = fixture.window.document.querySelector('.seerr-card-badge-upper');
+  if (upper) assert.ok(upper.classList.contains('seerr-card-badge'), 'it is still a badge');
+  // Comments stripped first: prose explaining an anchor can contain "bottom:"
+  // and satisfy these on its own, which is exactly how the first version of
+  // this assertion passed against a rule that said top.
+  const css = require('node:fs').readFileSync('src/content/seerr-overlay.css', 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  assert.match(css, /\.seerr-card-badge-upper\s*\{[^}]*bottom:/, 'the offset is defined in CSS');
+  assert.match(css, /\.seerr-card-badge\s*\{[^}]*bottom:/, 'and the badge itself sits at the bottom');
 });
 
 test('the bulk bar does not break its labels across lines', () => {
@@ -596,4 +606,61 @@ test('cancelling during scoring stops the remaining batches', { timeout: 20000 }
 
   assert.equal(done, fixture.window.RatingsConfig.bulkScoreBatch, 'it stops after the batch that cancelled it');
   assert.ok(done < unscored, 'leaving the rest untouched');
+});
+
+test('a pair of badges reads critics above audience, clear of the status tick', async t => {
+  // Seerr puts its own status badge — the green tick on an available title — at
+  // the top right, which our badge used to cover. Anchored to the bottom now,
+  // the second badge sits above the first, so the offset has to move to the
+  // critics badge or the pair reads upside down against the detail row.
+  const fixture = createOverlay({ audience: true });
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  await new Promise(resolve => setTimeout(resolve, 300));
+  await settle();
+
+  const card = [...fixture.window.document.querySelectorAll('[data-testid="title-card"]')]
+    .find(candidate => candidate.querySelector('.seerr-card-audience-badge'));
+  assert.ok(card, 'a card should carry both scores');
+
+  const critics = card.querySelector('.seerr-card-badge:not(.seerr-card-audience-badge)');
+  const audienceBadge = card.querySelector('.seerr-card-audience-badge');
+  assert.ok(critics.classList.contains('seerr-card-badge-upper'), 'critics sits above');
+  assert.ok(!audienceBadge.classList.contains('seerr-card-badge-upper'), 'audience stays at the bottom');
+});
+
+test('a lone badge is not offset as though something sat beneath it', async t => {
+  const fixture = createOverlay();
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  await new Promise(resolve => setTimeout(resolve, 300));
+  await settle();
+
+  const badges = [...fixture.window.document.querySelectorAll('.seerr-card-badge')];
+  assert.ok(badges.length > 0, 'there should be badges to check');
+  assert.ok(badges.every(badge => !badge.classList.contains('seerr-card-badge-upper')),
+    'with nothing below it, a single badge stays on the bottom edge');
+});
+
+test('a scored card is marked so the scores can step aside while it is hovered', async t => {
+  // Hovering an unavailable title grows a full-width Request button along the
+  // same bottom edge the badges now sit on. jsdom cannot evaluate :hover, so
+  // this covers the half that is behaviour — the marker the rule hangs on —
+  // and checks the rule itself is present and aimed at that marker.
+  const fixture = createOverlay();
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  await new Promise(resolve => setTimeout(resolve, 300));
+  await settle();
+
+  const badge = fixture.window.document.querySelector('.seerr-card-badge');
+  assert.ok(badge, 'there should be a badge to hide');
+  assert.ok(badge.closest('.seerr-scored-card'), 'its card carries the marker');
+
+  // Comments stripped: prose about hovering would otherwise satisfy this.
+  const css = require('node:fs').readFileSync('src/content/seerr-overlay.css', 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  // The terminator matters: /opacity:\s*0/ alone is satisfied by "opacity: 0.5".
+  assert.match(css, /\.seerr-scored-card:hover\s+\.seerr-card-badge\s*\{[^}]*opacity:\s*0\s*;/,
+    'the rule hides the scores rather than merely dimming them');
 });

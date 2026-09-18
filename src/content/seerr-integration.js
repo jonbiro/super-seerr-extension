@@ -952,6 +952,10 @@
       if (computed.position === 'static') {
         card.style.position = 'relative';
       }
+      // Lets the stylesheet step the scores aside while Seerr's own controls
+      // are showing. React owns className here, so losing it on a re-render
+      // only costs the hover behaviour, never the badges themselves.
+      card.classList.add('seerr-scored-card');
 
       // Mark the card as "rating-resolution in progress" so a re-entrant
       // call (e.g. setTimeout 2s retry) doesn't queue a second
@@ -977,6 +981,11 @@
           }
 
           if (FEATURE_FLAGS.cardBadges) {
+            // Anchored to the bottom of the card, the second badge sits above
+            // the first, so the offset belongs to whichever is meant to be on
+            // top: critics, or TMDB when there is no critics score.
+            let upperBadge = null;
+            let audienceBadge = null;
             if (bundle.rtCriticsScore !== null && bundle.confidence >= Config.confidenceThreshold) {
               const prefix = bundle.confidence < 1.0 && bundle.confidence >= Config.confidenceThreshold ? '~' : '';
               const badge = document.createElement('span');
@@ -984,13 +993,13 @@
               badge.setAttribute('data-seerr-overlay', 'true');
               badge.textContent = `🍅 ${prefix}${bundle.rtCriticsScore}%`;
               card.appendChild(badge);
+              upperBadge = badge;
             }
             if (bundle.rtAudienceScore !== null && bundle.confidence >= Config.confidenceThreshold) {
-              const audienceBadge = document.createElement('span');
+              audienceBadge = document.createElement('span');
               audienceBadge.className = 'seerr-card-badge seerr-card-audience-badge';
               audienceBadge.setAttribute('data-seerr-overlay', 'true');
               audienceBadge.textContent = `🍿 ${bundle.confidence < 1 ? '~' : ''}${bundle.rtAudienceScore}%`;
-              if (bundle.rtCriticsScore !== null || bundle.tmdbRating !== null) audienceBadge.classList.add('seerr-card-badge-stacked');
               card.appendChild(audienceBadge);
             }
             if ((bundle.rtCriticsScore === null || bundle.confidence < Config.confidenceThreshold) && bundle.tmdbRating !== null) {
@@ -999,7 +1008,10 @@
               tmdbBadge.setAttribute('data-seerr-overlay', 'true');
               tmdbBadge.textContent = `🎬 ${bundle.tmdbRating}/10`;
               card.appendChild(tmdbBadge);
+              upperBadge = upperBadge ?? tmdbBadge;
             }
+            // Only a pair needs separating, and only the upper one moves.
+            if (audienceBadge && upperBadge) upperBadge.classList.add('seerr-card-badge-upper');
           }
           updateSortFilterCoverage();
           applyScoreFilters(getCardsGrid());
