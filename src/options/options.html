@@ -69,14 +69,16 @@
                         id="plexToken"
                         placeholder="Your Plex X-Plex-Token (leave blank to disable)"
                     >
-                    <small>
-                        Sign in at app.plex.tv, open DevTools Console (F12), run <code>localStorage.getItem('myPlexAccessToken')</code>, and paste the value.
-                        <button type="button" id="togglePlexToken" class="toggle-password">
-                            Show
-                        </button>
-                        <button type="button" id="testPlexConnection" class="button secondary">
-                            Test Plex
-                        </button>
+                    <small class="plex-help">
+                        <span>Sign in at app.plex.tv, open DevTools Console (F12), run <code>localStorage.getItem('myPlexAccessToken')</code>, and paste the value.</span>
+                        <span class="plex-help-actions">
+                            <button type="button" id="togglePlexToken" class="toggle-password">
+                                Show
+                            </button>
+                            <button type="button" id="testPlexConnection" class="button secondary">
+                                Test Plex
+                            </button>
+                        </span>
                     </small>
                 </div>
 

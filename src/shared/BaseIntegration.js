@@ -444,14 +444,25 @@ class BaseIntegration {
     this.log('Opening media server URL:', watchUrl);
 
     setTimeout(() => {
-      window.open(watchUrl, '_blank');
+      const opened = window.open(watchUrl, '_blank');
 
-      this.ui.createNotification(
-          'Opening media server',
-          `Opening "${this.mediaData.title}"`,
-          'success',
-          3000
-      );
+      // A strict popup blocker answers null instead of a window: saying
+      // "opening" then would be a lie the user cannot act on.
+      if (!opened) {
+        this.ui.createNotification(
+            'Popup Blocked',
+            `Allow popups for this site to open "${this.mediaData.title}"`,
+            'warning',
+            4000
+        );
+      } else {
+        this.ui.createNotification(
+            'Opening media server',
+            `Opening "${this.mediaData.title}"`,
+            'success',
+            3000
+        );
+      }
 
       // Reset button state after a short delay
       setTimeout(() => {

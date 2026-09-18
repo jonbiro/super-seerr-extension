@@ -97,6 +97,24 @@ small {
     align-items: center;
 }
 
+/* The Plex hint is a full sentence plus two actions: it flows as a block
+   with the buttons on their own row instead of squeezed beside the text. */
+.form-group small.plex-help {
+    display: block;
+}
+
+.form-group small.plex-help code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 11px;
+}
+
+.plex-help-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 8px;
+}
+
 .toggle-password {
     background: none;
     border: none;

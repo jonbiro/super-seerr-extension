@@ -537,6 +537,43 @@ test('saving with a token but a declined Plex grant says so instead of success-a
   assert.match(text, /Plex host permission was declined/);
 });
 
+
+test('flyout toasts stack in one column and cap bursts', () => {
+  const { JSDOM } = require('jsdom');
+  const dom = new JSDOM('<body></body>', { url: 'https://www.imdb.com/title/tt0111161/', runScripts: 'outside-only' });
+  const { window } = dom;
+  try {
+    window.eval(fs.readFileSync('src/shared/UIComponents.js', 'utf8'));
+    const ui = new window.UIComponents({ siteName: 'TEST' });
+    // duration 0: no auto-remove timers, so the count is exact.
+    for (let i = 1; i <= 6; i++) ui.createNotification('Title ' + i, 'Message ' + i, 'info', 0);
+    const stack = window.document.querySelector('.seerr-notification-stack');
+    assert.ok(stack, 'toasts share one stack container');
+    assert.equal(stack.children.length, 4, 'a burst is capped instead of piling up');
+    const titles = [...stack.children].map(note => note.querySelector('.seerr-notification-title').textContent);
+    assert.deepEqual(titles, ['Title 3', 'Title 4', 'Title 5', 'Title 6']);
+  } finally {
+    dom.window.close();
+  }
+});
+test('plex help text and buttons live on separate rows, not one flex line', () => {
+  const { JSDOM } = require('jsdom');
+  const dom = new JSDOM(fs.readFileSync('src/options/options.html', 'utf8'),
+    { url: 'chrome-extension://test/options.html' });
+  const { document } = dom.window;
+  try {
+    const help = document.querySelector('small.plex-help');
+    assert.ok(help, 'the plex hint has its own block');
+    const [textRow, actionsRow] = [...help.children];
+    assert.ok(textRow && textRow.tagName === 'SPAN' && /localStorage/.test(textRow.textContent));
+    assert.ok(actionsRow && actionsRow.classList.contains('plex-help-actions'));
+    assert.ok(actionsRow.querySelector('#togglePlexToken'), 'show toggle sits in the actions row');
+    assert.ok(actionsRow.querySelector('#testPlexConnection'), 'test button sits in the actions row');
+  } finally {
+    dom.window.close();
+  }
+});
+
 test('plexWatchlistState reports on, off, and unknown without throwing', async () => {
   const stateFor = userState => loadWorker({
     get: async () => ({}),

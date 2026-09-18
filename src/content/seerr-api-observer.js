@@ -110,7 +110,15 @@
         const url = args[0] && typeof args[0] === 'object' ? args[0].url : args[0];
         if (watched(url)) {
           // clone() so the page still gets an unread body.
-          response.then(res => { if (res?.ok) res.clone().json().then(data => publish(url, data), () => {}); }, () => {});
+          response.then(res => {
+            try {
+              if (res?.ok) res.clone().json().then(data => publish(url, data), () => {});
+            } catch (_) {
+              // clone() throws when the body is already used. The page's own
+              // read is unaffected; without this the throw becomes an
+              // unhandled rejection in the page's console.
+            }
+          }, () => {});
         }
       } catch (_) {
         // Fall through; the page's response is already on its way.

@@ -83,3 +83,22 @@ test('navigating mid-request does not wedge the new page button shut', async t =
   integration.cleanupUI();
   assert.equal(integration._requestInFlight, false, 'cleanup releases the in-flight guard');
 });
+
+test('a blocked watch popup warns instead of claiming success', async t => {
+  const fixture = loadIntegration(); t.after(() => fixture.dom.window.close());
+  const integration = makeIntegration(fixture);
+  integration.mediaData = { title: 'Dune', mediaType: 'movie', tmdbId: 438631 };
+  integration.currentStatusData = { status: 'available_watch', buttonText: 'Watch', buttonClass: 'watch' };
+  fixture.window.open = () => null; // strict popup blocker
+
+  await integration.openMediaServer('https://media.example/watch/1');
+  let warning = null;
+  for (let i = 0; i < 50 && !warning; i++) {
+    await new Promise(resolve => setTimeout(resolve, 20));
+    warning = [...fixture.window.document.querySelectorAll('.seerr-notification')]
+      .find(note => note.textContent.includes('Popup Blocked'));
+  }
+  assert.ok(warning, 'blocking must surface, not report an opening that never happened');
+  assert.ok(![...fixture.window.document.querySelectorAll('.seerr-notification')]
+    .some(note => note.textContent.includes('Opening media server')), 'no false success');
+});

@@ -21,7 +21,7 @@ const INDEX_ENTRY = {
 const CARDS = `<article data-testid="title-card"><div><img src="https://image.tmdb.org/t/p/w300/p123.jpg" alt=""></div></article>
   <article data-testid="title-card"><div><img src="https://image.tmdb.org/t/p/w300/unknown.jpg" alt=""></div></article>`;
 
-function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverUrl = 'https://seerr.example' } = {}) {
+function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverUrl = 'https://seerr.example', apiConfigured = false } = {}) {
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM(`<main><div id="grid">${CARDS}</div></main>`,
     { url: 'https://seerr.example/discover', runScripts: 'outside-only' });
@@ -47,7 +47,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
     runtime: { sendMessage: async message => {
       messages.push(message);
       if (message.action === 'getConfigState') {
-        return { success: true, data: { apiConfigured: false, serverUrl: SERVER, plexConfigured } };
+        return { success: true, data: { apiConfigured, serverUrl: SERVER, plexConfigured } };
       }
       if (message.action === 'getRottenTomatoesRatings') return { success: true, data: rtScores };
       if (message.action === 'plexAddToWatchlist') return { success: true, data: { ratingKey: 'rk', already: false } };
@@ -61,7 +61,8 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
   require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(fs.readFileSync('src/content/seerr-integration.js', 'utf8').replace(/\}\)\(\);\s*$/, `window.testOverlay = {
     injectCardBadges, injectPlexCardButtons, hydrateCardsFromListItems, getRatings,
-    flushPersistedRatings, projectListIndex, detectRoute, handleObservedApiResponse
+    flushPersistedRatings, projectListIndex, detectRoute, handleObservedApiResponse,
+    toggleBulkMode, notifyResult
   }; })();`));
   return {
     dom, window, messages, localStore,
@@ -217,4 +218,41 @@ test('a direct RT flush coalesces the debounced one instead of writing twice', a
 
   const writes = worker.localWrites.filter(written => written.rtCacheV1);
   assert.equal(writes.length, 1, 'the scheduled write must not repeat a flush that already covered it');
+});
+
+
+test('overlay toasts share one corner column and burst-evicted oldest-first', async t => {
+  const fixture = openGrid();
+  t.after(() => { fixture.dom.window.close(); });
+  await flush(fixture.window);
+
+  for (let i = 1; i <= 6; i++) fixture.window.testOverlay.notifyResult('Title ' + i, 'Message ' + i, 'info');
+  const stack = fixture.window.document.querySelector('.seerr-notification-stack');
+  assert.ok(stack, 'toasts share one stack container');
+  assert.equal(stack.children.length, 4, 'a burst is capped instead of covering the page');
+  const titles = [...stack.children].map(note => note.querySelector('.seerr-notification-title').textContent);
+  assert.deepEqual(titles, ['Title 3', 'Title 4', 'Title 5', 'Title 6']);
+});
+test('bulk review with nothing requestable cannot confirm an empty request', async t => {
+  const fixture = openGrid({ apiConfigured: true });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+
+  // Bulk mode on, then select only the poster no title list can identify.
+  fixture.window.testOverlay.toggleBulkMode();
+  const cards = fixture.window.document.querySelectorAll('[data-testid="title-card"]');
+  cards[1].querySelector('.seerr-select-checkbox').click();
+  fixture.window.document.querySelector('.seerr-bulk-review').click();
+
+  const modal = fixture.window.document.querySelector('.seerr-confirmation-modal');
+  assert.ok(modal, 'review still opens to explain the exclusion');
+  const confirm = modal.querySelector('.confirm-btn');
+  assert.match(confirm.textContent, /Request 0 titles/);
+  assert.equal(confirm.disabled, true, 'zero ready titles is not confirmable');
+  confirm.click();
+  for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(
+    fixture.messages.filter(message => message.action === 'requestMedia').length, 0,
+    'a disabled confirm sends nothing');
+  assert.ok(modal.isConnected, 'and the review stays open');
 });

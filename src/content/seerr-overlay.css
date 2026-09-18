@@ -538,12 +538,33 @@
   color: white;
 }
 
+.seerr-confirmation-modal .confirm-btn:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 /* ─── Notifications ─── */
 
-.seerr-notification {
+/* Toasts share a corner column so a burst stays readable instead of piling
+   every note on the same coordinates, where only the topmost shows. */
+.seerr-notification-stack {
   position: fixed;
   top: 1rem;
   right: 1rem;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.seerr-notification-stack > * {
+  pointer-events: auto;
+}
+
+.seerr-notification {
+  position: static;
   background: rgba(31, 41, 55, 0.95);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);

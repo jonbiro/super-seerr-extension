@@ -10,18 +10,18 @@ const { JSDOM } = require('jsdom');
 const CHANNEL = 'super-seerr:api';
 const flush = () => new Promise(resolve => setImmediate(resolve));
 
-function installObserver({ url = 'https://seerr.example/' } = {}) {
+function installObserver({ url = 'https://seerr.example/', fetchImpl = null } = {}) {
   const dom = new JSDOM('', { url, runScripts: 'outside-only' });
   const { window } = dom;
   const posted = [];
   window.postMessage = (message, origin) => posted.push({ message, origin });
 
   const fetched = [];
-  window.fetch = async requested => {
+  window.fetch = fetchImpl ?? (async requested => {
     fetched.push(String(requested));
     const body = responses[String(requested)] ?? { results: [] };
     return { ok: true, clone: () => ({ json: async () => body }) };
-  };
+  });
   const responses = {};
 
   window.eval(fs.readFileSync('src/content/seerr-api-observer.js', 'utf8'));
@@ -164,4 +164,28 @@ test('endpoints about people rather than titles stay excluded', async () => {
   }
   await flush();
   assert.equal(ctx.posted.length, 0);
+});
+
+test('a body the observer cannot clone still reaches the page quietly', async t => {
+  const failures = [];
+  const onUnhandled = reason => failures.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+  t.after(() => process.off('unhandledRejection', onUnhandled));
+
+  const body = { results: [{ id: 550, title: 'Fight Club' }] };
+  const ctx = installObserver({
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => body,
+      clone: () => { throw new Error('body already used'); }
+    })
+  });
+  t.after(() => ctx.dom.window.close());
+
+  const response = await ctx.window.fetch('/api/v1/discover/movies');
+  assert.equal(await response.json(), body, 'the page reads its own response regardless');
+  await flush();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(ctx.posted.length, 0, 'nothing observable, nothing forwarded');
+  assert.equal(failures.length, 0, 'no unhandled rejection may escape into the page');
 });

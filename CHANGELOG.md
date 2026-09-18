@@ -8,9 +8,15 @@ heading per change.
 
 ## [Unreleased]
 
+- Options: the Plex Token hint and its Show/Test Plex buttons no longer collide. The hint flows full-width with the actions on their own row.
+
 - Request lookup pages past the first hundred: older requests no longer read as unrequested (and re-requestable) on servers with long histories. Capped at ten pages.
 - A hung ratings lookup can no longer pin its card forever: resolution now races a 30s deadline, goes provisional, and retries, instead of awaiting a dead channel for the session.
 - Navigating away mid-request no longer wedges the next page's request button shut.
+- Bulk review with nothing requestable can no longer confirm an empty request.
+- A blocked watch popup now warns instead of reporting an opening that never happened.
+- Toasts no longer pile on the same corner coordinates: flyout and overlay notifications share a capped corner column, so bursts stay readable.
+- The page-world observer no longer leaks an unhandled rejection when a response body cannot be cloned; the page still reads its own response.
 
 - Ratings survive hard reloads onto the cards, not just into storage. The title index behind the cards now persists with the scores (bounded separately), so a cold load identifies un-hovered cards before Seerr's own lists arrive, and pending writes flush on unload instead of dying with the page. Cleared and server-switched the same way scores are.
 - Lists Seerr speaks before settings finish loading are stashed briefly and replayed once the server is known, instead of being dropped as unidentifiable.

@@ -46,6 +46,17 @@ class UIComponents {
     return svg;
   }
 
+  // Toasts stack in a fixed corner column. Without the container every toast
+  // sat at the same coordinates and only the topmost was ever visible.
+  notificationStack() {
+    let stack = document.querySelector('.seerr-notification-stack');
+    if (!stack) {
+      stack = this.el('div', { className: 'seerr-notification-stack' });
+      document.body.appendChild(stack);
+    }
+    return stack;
+  }
+
   createNotification(title, message, type = 'info', duration = 5000) {
     const closeBtn = this.el('button', { className: 'seerr-notification-close', textContent: '×' });
     const notification = this.el('div', { className: `seerr-notification ${type}` }, [
@@ -60,7 +71,11 @@ class UIComponents {
       setTimeout(() => this.removeNotification(notification), duration);
     }
 
-    document.body.appendChild(notification);
+    const stack = this.notificationStack();
+    // A burst of toasts must not cover the page: oldest goes immediately,
+    // the rest fade on their own timers.
+    while (stack.children.length >= 4) stack.firstChild.remove();
+    stack.appendChild(notification);
     this.log('Notification created:', type, title);
     return notification;
   }
@@ -388,10 +403,26 @@ class UIComponents {
       }
 
       /* Notifications */
-      .seerr-notification {
+      /* Notifications stack in a fixed corner column so a burst stays
+         readable instead of piling every toast on the same spot. */
+      .seerr-notification-stack {
         position: fixed;
         top: 1.25rem;
         right: 1.25rem;
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+        align-items: flex-end;
+        pointer-events: none;
+      }
+
+      .seerr-notification-stack > * {
+        pointer-events: auto;
+      }
+
+      .seerr-notification {
+        position: static;
         background: #1f2937;
         border: 1px solid #374151;
         border-radius: 0.5rem;

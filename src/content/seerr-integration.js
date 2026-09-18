@@ -1296,11 +1296,20 @@
     }).catch(() => {});
   }
 
-  function notifyPlexResult(title, message, kind) {
+  // Toasts share one corner column so a burst (bulk results, rapid Plex
+  // adds) stays readable instead of piling every note on the same spot.
+  // Everything here is textContent: titles reaching this point are Seerr's
+  // own strings and must never become markup.
+  function notifyResult(title, message, kind) {
+    let stack = document.querySelector('.seerr-notification-stack');
+    if (!stack) {
+      stack = document.createElement('div');
+      stack.className = 'seerr-notification-stack';
+      stack.setAttribute('data-seerr-overlay', 'true');
+      document.body.appendChild(stack);
+    }
     const note = document.createElement('div');
     note.className = `seerr-notification ${kind}`;
-    note.setAttribute('data-seerr-overlay', 'true');
-    note.innerHTML = '';
     const heading = document.createElement('div');
     heading.className = 'seerr-notification-title';
     heading.textContent = title;
@@ -1308,7 +1317,8 @@
     body.className = 'seerr-notification-message';
     body.textContent = message;
     note.append(heading, body);
-    document.body.appendChild(note);
+    while (stack.children.length >= 4) stack.firstChild.remove();
+    stack.appendChild(note);
     setTimeout(() => note.remove(), 5000);
   }
 
@@ -1366,14 +1376,14 @@
           button.textContent = '✓';
           button.classList.add('is-added');
           button.title = response.data && response.data.already ? 'Already on Plex Watchlist' : 'Added to Plex Watchlist';
-          notifyPlexResult(
+          notifyResult(
             response.data && response.data.already ? 'Already on Plex Watchlist' : 'Added to Plex Watchlist',
             `"${cardTitle || response.data.title || 'Title'}" ${response.data && response.data.already ? 'is already' : 'has been added to'} your Plex Watchlist`,
             'success');
         } catch (error) {
           button.disabled = false;
           button.textContent = '＋';
-          notifyPlexResult('Plex Watchlist Failed', error.message || 'Failed to add to Plex Watchlist', 'error');
+          notifyResult('Plex Watchlist Failed', error.message || 'Failed to add to Plex Watchlist', 'error');
         }
       });
       card.appendChild(button);
@@ -1946,7 +1956,7 @@
       ` : ''}
       <div class="modal-actions">
         <button class="cancel-btn">Cancel</button>
-        <button class="confirm-btn">Request ${readyTitles.length} titles</button>
+        <button class="confirm-btn"${readyTitles.length === 0 ? ' disabled' : ''}>Request ${readyTitles.length} titles</button>
       </div>
     `;
 
@@ -2013,15 +2023,8 @@
       closeModal();
       hideBulkActionBar();
 
-      const summary = document.createElement('div');
-      summary.className = 'seerr-notification success';
-      summary.setAttribute('data-seerr-overlay', 'true');
-      summary.innerHTML = `
-        <div class="seerr-notification-title">Bulk Request Complete</div>
-        <div class="seerr-notification-message">${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}</div>
-      `;
-      document.body.appendChild(summary);
-      setTimeout(() => summary.remove(), 5000);
+      notifyResult('Bulk Request Complete',
+        `${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}`, 'success');
 
       bulkMode = false;
       selectedCards.clear();

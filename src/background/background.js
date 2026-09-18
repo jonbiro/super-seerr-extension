@@ -647,13 +647,6 @@ class SeerrAPI {
     });
     return response;
   }
-
-  updateSettings(settings) {
-    this.baseUrl = settings.seerrUrl;
-    this.apiKey = settings.seerrApiKey;
-    if (settings.plexToken !== undefined) this.plexToken = settings.plexToken || null;
-    this.updateIconBadge();
-  }
 }
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
