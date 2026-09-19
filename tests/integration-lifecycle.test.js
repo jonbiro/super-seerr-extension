@@ -102,3 +102,42 @@ test('a blocked watch popup warns instead of claiming success', async t => {
   assert.ok(![...fixture.window.document.querySelectorAll('.seerr-notification')]
     .some(note => note.textContent.includes('Opening media server')), 'no false success');
 });
+
+test('destroyed instances run no retries and build no UI', async t => {
+  const fixture = loadIntegration(); t.after(() => fixture.dom.window.close());
+  const { window } = fixture;
+  let extractions = 0;
+  class Eager extends window.BaseIntegration {
+    constructor() { super('Eager', { retryDelay: 40 }); }
+    async extractMediaData() { extractions++; return { title: 'Dune', year: 2021, mediaType: 'movie' }; }
+  }
+  const integration = new Eager();
+  await integration.init();
+  assert.equal(extractions, 1, 'init extracts once');
+  assert.equal(integration._pendingRetries.size, 1, 'the dynamic-content retry is tracked');
+
+  integration.destroy();
+  assert.equal(integration._pendingRetries.size, 0, 'destroy clears pending retries');
+  await new Promise(resolve => setTimeout(resolve, 120));
+  assert.equal(extractions, 1, 'no retry extraction runs after destroy');
+  assert.equal(window.document.querySelector('.seerr-flyout'), null, 'no flyout is resurrected');
+});
+
+test('navigation that dies mid-flight builds nothing', async t => {
+  const fixture = loadIntegration(); t.after(() => fixture.dom.window.close());
+  const { window } = fixture;
+  class Slow extends window.BaseIntegration {
+    constructor() { super('Slow', { retryDelay: 100000 }); }
+    async extractMediaData() { return { title: 'Dune', year: 2021, mediaType: 'movie' }; }
+  }
+  const integration = new Slow();
+  await integration.init();
+  integration.cleanupUI();
+  assert.equal(window.document.querySelector('.seerr-flyout'), null, 'precondition: no flyout yet');
+
+  const navigating = integration.handleNavigationChange();
+  integration.destroy();
+  await navigating;
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.equal(window.document.querySelector('.seerr-flyout'), null, 'a dead navigation must not build UI');
+});

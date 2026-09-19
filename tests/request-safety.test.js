@@ -114,3 +114,78 @@ test('a successful detail with no media record remains requestable', async () =>
   api.makeAPIRequest = async (_, endpoint) => endpoint.includes('/request') ? { results: [] } : { id: 550, mediaInfo: null };
   assert.equal((await api.getMediaStatus({ ...wanted, tmdbId: 550 })).status, 'available');
 });
+
+test('a page id naming another title is distrusted, not written', async () => {
+  const { api, ready } = loadWorker(CONFIGURED);
+  await ready;
+  // The page claims TMDB 999 for "Dune" (2021); Seerr says 999 is a 2024 film.
+  api.makeAPIRequest = async (method, endpoint, data) => {
+    if (method === 'POST') return { posted: data };
+    if (endpoint === '/api/v1/movie/999') return { id: 999, title: 'Dune Messiah', releaseDate: '2024-03-01' };
+    throw new Error(`unrouted ${method} ${endpoint}`);
+  };
+  assert.equal(await api.tmdbIdentityMatches({ title: 'Dune', year: 2021, mediaType: 'movie', tmdbId: 999 }), false);
+});
+
+test('a translated title keeping its year stays trusted', async () => {
+  const { api, ready } = loadWorker(CONFIGURED);
+  await ready;
+  api.makeAPIRequest = async () => ({ id: 438631, title: 'Dune', originalTitle: 'Diuna', releaseDate: '2021-09-03' });
+  assert.equal(await api.tmdbIdentityMatches({ title: 'Diuna', year: 2021, mediaType: 'movie', tmdbId: 438631 }), true);
+});
+
+test('an id Seerr cannot look up stays trusted for Seerr to judge', async () => {
+  const { api, ready } = loadWorker(CONFIGURED);
+  await ready;
+  api.makeAPIRequest = async () => { throw new Error('HTTP 404'); };
+  assert.equal(await api.tmdbIdentityMatches({ title: 'Dune', year: 2021, mediaType: 'movie', tmdbId: 999 }), true);
+});
+
+test('a contradicted page id falls back to search instead of posting', async () => {
+  const { api, ready } = loadWorker(CONFIGURED);
+  await ready;
+  const posts = [];
+  api.makeAPIRequest = async (method, endpoint, data) => {
+    if (method === 'POST') { posts.push(data); return { id: 1, type: 'movie', status: 1 }; }
+    if (endpoint === '/api/v1/movie/999') return { id: 999, title: 'Dune Messiah', releaseDate: '2024-03-01' };
+    throw new Error(`unrouted ${method} ${endpoint}`);
+  };
+  api.searchMedia = async () => [{ id: 438631, mediaType: 'movie', title: 'Dune', releaseDate: '2021-09-15' }];
+
+  await api.requestMedia({ title: 'Dune', year: 2021, mediaType: 'movie', tmdbId: 999 });
+  assert.equal(posts.length, 1, 'exactly one write');
+  assert.equal(posts[0].mediaId, 438631, 'the search-resolved id, never the contradicted page id');
+});
+
+test('a corroborated page id skips search entirely', async () => {
+  const { api, ready } = loadWorker(CONFIGURED);
+  await ready;
+  const posts = [];
+  api.makeAPIRequest = async (method, endpoint, data) => {
+    if (method === 'POST') { posts.push(data); return { id: 1, type: 'movie', status: 1 }; }
+    if (endpoint === '/api/v1/movie/438631') return { id: 438631, title: 'Dune', releaseDate: '2021-09-03' };
+    throw new Error(`unrouted ${method} ${endpoint}`);
+  };
+  api.searchMedia = async () => { throw new Error('search must not run for a corroborated id'); };
+
+  await api.requestMedia({ title: 'Dune', year: 2021, mediaType: 'movie', tmdbId: 438631 });
+  assert.equal(posts[0].mediaId, 438631);
+});
+
+test('status for a contradicted page id resolves by search', async () => {
+  const { api, ready } = loadWorker(CONFIGURED);
+  await ready;
+  api.makeAPIRequest = async (_, endpoint) => {
+    // The page id names an available title; the searched one is requestable.
+    if (endpoint === '/api/v1/movie/999') {
+      return { id: 999, title: 'Other Film', releaseDate: '2024-01-01', mediaInfo: { status: 5, mediaUrl: 'https://media.example/x' } };
+    }
+    if (endpoint === '/api/v1/request?take=100&skip=0') return { results: [] };
+    if (endpoint === '/api/v1/movie/438631') return { id: 438631, title: 'Dune', mediaInfo: undefined };
+    throw new Error(`unrouted ${endpoint}`);
+  };
+  api.searchMedia = async () => [{ id: 438631, mediaType: 'movie', title: 'Dune', releaseDate: '2021-09-15' }];
+
+  const status = await api.getMediaStatus({ title: 'Dune', year: 2021, mediaType: 'movie', tmdbId: 999 });
+  assert.equal(status.buttonClass, 'request', 'must describe the searched title, not the contradicted id');
+});

@@ -62,7 +62,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
   window.eval(fs.readFileSync('src/content/seerr-integration.js', 'utf8').replace(/\}\)\(\);\s*$/, `window.testOverlay = {
     injectCardBadges, injectPlexCardButtons, hydrateCardsFromListItems, getRatings,
     flushPersistedRatings, projectListIndex, detectRoute, handleObservedApiResponse,
-    toggleBulkMode, notifyResult
+    toggleBulkMode, notifyResult, listItemCount: () => lastListItems.length
   }; })();`));
   return {
     dom, window, messages, localStore,
@@ -221,6 +221,139 @@ test('a direct RT flush coalesces the debounced one instead of writing twice', a
 });
 
 
+
+
+test('repeated identical lists do not make a card ambiguous to itself', async t => {
+  const fixture = openGrid({ plexConfigured: true });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+
+  // The same list refetched three times: pagination overlap and SPA
+  // revisits produce exactly this. Identity is one title, not three matches.
+  const event = {
+    source: fixture.window,
+    origin: 'https://seerr.example',
+    data: {
+      channel: 'super-seerr:api',
+      url: 'https://seerr.example/api/v1/discover/movies',
+      items: [{ id: 123, mediaType: 'movie', title: 'Dune', posterPath: '/p123.jpg', releaseDate: '2021-10-22' }]
+    }
+  };
+  fixture.window.testOverlay.handleObservedApiResponse(event);
+  fixture.window.testOverlay.handleObservedApiResponse(event);
+  fixture.window.testOverlay.handleObservedApiResponse(event);
+  for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+
+  fixture.window.testOverlay.hydrateCardsFromListItems();
+  fixture.window.testOverlay.injectPlexCardButtons();
+  const buttons = fixture.window.document.querySelectorAll('.seerr-plex-card-button');
+  assert.equal(buttons.length, 1, 'duplicates collapse to the one identity they share');
+  assert.equal(buttons[0].getAttribute('aria-label'), 'Add Dune to Plex Watchlist');
+});
+
+
+test('poster matching ignores query strings and shared filenames', async t => {
+  const { JSDOM } = require('jsdom');
+  const dom = new JSDOM('<main><div id="grid">' +
+    '<article data-testid="title-card"><div><img alt="" src="https://image.tmdb.org/t/p/w300/p123.jpg?width=300"></div></article>' +
+    '<article data-testid="title-card"><div><img alt="" src="https://cdn.example/a/x.jpg"></div></article>' +
+    '</div></main>', { url: 'https://seerr.example/discover', runScripts: 'outside-only' });
+  const { window } = dom;
+  t.after(() => { window.dispatchEvent(new window.Event('pagehide')); dom.window.close(); });
+  const localStore = {
+    overlayRatingsV1: {
+      server: 'https://seerr.example/', epoch: 0, matcher: require('../src/shared/RatingsConfig').matcherVersion,
+      entries: {},
+      index: [
+        { tmdbId: '123', mediaType: 'movie', title: 'Dune', originalTitle: '', year: 2021, posterPath: '/p123.jpg' },
+        { tmdbId: '1', mediaType: 'movie', title: 'Aye', originalTitle: '', year: 2020, posterPath: '/a/x.jpg' },
+        { tmdbId: '2', mediaType: 'movie', title: 'Bee', originalTitle: '', year: 2021, posterPath: '/b/x.jpg' }
+      ]
+    }
+  };
+  window.chrome = {
+    storage: {
+      sync: { get: async () => ({ seerrUrl: 'https://seerr.example' }) },
+      local: {
+        get: async keys => Object.fromEntries(
+          (Array.isArray(keys) ? keys : [keys]).filter(key => localStore[key] !== undefined).map(key => [key, localStore[key]])),
+        set: async value => { Object.assign(localStore, value); },
+        remove: async keys => {}
+      },
+      onChanged: { addListener() {} }
+    },
+    runtime: { sendMessage: async message => {
+      if (message.action === 'getConfigState') {
+        return { success: true, data: { apiConfigured: false, serverUrl: 'https://seerr.example/', plexConfigured: true } };
+      }
+      return { success: true, data: null };
+    } }
+  };
+  window.fetch = async () => ({ ok: true, json: async () => ({ results: [] }) });
+  for (const file of ['RatingsModel', 'RatingsConfig']) window.eval(fs.readFileSync('src/shared/' + file + '.js', 'utf8'));
+  require('./helpers/overlay-modules').loadOverlayModules(window);
+  window.eval(fs.readFileSync('src/content/seerr-integration.js', 'utf8').replace(/\}\)\(\);\s*$/, 'window.testOverlay = { hydrateCardsFromListItems, injectPlexCardButtons }; })();'));
+  for (let i = 0; i < 30; i++) await new Promise(resolve => setImmediate(resolve));
+  window.testOverlay.hydrateCardsFromListItems();
+  window.testOverlay.injectPlexCardButtons();
+  const buttons = [...window.document.querySelectorAll('.seerr-plex-card-button')];
+  assert.equal(buttons.length, 2, 'query-string poster and unique-path poster both resolve');
+  assert.deepEqual(
+    buttons.map(button => button.getAttribute('aria-label')),
+    ['Add Dune to Plex Watchlist', 'Add Aye to Plex Watchlist']);
+});
+test('two different titles sharing a poster still refuse to resolve', async t => {
+  const fixture = openGrid({ plexConfigured: true });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+
+  fixture.window.testOverlay.handleObservedApiResponse({
+    source: fixture.window,
+    origin: 'https://seerr.example',
+    data: {
+      channel: 'super-seerr:api',
+      url: 'https://seerr.example/api/v1/discover/movies',
+      items: [
+        { id: 123, mediaType: 'movie', title: 'Dune', posterPath: '/p123.jpg', releaseDate: '2021-10-22' },
+        { id: 456, mediaType: 'movie', title: 'Other Film', posterPath: '/p123.jpg', releaseDate: '2022-01-01' }
+      ]
+    }
+  });
+  for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+
+  fixture.window.testOverlay.hydrateCardsFromListItems();
+  fixture.window.testOverlay.injectPlexCardButtons();
+  assert.equal(
+    fixture.window.document.querySelectorAll('.seerr-plex-card-button').length, 0,
+    'genuine ambiguity must still refuse, never guess');
+});
+test('a long browsing session keeps the title index bounded', async t => {
+  const Config = require('../src/shared/RatingsConfig');
+  const fixture = openGrid({ plexConfigured: true });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+
+  // Thirty refetches of a 300-title list, as infinite scroll and SPA
+  // revisits produce them. Duplicates must not accumulate without bound.
+  for (let round = 0; round < 30; round++) {
+    fixture.window.testOverlay.handleObservedApiResponse({
+      source: fixture.window,
+      origin: 'https://seerr.example',
+      data: {
+        channel: 'super-seerr:api',
+        url: 'https://seerr.example/api/v1/discover/movies?page=' + (round + 1),
+        items: Array.from({ length: 300 }, (_, i) => ({
+          id: 1000 + i, mediaType: 'movie', title: 'Title ' + (1000 + i),
+          posterPath: '/p' + (1000 + i) + '.jpg', releaseDate: '2020-01-01'
+        }))
+      }
+    });
+  }
+  for (let i = 0; i < 10; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.ok(
+    fixture.window.testOverlay.listItemCount() <= Config.overlayCacheMaxEntries,
+    'the live index never outgrows its cap no matter the traffic');
+});
 test('overlay toasts share one corner column and burst-evicted oldest-first', async t => {
   const fixture = openGrid();
   t.after(() => { fixture.dom.window.close(); });

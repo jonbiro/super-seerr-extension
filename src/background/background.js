@@ -347,8 +347,15 @@ class SeerrAPI {
 
     this.log('🎬 [Background] Requesting media:', mediaData);
 
-    // Use TMDB ID directly if provided — skip search entirely
+    // Use TMDB ID directly if provided — skip search entirely, unless the id
+    // demonstrably names another title (first-external-link extraction grabs
+    // a neighbour's id often enough to matter). A suspect id falls back to
+    // search rather than spending a write on the wrong title.
     let tmdbId = mediaData.tmdbId;
+    if (tmdbId && !isNaN(tmdbId) && !(await this.tmdbIdentityMatches(mediaData))) {
+      this.log('Provided TMDB ID contradicts the page title; resolving by search instead');
+      tmdbId = null;
+    }
     if (tmdbId && !isNaN(tmdbId)) {
       this.log('✅ [Background] Using provided TMDB ID:', tmdbId);
     } else {
@@ -432,9 +439,11 @@ class SeerrAPI {
     try {
       // The page usually already knows the TMDB id. Trust it rather than
       // running up to 19 fuzzy title searches that can resolve to the wrong
-      // title — requestMedia has always taken this shortcut.
+      // title — requestMedia has always taken this shortcut. The id still has
+      // to survive the identity check: extraction sometimes hands over a
+      // neighbour's id, and a mismatch falls through to search below.
       const knownTmdbId = mediaData.tmdbId;
-      if (Number.isInteger(knownTmdbId) && knownTmdbId > 0) {
+      if (Number.isInteger(knownTmdbId) && knownTmdbId > 0 && await this.tmdbIdentityMatches(mediaData)) {
         this.log('📊 [Background] Using provided TMDB ID, skipping search:', knownTmdbId);
         const details = await this.getMediaDetails(knownTmdbId, mediaData.mediaType);
         return this.formatMediaStatus(details, mediaData.mediaType);

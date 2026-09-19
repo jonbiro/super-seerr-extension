@@ -158,6 +158,18 @@ class OptionsManager {
   }
 
   async saveSettings(showSuccess = true) {
+    // Double submissions would prompt for host permissions twice, and the
+    // second prompt arrives with no user gesture left to grant it on.
+    if (this._saving) return;
+    this._saving = true;
+    try {
+      await this.saveSettingsInner(showSuccess);
+    } finally {
+      this._saving = false;
+    }
+  }
+
+  async saveSettingsInner(showSuccess = true) {
     const serverUrl = this.serverUrlInput.value.trim();
     const apiKey = this.apiKeyInput.value.trim();
     const plexToken = this.plexTokenInput ? this.plexTokenInput.value.trim() : '';

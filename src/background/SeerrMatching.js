@@ -90,5 +90,34 @@
       const year = parseInt(dateString.substring(0, 4));
       return isNaN(year) ? null : year;
     },
+
+    // A page-supplied TMDB id is trusted only while nothing contradicts it.
+    // External pages resolve the id from whichever link comes first, which is
+    // occasionally another title's. Distrust needs positive evidence: an
+    // unrelated title with a different year. A translated title keeps its
+    // year, so this never punishes localisation, and an id Seerr cannot look
+    // up stays trusted — Seerr itself judges the write.
+    async tmdbIdentityMatches(mediaData) {
+      if (!mediaData || !mediaData.title || !mediaData.tmdbId) return true;
+      let details;
+      try {
+        const endpoint = mediaData.mediaType === 'tv'
+          ? `/api/v1/tv/${mediaData.tmdbId}`
+          : `/api/v1/movie/${mediaData.tmdbId}`;
+        details = await this.makeAPIRequest('GET', endpoint);
+      } catch (_) {
+        return true;
+      }
+      if (!details || typeof details !== 'object') return true;
+      const known = [details.title, details.originalTitle, details.name, details.originalName]
+        .filter(title => typeof title === 'string' && title.trim());
+      if (known.some(title => this.areTitlesSimilar(title, mediaData.title))) return true;
+      const detailYear = parseInt(String(details.releaseDate || details.firstAirDate || '').slice(0, 4), 10);
+      if (!mediaData.year || !Number.isFinite(detailYear) || Math.abs(detailYear - mediaData.year) <= 1) return true;
+      this.log('TMDB id names a different title; resolving by search instead:', {
+        provided: mediaData.tmdbId, detailTitle: known[0], detailYear
+      });
+      return false;
+    },
   };
 })(globalThis);

@@ -55,11 +55,11 @@ class PopupManager {
       try {
         const response = await this.sendMessage({ action: 'testConnection' });
         
-        if (response.success) {
+        if (response && response.success) {
           this.showConfiguredState();
           this.setStatus('connected', `Connected as ${response.data.user}`);
         } else {
-          this.showErrorState(response.error || 'Connection failed');
+          this.showErrorState((response && response.error) || 'Connection failed');
           this.setStatus('error', 'Connection failed');
         }
       } catch (error) {
@@ -125,7 +125,8 @@ class PopupManager {
   formatServerUrl(url) {
     try {
       const urlObj = new URL(url);
-      return urlObj.hostname;
+      // Host, not hostname: self-hosted servers often differ only by port.
+      return urlObj.host;
     } catch (error) {
       return url;
     }
@@ -148,12 +149,12 @@ class PopupManager {
     try {
       const response = await this.sendMessage({ action: 'testConnection' });
       
-      if (response.success) {
+      if (response && response.success) {
         this.setStatus('connected', `Connected as ${response.data.user}`);
         this.showConfiguredState();
       } else {
         this.setStatus('error', 'Connection failed');
-        this.showErrorState(response.error || 'Connection test failed');
+        this.showErrorState((response && response.error) || 'Connection test failed');
       }
     } catch (error) {
       console.error('Connection test error:', error);

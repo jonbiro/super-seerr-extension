@@ -210,3 +210,20 @@ test('settings offers no vestigial skip action', () => {
   assert.ok(!html.includes('skipSetup'), 'no skip control in the markup');
   assert.ok(!script.includes('skipButton'), 'and nothing left wiring it');
 });
+
+test('double submissions save once and prompt once', async t => {
+  // The second prompt would arrive with no user gesture left, so it could
+  // neither be granted nor declined — only hang or fail behind the real save.
+  const ctx = openOptions({ granted: true });
+  t.after(() => ctx.dom.window.close());
+  await flush();
+
+  ctx.window.document.getElementById('serverUrl').value = 'https://seerr.example';
+  const form = ctx.window.document.getElementById('settingsForm');
+  form.dispatchEvent(new ctx.window.Event('submit'));
+  form.dispatchEvent(new ctx.window.Event('submit'));
+  await flush();
+
+  assert.equal(ctx.syncWrites.length, 1, 'one save, not two');
+  assert.equal(ctx.order.filter(entry => entry === 'permissions.request').length, 1, 'one prompt, not two');
+});

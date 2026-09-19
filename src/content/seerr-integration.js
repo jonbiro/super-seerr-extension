@@ -523,22 +523,74 @@
       });
   }
 
+  // Indexed view of lastListItems for hydrate: a full scan per card per pass
+  // starves the main thread on large grids (hundreds of ms each), which is
+  // what the browser's kill-or-wait dialog is for. Rebuilt only when the
+  // underlying array is replaced, so steady-state passes are lookups.
+  let listLookupIndex = null;
+  function posterFileName(poster) {
+    return String(poster ?? '').split('?')[0].split('/').pop() ?? '';
+  }
+  function indexedListItems() {
+    if (listLookupIndex && listLookupIndex.items === lastListItems) return listLookupIndex;
+    const byPosterFile = new Map();
+    const byTitle = new Map();
+    for (const item of lastListItems) {
+      const poster = item && (item.posterPath || item.poster_path);
+      if (typeof poster === 'string' && poster.length > 1) {
+        const file = posterFileName(poster);
+        if (file) {
+          if (!byPosterFile.has(file)) byPosterFile.set(file, []);
+          byPosterFile.get(file).push(item);
+        }
+      }
+      const info = mediaInfoFromListItem(item);
+      const title = info && info.title.trim().toLowerCase();
+      if (title) {
+        if (!byTitle.has(title)) byTitle.set(title, []);
+        byTitle.get(title).push(item);
+      }
+    }
+    listLookupIndex = { items: lastListItems, byPosterFile, byTitle };
+    return listLookupIndex;
+  }
+
   function hydrateCardsFromListItems(root = document) {
     if (!lastListItems.length) return;
+    const { byPosterFile, byTitle } = indexedListItems();
     const cards = getMediaCards(root);
     cards.forEach(card => {
       if (getCardMediaInfo(card)) return;
       const title = (card.querySelector('h2, h3, [class*="title"], [class*="Title"]')?.textContent
         || card.querySelector('img[alt]')?.getAttribute('alt') || '').trim().toLowerCase();
       const image = card.querySelector('img');
-      const posterUrl = image?.getAttribute('src') || '';
-      const posterMatches = lastListItems.filter(item => {
-        const poster = item.posterPath || item.poster_path;
-        return typeof poster === 'string' && poster.length > 1 && posterUrl.split('?')[0].endsWith(poster);
+      const posterUrl = (image?.getAttribute('src') || '').split('?')[0];
+      // The same title recurs across refetches and overlapping lists. Those
+      // duplicates share one identity and must collapse; a poster shared by
+      // two genuinely different titles still refuses, as before.
+      const seenIdentities = new Set();
+      const uniqueMatches = matches => matches.map(mediaInfoFromListItem).filter(info => {
+        if (!info) return false;
+        const key = `${info.mediaType}:${info.tmdbId}`;
+        if (seenIdentities.has(key)) return false;
+        seenIdentities.add(key);
+        return true;
       });
-      const matches = posterMatches.length
-        ? posterMatches.map(mediaInfoFromListItem).filter(Boolean)
-        : lastListItems.map(mediaInfoFromListItem).filter(info => title && info && info.title.trim().toLowerCase() === title);
+      // Suffix matching is preserved exactly: the filename buckets candidates
+      // and endsWith verifies, so a shared filename across different paths
+      // still counts every path that truly matches.
+      let matches = [];
+      const file = posterFileName(posterUrl);
+      if (file) {
+        matches = uniqueMatches(
+          (byPosterFile.get(file) || []).filter(item => {
+            const poster = item.posterPath || item.poster_path;
+            return typeof poster === 'string' && poster.length > 1 && posterUrl.endsWith(poster);
+          }));
+      }
+      if (matches.length === 0 && title) {
+        matches = uniqueMatches(byTitle.get(title) || []);
+      }
       // DOM order can differ from API order after sorting or lazy loading.
       // An ambiguous title must remain unresolved rather than request the wrong ID.
       if (matches.length !== 1) return;

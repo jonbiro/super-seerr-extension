@@ -15,7 +15,12 @@ heading per change.
 - Navigating away mid-request no longer wedges the next page's request button shut.
 - Bulk review with nothing requestable can no longer confirm an empty request.
 - A blocked watch popup now warns instead of reporting an opening that never happened.
+- Destroyed integrations run nothing: extraction retries, navigation rebuilds, and status renders all stand down once destroyed instead of resurrecting UI.
+- A page id contradicted by Seerr (another title, another year) no longer spends its write: requests and statuses fall back to title search instead of trusting first-external-link extraction.
 - Toasts no longer pile on the same corner coordinates: flyout and overlay notifications share a capped corner column, so bursts stay readable.
+- Double-clicking Save Settings saves once and prompts once instead of firing a second permission prompt with no gesture left to answer it.
+- Repeated identical title lists no longer make a card ambiguous to itself: duplicates collapse to their shared identity at match time, while genuinely different titles sharing a poster still refuse.
+- Card identification no longer scans every stored title per card per pass: a poster/title index rebuilt only when the lists change keeps steady-state passes to lookups (~70× faster on large grids), which was starving the main thread into kill-or-wait dialogs.
 - The page-world observer no longer leaks an unhandled rejection when a response body cannot be cloned; the page still reads its own response.
 
 - Ratings survive hard reloads onto the cards, not just into storage. The title index behind the cards now persists with the scores (bounded separately), so a cold load identifies un-hovered cards before Seerr's own lists arrive, and pending writes flush on unload instead of dying with the page. Cleared and server-switched the same way scores are.

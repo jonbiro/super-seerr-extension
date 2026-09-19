@@ -38,6 +38,7 @@ class BaseIntegration {
     this.navigationListener = null;
     this.currentStatusData = null; // Cache current status data for performance
     this.plexConfigured = false;
+    this._pendingRetries = new Set();
 
     this.log('BaseIntegration initialized for', this.siteName);
   }
@@ -86,7 +87,7 @@ class BaseIntegration {
     }
 
     // Retry after delay for dynamic content
-    setTimeout(() => {
+    this.deferRetry(() => {
       this.log(`Retry extraction after ${this.retryDelay}ms`);
       this.extractAndSetup().catch(err => this.error('Retry extraction failed:', err));
     }, this.retryDelay);
@@ -94,6 +95,25 @@ class BaseIntegration {
     // Setup SPA navigation detection
     this.setupNavigationDetection();
     this.setupLifecycleHandlers();
+  }
+
+  /**
+   * A retry timer that never fires on a destroyed instance. Raw setTimeout
+   * calls here resurrected UI after destroy: the callback ran extractAndSetup
+   * on a page that no longer wanted it.
+   */
+  deferRetry(fn, delay) {
+    const id = setTimeout(() => {
+      this._pendingRetries.delete(id);
+      if (!this.destroyed) fn();
+    }, delay);
+    this._pendingRetries.add(id);
+    return id;
+  }
+
+  clearPendingRetries() {
+    for (const id of this._pendingRetries) clearTimeout(id);
+    this._pendingRetries.clear();
   }
 
   /**
@@ -143,6 +163,7 @@ class BaseIntegration {
     try {
       this.log('Starting media data extraction...');
       const mediaData = await this.extractMediaData();
+      if (this.destroyed) return;
       this.log('Extracted media data:', mediaData);
 
       if (mediaData && mediaData.title) {
@@ -185,6 +206,7 @@ class BaseIntegration {
   }
 
   async setupButtonUI() {
+    if (this.destroyed) return;
     if (typeof this.getButtonInsertionPoint !== 'function') {
       this.error('Button UI requires getButtonInsertionPoint() — falling back to flyout');
       return this.setupFlyoutUI();
@@ -227,6 +249,7 @@ class BaseIntegration {
    */
   async setupFlyoutUI() {
     this.log('Setting up flyout UI...');
+    if (this.destroyed) return;
 
     // Preserve expanded flyout - don't recreate
     if (this.isFlyoutExpanded()) {
@@ -306,6 +329,7 @@ class BaseIntegration {
 
       const plexState = await plexStatePromise;
       const plexOnWatchlist = plexState ? plexState.onWatchlist === true : false;
+      if (this.destroyed) return;
 
       // Update UI based on theme
       if (this.uiTheme === 'flyout') {
@@ -760,12 +784,14 @@ class BaseIntegration {
 
     // Wait a bit for the new page content to load
     await new Promise(resolve => setTimeout(resolve, 500));
+    if (this.destroyed) return;
 
     // Re-extract and setup for the new page
     await this.extractAndSetup();
+    if (this.destroyed) return;
 
     // Retry after delay for dynamic content
-    setTimeout(() => {
+    this.deferRetry(() => {
       this.log('Retry extraction after navigation');
       this.extractAndSetup().catch(err => this.error('Nav retry extraction failed:', err));
     }, this.retryDelay);
@@ -776,6 +802,9 @@ class BaseIntegration {
    */
   cleanupUI() {
     this.log('Cleaning up existing UI');
+
+    // A new page supersedes every retry scheduled for the old one.
+    this.clearPendingRetries();
 
     // Protect expanded flyout from removal
     if (this.isFlyoutExpanded()) {

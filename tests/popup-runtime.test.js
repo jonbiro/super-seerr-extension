@@ -36,3 +36,30 @@ test('popup distinguishes ratings-only, unconfigured and request-enabled modes',
     assert.equal(getNode('testConnection').classList.contains('hidden'), !settings.seerrApiKey);
   }
 });
+
+test('popup keeps the port when shortening the server URL', async () => {
+  const stub = () => ({
+    textContent: '',
+    addEventListener() {},
+    classList: { add() {}, remove() {}, contains: () => true },
+    querySelector: () => stub()
+  });
+  const context = vm.createContext({
+    URL, console,
+    document: {
+      readyState: 'complete',
+      getElementById: () => stub(),
+      addEventListener() {},
+      querySelector: () => null
+    },
+    chrome: {
+      storage: { sync: { get: async () => ({}) }, local: { get: async () => ({}) } },
+      runtime: { sendMessage: async () => ({ success: false }) }
+    }
+  });
+  vm.runInContext(fs.readFileSync('src/popup/popup.js', 'utf8') + '\nglobalThis.manager = new PopupManager();', context);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(context.manager.formatServerUrl('http://127.0.0.1:5055'), '127.0.0.1:5055');
+  assert.equal(context.manager.formatServerUrl('https://seerr.example'), 'seerr.example');
+  assert.equal(context.manager.formatServerUrl('not a url'), 'not a url');
+});
