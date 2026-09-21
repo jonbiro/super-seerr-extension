@@ -28,6 +28,8 @@ class UIComponents {
       const heading = this.el('h2', { textContent: 'Choose matching title' });
       const explanation = this.el('p', { textContent: `Select the correct match for “${title || ''}”. This checks availability; it does not send a request.` });
       dialog.append(heading, explanation);
+      const remember = this.el('input', { type: 'checkbox' });
+      const rememberLabel = this.el('label', {}, [remember, this.el('span', { textContent: ' Remember this match on this device' })]);
       const finish = value => {
         signal?.removeEventListener('abort', abort);
         backdrop.remove();
@@ -42,18 +44,18 @@ class UIComponents {
         button.style.cssText = 'display:block;width:100%;padding:12px;margin:10px 0;text-align:left;background:#263244;color:#fff;border:1px solid #94a3b8;border-radius:6px;cursor:pointer;';
         button.append(this.el('strong', { textContent: `${candidate.title} (${candidate.year || 'Year unknown'}) — ${candidate.mediaType === 'tv' ? 'TV' : 'Movie'}` }));
         button.append(this.el('p', { textContent: candidate.overview || `TMDB ${candidate.tmdbId}` }));
-        button.addEventListener('click', () => finish(candidate), { once: true });
+        button.addEventListener('click', () => finish({ ...candidate, rememberChoice: remember.checked }), { once: true });
         list.appendChild(button);
       }
       if (!candidates.length) list.appendChild(this.el('p', { textContent: 'No verified matches found. Search directly in Seerr to choose a different title.' }));
       const cancel = this.el('button', { type: 'button', textContent: 'Cancel' });
       cancel.style.cssText = 'padding:8px 16px;margin-top:12px;';
       cancel.addEventListener('click', abort);
-      dialog.append(list, cancel); backdrop.appendChild(dialog); document.body.appendChild(backdrop);
+      dialog.append(list, rememberLabel, cancel); backdrop.appendChild(dialog); document.body.appendChild(backdrop);
       dialog.addEventListener('keydown', event => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); abort(); }
         if (event.key === 'Tab') {
-          const controls = [...dialog.querySelectorAll('button')];
+          const controls = [...dialog.querySelectorAll('button,input')];
           const index = controls.indexOf(document.activeElement);
           if (event.shiftKey && index <= 0) { event.preventDefault(); controls.at(-1).focus(); }
           else if (!event.shiftKey && (index === controls.length - 1 || index < 0)) { event.preventDefault(); controls[0].focus(); }

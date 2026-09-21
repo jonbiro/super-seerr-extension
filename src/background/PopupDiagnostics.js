@@ -2,6 +2,16 @@
 (function (root) {
   const row = (state, message, fix = null) => ({ state, message, fix });
   root.PopupDiagnostics = {
+    async exportDiagnostics() {
+      const report = await this.getPopupDiagnostics();
+      const checks = {};
+      for (const name of ['permission', 'apiKey', 'seerr', 'plex']) {
+        const state = report.checks[name]?.state;
+        checks[name] = ['ok', 'warning', 'error'].includes(state) ? state : 'unknown';
+      }
+      return { schema: 1, version: chrome.runtime.getManifest().version, checkedAt: new Date().toISOString(),
+        localStorageIsolationSupported: typeof chrome.storage.local.setAccessLevel === 'function', checks };
+    },
     async getPopupDiagnostics() {
       const result = { serverUrl: null, checks: {} };
       const checks = result.checks;

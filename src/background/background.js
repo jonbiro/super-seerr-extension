@@ -12,6 +12,7 @@ import './RecentActions.js';
 import './PopupDiagnostics.js';
 import './SeasonRequests.js';
 import './OverlayStorage.js';
+import './TitleCorrections.js';
 const RatingsConfig = globalThis.RatingsConfig;
 const MediaValidation = globalThis.MediaValidation;
 
@@ -20,7 +21,7 @@ const MediaValidation = globalThis.MediaValidation;
 // the saved origin instead, once the user grants that optional host permission.
 const OVERLAY_SCRIPT_ID = 'seerr-overlay';
 const OVERLAY_SCRIPT_FILES = {
-  js: ['src/shared/SeasonPicker.js', 'src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/OverlayCache.js', 'src/content/RatingsPresentation.js', 'src/content/SeerrSession.js', 'src/content/FilterPresets.js', 'src/content/seerr-integration.js'],
+  js: ['src/shared/SeasonPicker.js', 'src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/OverlayCache.js', 'src/content/RatingsPresentation.js', 'src/content/SeerrSession.js', 'src/content/FilterPresets.js', 'src/content/RatingQueue.js', 'src/content/seerr-integration.js'],
   css: ['src/content/seerr-overlay.css']
 };
 
@@ -236,7 +237,7 @@ class SeerrAPI {
       switch (request.action) {
         case 'requestMedia': {
           const result = await this.requestMedia(request.data);
-          await this.recordRecentAction('request', request.data);
+          await this.recordRecentAction('request', { ...request.data, tmdbId: result.tmdbId || request.data.tmdbId, historyServer: result.historyServer || this.baseUrl });
           sendResponse({ success: true, data: result });
           break;
         }
@@ -270,6 +271,20 @@ class SeerrAPI {
           break;
         }
 
+        case 'getSavedTitleCorrection': {
+          sendResponse({ success: true, data: await this.getSavedTitleCorrection(request.data) }); break;
+        }
+        case 'saveTitleCorrection': {
+          await this.saveTitleCorrection(request.data); sendResponse({ success: true }); break;
+        }
+        case 'getTitleCorrections': {
+          this.requireExtensionPage(sender);
+          sendResponse({ success: true, data: await this.getTitleCorrections() }); break;
+        }
+        case 'removeTitleCorrection': {
+          this.requireExtensionPage(sender);
+          await this.removeTitleCorrection(request.key); sendResponse({ success: true }); break;
+        }
         case 'getMediaCandidates': {
           sendResponse({ success: true, data: await this.getMediaCandidates(request.data) });
           break;
@@ -341,7 +356,7 @@ class SeerrAPI {
 
         case 'addToWatchlist': {
           const watchlistResult = await this.addToWatchlist(request.data);
-          await this.recordRecentAction('seerr-watchlist', request.data);
+          await this.recordRecentAction('seerr-watchlist', { ...request.data, tmdbId: watchlistResult.tmdbId || request.data.tmdbId, historyServer: watchlistResult.historyServer || this.baseUrl });
           sendResponse({ success: true, data: watchlistResult });
           break;
         }
@@ -354,6 +369,15 @@ class SeerrAPI {
           diagnosticClient.plexToken = this.plexToken;
           sendResponse({ success: true, data: await diagnosticClient.getPopupDiagnostics() });
           break;
+        }
+
+        case 'exportDiagnostics': {
+          this.requireExtensionPage(sender);
+          sendResponse({ success: true, data: await this.exportDiagnostics() }); break;
+        }
+        case 'getRecentActionStatuses': {
+          this.requireExtensionPage(sender);
+          sendResponse({ success: true, data: await this.getRecentActionStatuses() }); break;
         }
 
         case 'getRecentActions': {
@@ -433,11 +457,13 @@ class SeerrAPI {
     };
 
     this.log('📡 [Background] Sending request to Seerr:', requestData);
+    const historyServer = this.baseUrl;
     const response = await this.makeAPIRequest('POST', '/api/v1/request', requestData);
     this.log('✅ [Background] Request successful:', response);
 
     return {
       id: response.id,
+      tmdbId, historyServer,
       mediaType: response.type,
       status: response.status,
       title: mediaData.title
@@ -715,18 +741,19 @@ class SeerrAPI {
       if (!match) throw new Error(`No unambiguous match for "${data.title}". Choose this title in Seerr before adding to your watchlist.`);
       tmdbId = MediaValidation.tmdbId(match.id);
     }
+    const historyServer = this.baseUrl;
     const response = await this.makeAPIRequest('POST', '/api/v1/watchlist', {
       tmdbId,
       mediaType: data.mediaType,
       ...(data.title ? { title: String(data.title) } : {})
     });
-    return response;
+    return { ...response, tmdbId, historyServer };
   }
 }
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
 
-Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests, globalThis.OverlayStorage);
+Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests, globalThis.OverlayStorage, globalThis.TitleCorrections);
 
 const seerrAPI = new SeerrAPI();
 let initializing = true;

@@ -46,6 +46,7 @@ release-firefox: build-firefox
 	@echo "Firefox release created: $(RELEASE_FILE_FIREFOX)"
 
 release: release-chrome release-firefox
+	@node scripts/release-checksums.cjs
 	@echo "All releases created successfully!"
 
 clean-chrome:

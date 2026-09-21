@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.5.10-blue)
+![Version](https://img.shields.io/badge/version-3.5.12-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -46,7 +46,7 @@ On a supported Seerr grid, choose **Sort titles → RT critics: highest first** 
 
 Sorting and filtering apply to loaded cards in the grid associated with the controls, not to the entire server catalogue or pages that have not loaded. Separate carousels may not share one control bar. DOM layout changes in Seerr can affect card detection.
 
-Ratings you have already seen are cached on your device, so returning to Seerr does not look them up again. They do not expire. The title lists behind the cards persist too, so a cold load still identifies cards before Seerr's own lists arrive, and pending writes flush when the page unloads rather than dying with it. Scores move as reviews arrive, so the grid controls show when the loaded titles were cached and offer **Refresh scores**, which refetches just those titles. For everything at once, **Settings → Troubleshooting → Clear ratings cache** forces a fresh lookup, and takes effect in open Seerr tabs without a reload. Changing your server URL discards them automatically.
+Ratings you have already seen are cached on your device and displayed immediately on return. Aging scores refresh quietly, and missing sources retry sooner. The title lists behind the cards persist too, so a cold load still identifies cards before Seerr's own lists arrive, and pending writes flush when the page unloads rather than dying with it. Scores move as reviews arrive, so the grid controls show when the loaded titles were cached and offer **Refresh scores**, which refetches just those titles. For everything at once, **Settings → Troubleshooting → Clear ratings cache** forces a fresh lookup, and takes effect in open Seerr tabs without a reload. Changing your server URL discards them automatically.
 
 Scores are partial data: missing values stay absent. An unrated or unreleased title shows no IMDb or TMDB score rather than zero, since those scales treat zero as “not rated”; a 0% from Rotten Tomatoes is shown, because there it is a real verdict. RT matches below the confidence threshold are hidden; approximate accepted matches have a `~` prefix. A score without `~` matched the title exactly in the expected year. Where a title is shared by more than one film and no year is known, no score is shown rather than a guess. Summary labels are heuristics, not official RT certification. External title matching can still be wrong, especially for remakes or missing years.
 
@@ -121,3 +121,30 @@ Availability is for standard quality. Already available, partially available, pe
 Content scripts access cached ratings through worker messages restricted to the configured Seerr origin and base path. The worker validates and bounds the cache schema; it never returns arbitrary local storage. Cache clearing is limited to extension pages and serialized with cache writes. Settings-change notifications contain no keys or tokens.
 
 Where `storage.local.setAccessLevel` is available, local storage is restricted to trusted extension contexts before initialization. Chromium verification confirms content-script key reads are rejected. Firefox 147.0.3 lacks this API: the worker bridge works, but API-enforced local-storage isolation is unavailable there. This distinction follows the browser's [storage access controls](https://developer.chrome.com/docs/extensions/reference/api/storage#type-AccessLevel), not a claim that Firefox provides the same restriction.
+
+### Faster grids, remembered matches, and support
+
+Card ratings use a four-job queue per page, prioritizing visible cards before
+cards farther from the viewport. Scrolling reprioritizes waiting work. Navigation
+and page exit discard queued jobs, abort page-side Seerr rating reads, and prevent
+later lookup stages from starting. A Rotten Tomatoes worker read already in flight
+may finish because other tabs can share it; abandoned cards are not repainted.
+
+In **Choose title**, select **Remember this match on this device** to reuse a
+correction. The choice is scoped to the original title/type/year and server,
+stored locally, and revalidated against current candidates before application.
+Settings → **Saved matches and support** lets you inspect and forget it. Reload
+the source page after forgetting a match. A saved choice never submits a request.
+
+**Recent actions → Refresh statuses** checks current Seerr status and provides
+**Open in Seerr** links for new actions with a known TMDB ID on the current server.
+Older entries without IDs and entries from a different server keep their historical
+record without guessing a link. An offline server does not erase confirmed actions.
+
+Settings → **Prepare diagnostic report** previews a JSON report before downloading.
+It contains extension version, check time, storage-isolation capability, and the
+four connection-check states. It excludes server addresses, credentials, media
+titles, history, saved matches and raw errors. Nothing is uploaded automatically.
+
+For downloadable packages, checksums and optional Firefox signing, see
+[release preparation](docs/releases.md).

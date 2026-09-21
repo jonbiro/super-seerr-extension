@@ -19,3 +19,6 @@ node_modules/
 # Browser test output
 test-results/
 playwright-report/
+
+# Release checksums
+super-seerr-v*-SHA256SUMS.txt

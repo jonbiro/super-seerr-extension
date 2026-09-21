@@ -5,7 +5,14 @@
   function clean(entry) {
     if (!entry || !kinds.has(entry.kind) || !['movie', 'tv'].includes(entry.mediaType) ||
         !Number.isFinite(entry.at) || typeof entry.title !== 'string') return null;
-    return { kind: entry.kind, mediaType: entry.mediaType, title: entry.title.slice(0, 200), at: entry.at };
+    const result = { kind: entry.kind, mediaType: entry.mediaType, title: entry.title.slice(0, 200), at: entry.at };
+    try {
+      const url = new URL(entry.server);
+      if (['https:', 'http:'].includes(url.protocol) && !url.username && !url.password && !url.search && !url.hash && Number.isSafeInteger(entry.tmdbId) && entry.tmdbId > 0) {
+        result.server = url.href; result.tmdbId = entry.tmdbId;
+      }
+    } catch (_) { /* Older history has no stable identity. */ }
+    return result;
   }
   root.RecentActions = {
     requireExtensionPage(sender) {
@@ -24,6 +31,28 @@
       const value = (await chrome.storage.local.get(KEY))[KEY];
       return Array.isArray(value) ? value.slice(0, 50).map(clean).filter(Boolean) : [];
     },
+    async getRecentActionStatuses() {
+      const server = this.baseUrl;
+      const rows = await this.getRecentActions();
+      const results = new Array(rows.length); let cursor = 0;
+      await Promise.all(Array.from({ length: Math.min(4, rows.length) }, async () => {
+        while (cursor < rows.length) {
+          const index = cursor++, entry = rows[index];
+          const result = { at: entry.at, title: entry.title, mediaType: entry.mediaType, status: 'Status unavailable', url: null };
+          if (server && entry.server === new URL(server).href && entry.tmdbId) {
+            result.url = `${server.replace(/\/$/, '')}/${entry.mediaType}/${entry.tmdbId}`;
+            try {
+              const state = await this.getMediaStatus({ tmdbId: entry.tmdbId, mediaType: entry.mediaType });
+              const labels = { available_watch: 'Available', available: 'Not requested', pending: 'Pending approval', requested: 'Requested', downloading: 'Processing', partial: 'Partially available', declined: 'Declined', failed: 'Failed' };
+              result.status = labels[state.status] || 'Status unavailable';
+            } catch (_) { /* Keep the confirmed historical action even offline. */ }
+          }
+          results[index] = result;
+        }
+      }));
+      if (server !== this.baseUrl) throw new Error('Server changed. Refresh history.');
+      return results;
+    },
     clearRecentActions() {
       return this.queueRecentAction(() => chrome.storage.local.remove(KEY));
     },
@@ -35,7 +64,7 @@
         for (const secret of [this.apiKey, this.plexToken]) {
           if (secret) title = title.split(secret).join('[redacted]');
         }
-        const entry = clean({ kind, mediaType: media.mediaType, title, at: Date.now() });
+        const entry = clean({ kind, mediaType: media.mediaType, title, at: Date.now(), tmdbId: Number(media.tmdbId), server: media.historyServer || this.baseUrl });
         if (!entry) return;
         await this.queueRecentAction(async () => {
           const stored = (await chrome.storage.local.get(KEY))[KEY];

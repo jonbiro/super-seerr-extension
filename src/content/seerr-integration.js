@@ -157,6 +157,7 @@
   // Isolated content scripts cannot reliably patch the page's history methods.
   let navigationTimer = setInterval(handleRouteChange, 1000);
   window.addEventListener('pagehide', () => {
+    cardRatingQueue.clear();
     clearInterval(navigationTimer); navigationTimer = null;
     // A debounced write still waiting would die with this context, taking the
     // latest resolutions with it. Flush now so a reload finds them on disk.
@@ -194,10 +195,14 @@
     return document.querySelector(selector);
   }
 
+  const cardRatingQueue = window.createRatingQueue();
+  window.addEventListener('scroll', () => cardRatingQueue.reprioritize(), { passive: true, capture: true });
+
   function cleanupOverlay() {
     activeBulkSeasonController?.abort();
     activeBulkSeasonController = null;
     routeGeneration++;
+    cardRatingQueue.clear();
     const cards = getMediaCards();
     for (const grid of new Set(cards.map(card => getCardsGrid([card])).filter(Boolean))) {
       applyScoreSort(grid, 'default');
@@ -760,9 +765,11 @@
     title = heading.title || title;
     year = year ?? heading.year;
     log(`Resolving ratings for TMDB ${tmdbId}`);
+    if (options.signal?.aborted) return null;
     // Refreshes must read the sources again, not recycle the page's old scores.
     const native = options.refresh ? null : extractSeerrNativeRatings(tmdbId, mediaType);
     await indexCurrentListRatings();
+    if (options.signal?.aborted) return null;
     const pageMeta = tmdbId !== null && tmdbId !== undefined ? pageMetadataByTmdbId.get(ratingKey(tmdbId, mediaType)) : null;
     const lookupTitle = title || pageMeta?.title || '';
     const lookupYear = year || pageMeta?.year || null;
@@ -772,6 +779,7 @@
     // entirely when Seerr can already supply the current ratings.
     if (options.refresh) bundle = await fetchSeerrSessionRatings(tmdbId, mediaType, null, options.outcome ?? {});
 
+    if (options.signal?.aborted) return null;
     if (!bundle || bundle.rtCriticsScore === null || bundle.rtAudienceScore === null) {
       const rtBundle = await fetchRottenTomatoesRatings(
         lookupTitle, lookupYear, mediaType, options.refresh === true, pageMeta?.originalTitle || null, options.outcome ?? {});
@@ -784,6 +792,7 @@
     // Continue filling partial bundles without overwriting higher-trust data.
     // Passing what is already known lets it skip endpoints that could only
     // return those same fields.
+    if (options.signal?.aborted) return null;
     if (!options.refresh && !isBundleComplete(bundle)) {
       bundle = mergeBundles(bundle, await fetchSeerrSessionRatings(tmdbId, mediaType, bundle, options.outcome ?? {}));
     }
@@ -985,7 +994,8 @@
 
     // Whether a null result means "nothing knows this title" or "we could not
     // find out". Only the first is worth remembering.
-    const outcome = {};
+    if (options.signal?.aborted) return null;
+    const outcome = { signal: options.signal };
     const promise = resolveRatings(tmdbId, title, year, mediaType, { ...options, outcome });
     ratingsCache.set(pendingKey, promise);
     // A hung channel must not pin the coalesced promise forever: after the
@@ -998,6 +1008,7 @@
 
     try {
       const bundle = await Promise.race([promise, deadline]);
+      if (options.signal?.aborted) return null;
       // Storing the absence is the point: without it every visit asks again.
       let storable = bundle && Model.hasAnyScore(bundle) ? bundle : null;
       // An unavailable source is not evidence that a previously known score
@@ -1250,7 +1261,7 @@
 
       // Resolve ratings asynchronously
       if (mediaInfo.tmdbId) {
-        getRatings(mediaInfo.tmdbId, mediaInfo.title, null, mediaInfo.mediaType).then(bundle => {
+        cardRatingQueue.add(card, signal => getRatings(mediaInfo.tmdbId, mediaInfo.title, null, mediaInfo.mediaType, { signal })).then(bundle => {
           if (generation !== routeGeneration || !card.isConnected) return;
           // Re-check: a cleanup could have removed any previously-rendered
           // badges since this promise was queued.

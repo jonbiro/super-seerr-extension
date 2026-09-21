@@ -164,7 +164,15 @@ class BaseIntegration {
     const pageUrl = window.location.href;
     try {
       this.log('Starting media data extraction...');
-      const mediaData = await this.extractMediaData();
+      let mediaData = await this.extractMediaData();
+      if (mediaData?.title) {
+        try {
+          const saved = await this.client.sendMessage({ action: 'getSavedTitleCorrection', data: mediaData });
+          if (saved?.success && saved.data?.tmdbId && saved.data?.title && saved.data.mediaType === mediaData.mediaType) {
+            mediaData = { ...mediaData, ...saved.data };
+          }
+        } catch (_) { /* Matching stays available if local storage is unavailable. */ }
+      }
       if (this.destroyed || generation !== this._extractionGeneration || window.location.href !== pageUrl) return;
       this.log('Extracted media data:', mediaData);
 
@@ -468,6 +476,11 @@ class BaseIntegration {
     try {
       const selected = await this.ui.chooseTitle(response.data, { title: view.media.title, signal: controller.signal });
       if (!selected || !view.isCurrent()) return;
+      if (selected.rememberChoice) {
+        const saved = await this.client.sendMessage({ action: 'saveTitleCorrection', data: { original: view.media, tmdbId: selected.tmdbId } });
+        if (!view.isCurrent()) return;
+        if (!saved?.success) throw new Error(saved?.error || 'Could not remember this match');
+      }
       this.mediaData = { ...view.media, title: selected.title, tmdbId: selected.tmdbId, mediaType: selected.mediaType, year: selected.year };
       const heading = view.elements.flyout?.querySelector('.seerr-title');
       if (heading) heading.textContent = `${selected.title}${selected.year ? ` (${selected.year})` : ''}`;

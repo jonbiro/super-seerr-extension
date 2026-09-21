@@ -256,6 +256,7 @@ test('ambiguous title picker checks the chosen identity and sends only a separat
     await page.getByRole('button', { name: 'Open Super Seerr', exact: true }).click();
     await page.getByRole('button', { name: 'Choose title', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Choose matching title' })).toBeVisible();
+    await page.getByLabel('Remember this match on this device').check();
     await page.getByRole('button', { name: /The Thing \(2011\)/ }).click();
     await expect(page.locator('.seerr-title')).toHaveText('The Thing (2011)');
     await expect(page.getByRole('button', { name: 'Request on Seerr', exact: true })).toBeVisible();
@@ -264,6 +265,9 @@ test('ambiguous title picker checks the chosen identity and sends only a separat
     await expect.poll(() => posts.length).toBe(1);
     expect(posts[0].mediaId).toBe(911);
     expect(posts[0].mediaType).toBe('movie');
+    const saved = await options.evaluate(() => chrome.runtime.sendMessage({ action: 'getSavedTitleCorrection', data: { title: 'The Thing', mediaType: 'movie' } }));
+    expect(saved.data.tmdbId).toBe(911);
+
   } finally {
     server.off('request', capture);
     await page.close();
@@ -362,3 +366,37 @@ for (const fixture of require('./site-fixtures.cjs').SITES) {
     await page.close();
   });
 }
+
+
+test('Settings inspects and forgets remembered matches and exports a redacted diagnostic report', async () => {
+  await options.getByRole('button', { name: 'Inspect saved title matches' }).click();
+  const row = options.locator('li').filter({ hasText: 'TMDB 911' });
+  await expect(row).toContainText('The Thing');
+  await row.getByRole('button', { name: 'Forget match' }).click();
+  await expect(row).toHaveCount(0);
+  await options.getByRole('button', { name: 'Prepare diagnostic report' }).click();
+  const preview = options.getByLabel('Diagnostic report preview');
+  await expect(preview).toBeVisible();
+  const report = JSON.parse(await preview.inputValue());
+  expect(Object.keys(report.checks).sort()).toEqual(['apiKey', 'permission', 'plex', 'seerr']);
+  expect(await preview.inputValue()).not.toContain(origin);
+  expect(await preview.inputValue()).not.toContain('smoke-key');
+  const downloading = options.waitForEvent('download');
+  await options.getByRole('button', { name: 'Download report' }).click();
+  const download = await downloading;
+  expect(download.suggestedFilename()).toBe('super-seerr-diagnostics.json');
+  const stream = await download.createReadStream(); let contents = '';
+  for await (const chunk of stream) contents += chunk;
+  expect(JSON.parse(contents)).toEqual(report);
+});
+
+test('recent confirmed requests show current status and exact Seerr title links', async () => {
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+  const row = popup.locator('#recentActionsList li').filter({ hasText: 'Requested: The Thing' });
+  await expect(row.getByRole('link', { name: 'Open in Seerr' })).toHaveAttribute('href', `${origin}/movie/911`);
+  await expect(row).toContainText('Not requested'); // The fixture serves an empty request history.
+  await popup.getByRole('button', { name: 'Refresh statuses' }).click();
+  await expect(row.getByRole('link')).toHaveCount(1);
+  await popup.close();
+});

@@ -1,12 +1,12 @@
 // Session-authenticated Seerr reads and per-title ratings resolution.
 (function (root) {
   root.createSeerrSession = function ({ Config, Model, log, getServer, bundleFromRatingObject, mergeBundles, isBundleComplete }) {
-    async function fetchJsonFromSeerr(endpoint) {
+    async function fetchJsonFromSeerr(endpoint, signal) {
       const basePath = getServer()?.pathname.replace(/\/+$/, '') || '';
       const url = new URL(`${basePath}${endpoint}`, window.location.origin);
       const response = await fetch(url.toString(), {
         method: 'GET',
-        signal: AbortSignal.timeout(Config.requestTimeoutMs),
+        signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(Config.requestTimeoutMs)]) : AbortSignal.timeout(Config.requestTimeoutMs),
         credentials: 'include',
         headers: { Accept: 'application/json' }
       });
@@ -66,6 +66,7 @@
       let bundle = null;
       let ratingsAreAbsent = false;
       for (const endpoint of endpoints) {
+        if (outcome.signal?.aborted) { outcome.conclusive = false; return null; }
         // Seerr answers /ratingscombined with 404 only when it has neither RT
         // nor IMDb, and /ratings with 404 when it has no RT. So once combined
         // has 404ed, /ratings cannot succeed; asking is a guaranteed second
@@ -78,7 +79,7 @@
           const kind = endpoint.endsWith('/ratingscombined') ? 'ratingscombined'
             : endpoint.endsWith('/ratings') ? 'ratings' : null;
           if (kind) seerrRatingsRequests[kind]++;
-          const result = await fetchJsonFromSeerr(endpoint);
+          const result = await fetchJsonFromSeerr(endpoint, outcome.signal);
           if (expected !== generation) { outcome.conclusive = false; return null; }
           if (!result.ok) {
             if (result.status === 404 && endpoint.endsWith('/ratingscombined')) ratingsAreAbsent = true;

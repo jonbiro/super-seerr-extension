@@ -62,7 +62,7 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local
     querySelectorAll: selector => selector.startsWith('script') ? scripts.map(data => ({ textContent: JSON.stringify(data) })) : []
   };
   const context = vm.createContext({
-    console, URL, document, fetch, AbortSignal,
+    console, URL, document, fetch, AbortSignal, AbortController,
     // Timers are recorded rather than run, so tests stay deterministic. Call
     // runTimers() to fire what the code under test scheduled.
     setTimeout: (fn, delay) => { timers.push({ fn, delay }); return timers.length; },

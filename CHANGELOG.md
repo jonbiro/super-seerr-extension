@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.12]
+
+- Prioritize visible card ratings with four concurrent jobs per page, reprioritize on scroll, and cancel obsolete queued/page-side reads after navigation.
+- Add opt-in, device-local remembered title choices with fresh candidate validation and Settings inspection/reset.
+- Recent actions retain resolved TMDB identities and server scope, refresh current status, and link directly to the correct Seerr title. Legacy/offline history remains readable.
+- Add previewable, allowlisted diagnostic JSON exports without server addresses, credentials, titles or raw errors.
+- Prepare Chrome/Firefox release archives with SHA-256 checksums, a manual artifact workflow, and credential-gated Firefox signing. Signed/store releases still require publisher access.
+
 ## [3.5.10]
 
 - IMDb no longer treats unbranded error/challenge page titles as movies. Trakt ignores its generic application title and uses its existing route-title fallback. Both were found during live-site checks.
