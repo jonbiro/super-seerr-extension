@@ -30,12 +30,12 @@ class MetacriticIntegration extends BaseIntegration {
     // Check for movie pages
     if (url.includes('/movie/')) {
       mediaType = 'movie';
-      urlMatch = url.match(/\/movie\/([^\/]+)/);
+      urlMatch = url.match(/^\/movie\/([^/]+)\/?$/);
     }
     // Check for TV show pages
     else if (url.includes('/tv/')) {
       mediaType = 'tv';
-      urlMatch = url.match(/\/tv\/([^\/]+)/);
+      urlMatch = url.match(/^\/tv\/([^/]+)(?:\/season-\d+)?\/?$/);
     }
     else {
       this.log('URL does not match movie or TV pattern:', url);

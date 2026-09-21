@@ -30,12 +30,12 @@ class RottenTomatoesIntegration extends BaseIntegration {
     // Check for movie pages
     if (url.includes('/m/')) {
       mediaType = 'movie';
-      urlMatch = url.match(/\/m\/([^\/]+)/);
+      urlMatch = url.match(/^\/m\/([^/]+)\/?$/);
     }
     // Check for TV show pages
     else if (url.includes('/tv/')) {
       mediaType = 'tv';
-      urlMatch = url.match(/\/tv\/([^\/]+)/);
+      urlMatch = url.match(/^\/tv\/([^/]+)(?:\/s\d+)?\/?$/);
     }
     else {
       this.log('URL does not match movie or TV pattern:', url);

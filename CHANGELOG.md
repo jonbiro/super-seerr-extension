@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.42]
+
+- Stop Rotten Tomatoes and Metacritic review subpages from producing requestable title metadata; reject RT episode subpages as well.
+- Retain movie, series and season detail routes, with eight route regressions.
+
 ## [3.5.41]
 
 - Restrict TMDB extraction to movie and series detail routes so cast, review and episode headings cannot become parent-title request metadata.
