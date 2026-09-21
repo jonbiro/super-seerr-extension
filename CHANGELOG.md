@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.17]
+
+- Grant access from the Settings warning for the saved server, even when the URL field contains unsaved edits. Keep permission requests attached to the original click.
+- Show cache read failures as unknown rather than empty, keep clearing available for recovery, and prevent duplicate clear requests with a visible pending state.
+
 ## [3.5.16]
 
 - Keep saved filter presets unchanged in memory when saving or deleting fails. Disable preset controls during initial loading and writes to prevent overlapping operations.

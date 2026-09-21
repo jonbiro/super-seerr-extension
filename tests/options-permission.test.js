@@ -273,3 +273,29 @@ test('saving Seerr and Plex permissions uses one user-gesture request', async t 
   assert.equal(requests.length, 1, 'a second asynchronous permission prompt can lose the click gesture');
   assert.deepEqual(new Set(requests[0]), new Set(['https://seerr.example/*', 'https://plex.tv/*', 'https://*.plex.tv/*']));
 });
+
+test('granting the standing warning targets the saved server despite unsaved edits', async t => {
+  const ctx = openOptions({ granted: false, synced: { seerrUrl: 'https://saved.example:5055' } });
+  t.after(() => ctx.window.close()); await flush();
+  ctx.window.document.getElementById('serverUrl').value = 'https://unsaved.example';
+  ctx.window.document.getElementById('grantPermission').click();
+  assert.deepEqual(ctx.requested, ['https://saved.example/*'], 'request remains synchronous with the click');
+  await flush(); assert.equal(ctx.syncWrites.length, 0);
+});
+
+test('cache read failures remain unknown and clearing stays available without duplicate requests', async t => {
+  const ctx = openOptions({ local: { rtCacheV1: { entries: { film: {} } } } });
+  t.after(() => ctx.window.close()); await flush();
+  let finish, calls = 0;
+  ctx.window.chrome.storage.local.get = async () => { throw new Error('Storage unavailable'); };
+  ctx.window.chrome.runtime.sendMessage = () => { calls++; return new Promise(resolve => { finish = resolve; }); };
+  const button = ctx.window.document.getElementById('clearRatingsCache');
+  button.click(); button.click();
+  assert.equal(calls, 1); assert.equal(button.disabled, true); assert.match(button.textContent, /Clearing/);
+  finish({ success: false }); await flush();
+  assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /Could not read/);
+  assert.equal(button.disabled, false);
+  button.click(); assert.equal(calls, 2);
+  finish({ success: true }); await flush();
+  assert.equal(button.disabled, false);
+});

@@ -67,15 +67,21 @@ class OptionsManager {
         Object.keys(stored[RT_CACHE_KEY]?.entries || {}).length;
       this.hasRatingsAvailability = !!stored[RATINGS_UNAVAILABLE_KEY];
     } catch (_) {
-      held = 0;
+      this.cacheCount.textContent = 'Could not read the ratings cache';
+      if (this.clearCacheButton) this.clearCacheButton.disabled = !!this.clearingCache;
+      return;
     }
     this.cacheCount.textContent = held === 0
       ? 'No ratings cached'
       : `${held} title${held === 1 ? '' : 's'} cached`;
-    if (this.clearCacheButton) this.clearCacheButton.disabled = held === 0 && !this.hasRatingsAvailability;
+    if (this.clearCacheButton) this.clearCacheButton.disabled = !!this.clearingCache || (held === 0 && !this.hasRatingsAvailability);
   }
 
   async clearRatingsCache() {
+    if (this.clearingCache) return;
+    this.clearingCache = true;
+    const label = this.clearCacheButton?.textContent;
+    if (this.clearCacheButton) { this.clearCacheButton.disabled = true; this.clearCacheButton.textContent = 'Clearing…'; }
     try {
       const response = await chrome.runtime.sendMessage({ action: 'clearRatingsCache' });
       if (!response?.success) throw new Error(response?.error || 'Cache clear failed');
@@ -84,6 +90,8 @@ class OptionsManager {
       console.error('Could not clear the ratings cache:', error);
       this.showStatus('error', 'Failed to clear the ratings cache');
     }
+    this.clearingCache = false;
+    if (this.clearCacheButton) this.clearCacheButton.textContent = label;
     await this.refreshCacheCount();
   }
 
@@ -114,7 +122,8 @@ class OptionsManager {
   async refreshPermissionWarning() {
     if (!this.permissionWarning) return;
     const { seerrUrl } = await chrome.storage.sync.get(['seerrUrl']);
-    const pattern = this.originPattern(seerrUrl);
+    const pattern = this.originPattern(seerrUrl || '');
+    this.savedPermissionPattern = pattern;
     const missing = !!pattern && !(await this.hasOverlayPermission(pattern));
     this.permissionWarning.classList.toggle('hidden', !missing);
   }
@@ -136,7 +145,7 @@ class OptionsManager {
 
   // The banner's button: nothing to save, so nudge the worker directly.
   async grantOverlayAccess() {
-    const granted = await this.requestOverlayPermission();
+    const granted = await this.requestOverlayPermission(this.savedPermissionPattern || null);
     if (granted) await chrome.runtime.sendMessage({ action: 'reloadSettings' }).catch(() => {});
     await this.refreshPermissionWarning();
     return granted;
