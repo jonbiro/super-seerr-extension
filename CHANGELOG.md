@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.45]
+
+- Preserve numeric Filmweb titles in both original-title and localized-title extraction.
+- Preserve TMDB subtitles following an en dash instead of truncating the title.
+- Add four title-identity regressions while retaining parenthesized release-year cleanup.
+
 ## [3.5.44]
 
 - Restrict IMDb extraction to exact title detail routes so review, credits and episode-list headings cannot become request metadata.

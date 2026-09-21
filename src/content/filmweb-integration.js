@@ -49,7 +49,6 @@ class FilmwebIntegration extends BaseIntegration {
     if (title) {
       title = title
           .replace(/\s*\(\d{4}\)\s*$/g, '') // Remove year in parentheses
-          .replace(/\s*\d{4}\s*$/g, '') // Remove trailing year with spaces
           .trim();
 
       // Ensure title is not empty after cleanup
@@ -62,7 +61,6 @@ class FilmwebIntegration extends BaseIntegration {
       title = this.extractor.extractTitle(titleSelectors, {
         cleanupPatterns: [
           /\s*\(\d{4}\)\s*$/, // Remove year in parentheses
-          /\s*\d{4}\s*$/, // Remove trailing year
         ]
       });
     }
