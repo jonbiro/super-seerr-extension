@@ -65,7 +65,6 @@ class MetacriticIntegration extends BaseIntegration {
     const title = this.extractor.extractTitle(titleSelectors, {
       cleanupPatterns: [
         /\s*\(\d{4}\)\s*$/, // Remove year in parentheses
-        /\s*\d{4}\s*$/, // Remove trailing year
         /\s*-\s*Metacritic\s*$/, // Remove Metacritic suffix
         /\s*Reviews\s*$/, // Remove Reviews suffix
       ]

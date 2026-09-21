@@ -79,7 +79,6 @@ class TraktIntegration extends BaseIntegration {
     let title = this.extractor.extractTitle(titleSelectors, {
       cleanupPatterns: [
         /\s*\(\d{4}\)\s*$/, // Remove year in parentheses
-        /\s*\d{4}\s*$/, // Remove trailing year
         /\s*-\s*Trakt.*$/, // Remove Trakt suffix (flexible)
         /\s*\|\s*Trakt.*$/, // Remove | Trakt suffix
         /^Trakt Web:\s*/, // Remove "Trakt Web:" prefix

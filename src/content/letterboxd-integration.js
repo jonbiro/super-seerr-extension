@@ -48,7 +48,6 @@ class LetterboxdIntegration extends BaseIntegration {
     const title = this.extractor.extractTitle(titleSelectors, {
       cleanupPatterns: [
         /\s*\(\d{4}\)\s*$/, // Remove year in parentheses
-        /\s*\d{4}\s*$/, // Remove trailing year
       ]
     });
 

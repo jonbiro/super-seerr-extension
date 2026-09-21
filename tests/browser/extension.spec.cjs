@@ -479,3 +479,25 @@ test('RT preserves numeric and Season movie titles in the rendered panel', async
   }
   await page.close();
 });
+
+test('numeric titles survive extraction in IMDb, Letterboxd, Metacritic and Trakt panels', async () => {
+  const cases = [
+    ['https://www.imdb.com/title/tt8579674/', 'data-testid="hero-title-block__title"'],
+    ['https://letterboxd.com/film/example/', 'class="headline-1 prettify"'],
+    ['https://www.metacritic.com/movie/example/', 'data-testid="product-title"'],
+    ['https://trakt.tv/movies/example', 'data-test-id="movie-title"']
+  ];
+  for (const [url, attributes] of cases) {
+    const page = await context.newPage();
+    for (const title of ['1917', 'Blade Runner 2049']) {
+      await page.route('**/*', route => route.request().isNavigationRequest()
+        ? route.fulfill({ contentType: 'text/html', body: `<h1 ${attributes}>${title}</h1>` })
+        : route.abort());
+      await page.goto(url, { waitUntil: 'domcontentloaded' });
+      await page.getByRole('button', { name: 'Open Super Seerr', exact: true }).click();
+      await expect(page.locator('.seerr-title')).toHaveText(title);
+      await page.unroute('**/*');
+    }
+    await page.close();
+  }
+});

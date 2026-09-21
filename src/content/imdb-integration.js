@@ -49,7 +49,6 @@ class IMDBIntegration extends BaseIntegration {
       fallbackToPageTitle: /\s[-|]\sIMDb\s*$/i.test(document.title),
       cleanupPatterns: [
         /\s*\(\d{4}\)\s*$/, // Remove year in parentheses
-        /\s*\d{4}\s*$/, // Remove trailing year
         /\s*-\s*IMDb\s*$/, // Remove IMDB suffix
       ]
     });

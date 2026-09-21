@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.37]
+
+- Preserve numeric movie titles on IMDb, Letterboxd, Metacritic and Trakt while still removing parenthesized release-year labels.
+- Add extraction and packaged-browser regressions for numeric titles across all four integrations.
+
 ## [3.5.36]
 
 - Preserve Rotten Tomatoes movie titles containing four-digit numbers or the word Season; only remove explicit numbered season suffixes.
