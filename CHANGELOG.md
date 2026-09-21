@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.62]
+
+- Refuse media-request writes if the Seerr URL or API key changes during title matching or season validation.
+- Add deferred-verification regressions proving no write reaches changed settings.
+
 ## [3.5.61]
 
 - Skip null search results and candidates without valid TMDB IDs, and safely handle non-string release dates.

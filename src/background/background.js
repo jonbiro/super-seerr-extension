@@ -432,6 +432,8 @@ class SeerrAPI {
       throw new Error('Seerr server URL and API key are required. Please configure them in the extension options.');
     }
 
+    const requestServer = this.baseUrl;
+    const requestKey = this.apiKey;
     this.log('🎬 [Background] Requesting media:', mediaData);
 
     // Use TMDB ID directly if provided — skip search entirely, unless the id
@@ -464,6 +466,9 @@ class SeerrAPI {
       seasons: mediaData.mediaType === 'tv' ? await this.validateRequestSeasons(mediaData, tmdbId) : undefined
     };
 
+    if (this.baseUrl !== requestServer || this.apiKey !== requestKey) {
+      throw new Error('Settings changed. Review the title and request again.');
+    }
     this.log('📡 [Background] Sending request to Seerr:', requestData);
     const historyServer = this.baseUrl;
     const response = await this.makeAPIRequest('POST', '/api/v1/request', requestData);
