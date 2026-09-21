@@ -17,6 +17,7 @@
     const limits = { minCritics: 100, minAudience: 100, minTmdb: 10, minImdb: 10 };
     let presets = [];
     let busy = false;
+    let revision = 0, appliedRevision = 0, disposed = false, selection = '';
     function setBusy(value) {
       busy = value;
       wrapper.setAttribute('aria-busy', String(value));
@@ -34,22 +35,29 @@
       return { name: value.name.trim().slice(0, 40), sort: value.sort, filters };
     }
     async function request(action, data) {
+      const current = ++revision;
       const reply = await chrome.runtime.sendMessage({ action, data });
       if (!reply?.success || !Array.isArray(reply.data)) throw new Error(reply?.error || 'Could not update presets.');
-      return reply.data.map(validate).filter(Boolean);
+      return { revision: current, value: reply.data.map(validate).filter(Boolean) };
     }
     const load = () => request('getFilterPresets');
-    function render(selected = '') {
+    function adopt(result) {
+      if (disposed || result.revision < appliedRevision) return;
+      appliedRevision = result.revision; presets = result.value; render();
+    }
+    function render(selected = selection) {
+      selection = selected;
       select.replaceChildren();
       const empty = document.createElement('option'); empty.value = ''; empty.textContent = 'Saved presets'; select.appendChild(empty);
       for (const preset of presets) {
         const option = document.createElement('option'); option.value = preset.name; option.textContent = preset.name; select.appendChild(option);
       }
-      select.value = selected;
+      select.value = presets.some(preset => preset.name === selected) ? selected : '';
       remove.disabled = busy || !select.value;
     }
     select.addEventListener('change', () => {
       if (busy) return;
+      selection = select.value;
       const preset = presets.find(item => item.name === select.value);
       remove.disabled = !preset;
       if (preset) { name.value = preset.name; apply(preset); status.textContent = `Applied ${preset.name}`; }
@@ -61,41 +69,41 @@
       setBusy(true);
       try {
         const next = await request('saveFilterPreset', preset);
-        presets = next; render(preset.name);
+        if (disposed) return;
+        selection = preset.name; adopt(next); render();
         status.textContent = `Saved ${preset.name}`;
-      } catch (error) { status.textContent = error.message || 'Could not save preset.'; }
-      finally { setBusy(false); }
+      } catch (error) { if (!disposed) status.textContent = error.message || 'Could not save preset.'; }
+      finally { if (!disposed) setBusy(false); }
     });
     remove.addEventListener('click', async () => {
       const selected = select.value; if (busy || !selected) return;
       setBusy(true);
       try {
         const next = await request('deleteFilterPreset', { name: selected });
-        presets = next; render(); name.value = ''; status.textContent = `Deleted ${selected}`;
-      } catch (_) { status.textContent = 'Could not delete preset.'; }
-      finally { setBusy(false); }
+        if (disposed) return;
+        selection = ''; adopt(next); render(); name.value = ''; status.textContent = `Deleted ${selected}`;
+      } catch (_) { if (!disposed) status.textContent = 'Could not delete preset.'; }
+      finally { if (!disposed) setBusy(false); }
     });
-    let revision = 0;
     function changed(changes, area) {
       if (area !== 'sync' || !changes[KEY]) return;
-      const current = ++revision;
-      void load().then(value => {
-        if (current !== revision) return;
-        const selected = select.value;
-        presets = value; render(selected);
-      }).catch(() => { status.textContent = 'Could not refresh presets. Try again.'; });
+      const current = revision + 1;
+      void load().then(adopt).catch(() => {
+        if (!disposed && current === revision) status.textContent = 'Could not refresh presets. Try again.';
+      });
     }
     chrome.storage.onChanged?.addListener(changed);
     const cleanup = () => {
-      revision++;
+      disposed = true; revision++;
       chrome.storage.onChanged?.removeListener?.(changed);
       root.removeEventListener('pagehide', cleanup);
     };
     bar.__seerrPresetCleanup = cleanup;
     root.addEventListener('pagehide', cleanup, { once: true });
     render(); setBusy(true);
-    void load().then(value => { presets = value; render(); })
-      .catch(() => { status.textContent = 'Could not load presets. Save retries loading before making changes.'; })
-      .finally(() => setBusy(false));
+    const initialRevision = revision + 1;
+    void load().then(adopt)
+      .catch(() => { if (!disposed && initialRevision === revision) status.textContent = 'Could not load presets. Save retries loading before making changes.'; })
+      .finally(() => { if (!disposed) setBusy(false); });
   };
 })(typeof window !== 'undefined' ? window : globalThis);

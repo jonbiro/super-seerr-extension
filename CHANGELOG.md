@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.34]
+
+- Keep delayed preset reads from overwriting newer cross-tab state, and ignore obsolete refresh errors.
+- Stop late preset responses from updating controls after overlay cleanup.
+- Restore the Saved presets placeholder when another tab deletes the selected preset.
+- Add ordering/cleanup regressions and verify selected-preset deletion in the real two-tab browser test.
+
 ## [3.5.33]
 
 - Reject stale Firefox manifests before signing, including same-version permission or identity changes.

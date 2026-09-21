@@ -455,9 +455,13 @@ test('presets saved concurrently in two tabs synchronize without losing either c
       await expect(page.getByLabel('Saved filter presets')).toContainText('Tab 1');
       await expect(page.getByLabel('Saved filter presets')).toContainText('Tab 2');
     }
+    await tabs[1].getByLabel('Saved filter presets').selectOption('Tab 1');
     await tabs[0].getByLabel('Saved filter presets').selectOption('Tab 1');
     await tabs[0].getByRole('button', { name: 'Delete preset', exact: true }).click();
     await expect(tabs[1].getByLabel('Saved filter presets').locator('option')).toHaveCount(2);
     await expect(tabs[1].getByLabel('Saved filter presets')).not.toContainText('Tab 1');
+    await expect(tabs[1].getByLabel('Saved filter presets')).toHaveValue('');
+    expect(await tabs[1].getByLabel('Saved filter presets').evaluate(select => select.selectedIndex)).toBe(0);
+    await expect(tabs[1].getByRole('button', { name: 'Delete preset', exact: true })).toBeDisabled();
   } finally { await Promise.all(tabs.map(page => page.close())); }
 });
