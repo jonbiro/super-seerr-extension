@@ -101,49 +101,9 @@ class UIComponents {
 
   // Toasts stack in a fixed corner column. Without the container every toast
   // sat at the same coordinates and only the topmost was ever visible.
-  notificationStack() {
-    let stack = document.querySelector('.seerr-notification-stack');
-    if (!stack) {
-      stack = this.el('div', { className: 'seerr-notification-stack' });
-      document.body.appendChild(stack);
-    }
-    return stack;
-  }
-
-  createNotification(title, message, type = 'info', duration = 5000) {
-    const closeBtn = this.el('button', { type: 'button', className: 'seerr-notification-close', 'aria-label': 'Dismiss notification', textContent: '×' });
-    const notification = this.el('div', { className: `seerr-notification ${type}`, role: type === 'error' ? 'alert' : 'status' }, [
-      this.el('div', { className: 'seerr-notification-title', textContent: title }),
-      this.el('div', { className: 'seerr-notification-message', textContent: message }),
-      closeBtn
-    ]);
-
-    closeBtn.addEventListener('click', () => this.removeNotification(notification));
-
-    if (duration > 0) {
-      setTimeout(() => this.removeNotification(notification), duration);
-    }
-
-    const stack = this.notificationStack();
-    // A burst of toasts must not cover the page: oldest goes immediately,
-    // the rest fade on their own timers.
-    while (stack.children.length >= 4) stack.firstChild.remove();
-    stack.appendChild(notification);
-    this.log('Notification created:', type, title);
-    return notification;
-  }
-
-  removeNotification(notification) {
-    if (notification?.parentNode) {
-      notification.style.opacity = '0';
-      notification.style.transform = 'translateX(100%)';
-      setTimeout(() => {
-        if (notification.parentNode) {
-          notification.parentNode.removeChild(notification);
-        }
-      }, 300);
-    }
-  }
+  notificationStack() { return window.SeerrNotifications.notificationStack(); }
+  createNotification(...args) { return window.SeerrNotifications.createNotification(...args); }
+  removeNotification(notification) { return window.SeerrNotifications.removeNotification(notification); }
 
   createRequestButton(options = {}) {
     const button = this.el('button', { type: 'button', className: 'seerr-request-button request' }, [

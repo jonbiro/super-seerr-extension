@@ -201,7 +201,8 @@ test('flyout Plex button shows for available titles when configured, hides other
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<body></body>', { url: 'https://www.imdb.com/title/tt0111161/', runScripts: 'outside-only' });
   const { window } = dom;
-  window.eval(fs.readFileSync('src/shared/UIComponents.js', 'utf8'));
+  window.eval(fs.readFileSync('src/shared/NotificationCenter.js', 'utf8'));
+    window.eval(fs.readFileSync('src/shared/UIComponents.js', 'utf8'));
   const ui = new window.UIComponents({ siteName: 'TEST' });
   const panel = window.document.createElement('div');
   const elements = ui.createFlyoutContent({ title: 'Dune', year: 2021, mediaType: 'movie' }, panel);
@@ -538,11 +539,12 @@ test('saving with a token but a declined Plex grant says so instead of success-a
 });
 
 
-test('flyout toasts stack in one column and cap bursts', () => {
+test('flyout toasts stack in one column and cap bursts', async () => {
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM('<body></body>', { url: 'https://www.imdb.com/title/tt0111161/', runScripts: 'outside-only' });
   const { window } = dom;
   try {
+    window.eval(fs.readFileSync('src/shared/NotificationCenter.js', 'utf8'));
     window.eval(fs.readFileSync('src/shared/UIComponents.js', 'utf8'));
     const ui = new window.UIComponents({ siteName: 'TEST' });
     // duration 0: no auto-remove timers, so the count is exact.
@@ -550,6 +552,7 @@ test('flyout toasts stack in one column and cap bursts', () => {
     const stack = window.document.querySelector('.seerr-notification-stack');
     assert.ok(stack, 'toasts share one stack container');
     assert.equal(stack.children.length, 4, 'a burst is capped instead of piling up');
+    await new Promise(resolve => setTimeout(resolve, 10));
     const titles = [...stack.children].map(note => note.querySelector('.seerr-notification-title').textContent);
     assert.deepEqual(titles, ['Title 3', 'Title 4', 'Title 5', 'Title 6']);
   } finally {
@@ -638,6 +641,7 @@ test('flyout Plex button renders already-on-watchlist as disabled state', async 
   const dom = new JSDOM('<body></body>', { url: 'https://www.imdb.com/title/tt0111161/', runScripts: 'outside-only' });
   const { window } = dom;
   try {
+    window.eval(fs.readFileSync('src/shared/NotificationCenter.js', 'utf8'));
     window.eval(fs.readFileSync('src/shared/UIComponents.js', 'utf8'));
     const ui = new window.UIComponents({ siteName: 'TEST' });
     const panel = window.document.createElement('div');

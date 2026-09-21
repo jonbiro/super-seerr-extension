@@ -22,7 +22,7 @@ const MediaValidation = globalThis.MediaValidation;
 // the saved origin instead, once the user grants that optional host permission.
 const OVERLAY_SCRIPT_ID = 'seerr-overlay';
 const OVERLAY_SCRIPT_FILES = {
-  js: ['src/shared/SeasonPicker.js', 'src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/OverlayCache.js', 'src/content/RatingsPresentation.js', 'src/content/SeerrSession.js', 'src/content/FilterPresets.js', 'src/content/RatingQueue.js', 'src/content/seerr-integration.js'],
+  js: ['src/shared/NotificationCenter.js', 'src/shared/SeasonPicker.js', 'src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/OverlayCache.js', 'src/content/RatingsPresentation.js', 'src/content/SeerrSession.js', 'src/content/FilterPresets.js', 'src/content/RatingQueue.js', 'src/content/seerr-integration.js'],
   css: ['src/content/seerr-overlay.css']
 };
 

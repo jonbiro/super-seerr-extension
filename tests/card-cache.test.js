@@ -369,6 +369,7 @@ test('overlay toasts share one corner column and burst-evicted oldest-first', as
   const stack = fixture.window.document.querySelector('.seerr-notification-stack');
   assert.ok(stack, 'toasts share one stack container');
   assert.equal(stack.children.length, 4, 'a burst is capped instead of covering the page');
+  await new Promise(resolve => setTimeout(resolve, 10));
   const titles = [...stack.children].map(note => note.querySelector('.seerr-notification-title').textContent);
   assert.deepEqual(titles, ['Title 3', 'Title 4', 'Title 5', 'Title 6']);
 });

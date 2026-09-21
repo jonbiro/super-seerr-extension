@@ -843,6 +843,7 @@ for (const [outcomes, kind, heading] of [
     f.window.chrome.runtime.sendMessage = async message => message.action === 'requestMedia' ? { success: outcomes[sent++] } : original(message);
     doc.querySelector('.confirm-btn').click();
     await new Promise(resolve => setTimeout(resolve, outcomes.length > 1 ? 550 : 0)); await settle();
+    await new Promise(resolve => setTimeout(resolve, 10));
     const note = doc.querySelector('.seerr-notification');
     assert.equal(note.classList.contains(kind), true);
     assert.equal(note.querySelector('.seerr-notification-title').textContent, heading);

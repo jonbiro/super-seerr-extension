@@ -1510,26 +1510,8 @@
   // Everything here is textContent: titles reaching this point are Seerr's
   // own strings and must never become markup.
   function notifyResult(title, message, kind) {
-    let stack = document.querySelector('.seerr-notification-stack');
-    if (!stack) {
-      stack = document.createElement('div');
-      stack.className = 'seerr-notification-stack';
-      stack.setAttribute('data-seerr-overlay', 'true');
-      document.body.appendChild(stack);
-    }
-    const note = document.createElement('div');
-    note.className = `seerr-notification ${kind}`;
-    note.setAttribute('role', kind === 'error' ? 'alert' : 'status');
-    const heading = document.createElement('div');
-    heading.className = 'seerr-notification-title';
-    heading.textContent = title;
-    const body = document.createElement('div');
-    body.className = 'seerr-notification-message';
-    body.textContent = message;
-    note.append(heading, body);
-    while (stack.children.length >= 4) stack.firstChild.remove();
-    stack.appendChild(note);
-    setTimeout(() => note.remove(), 5000);
+    const note = window.SeerrNotifications.createNotification(title, message, kind);
+    note.parentElement.setAttribute('data-seerr-overlay', 'true');
   }
 
   // Per-card Plex action for grids (discover, search, watchlist, …): available

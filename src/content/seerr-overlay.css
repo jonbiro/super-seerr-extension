@@ -656,3 +656,12 @@
 .seerr-bulk-action-bar button:disabled { opacity: .5; cursor: default; }
 
 .seerr-bulk-action-bar button:focus-visible, .seerr-select-checkbox:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
+
+/* Dismissal is available for persistent errors and for keyboard users. */
+.seerr-notification { position: relative; padding-right: 48px; }
+.seerr-notification-close {
+  position: absolute; top: 4px; right: 4px; width: 36px; height: 36px;
+  border: 0; border-radius: 4px; background: transparent; color: #f9fafb;
+  cursor: pointer; font-size: 22px; line-height: 1;
+}
+.seerr-notification-close:focus-visible { outline: 2px solid #93c5fd; outline-offset: -2px; }

@@ -5,6 +5,7 @@ for (const kind of ['title', 'season']) {
   test(`${kind} picker fits a narrow host page without a CSS reset and restores keyboard focus`, async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });
     await page.setContent('<button id="opener">Choose</button>');
+    await page.addScriptTag({ path: path.resolve('src/shared/NotificationCenter.js') });
     await page.addScriptTag({ path: path.resolve('src/shared/UIComponents.js') });
     await page.addScriptTag({ path: path.resolve('src/shared/SeasonPicker.js') });
     await page.locator('#opener').focus();

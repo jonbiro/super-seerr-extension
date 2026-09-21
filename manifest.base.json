@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Super Seerr",
-  "version": "3.5.29",
+  "version": "3.5.30",
   "description": "Request movies and TV from seven discovery sites, with ratings, filters and request management for your Seerr server.",
   "permissions": [
     "storage",
@@ -38,6 +38,7 @@
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
         "src/shared/SeasonPicker.js",
+        "src/shared/NotificationCenter.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/imdb-integration.js"
@@ -55,6 +56,7 @@
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
         "src/shared/SeasonPicker.js",
+        "src/shared/NotificationCenter.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/rt-integration.js"
@@ -72,6 +74,7 @@
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
         "src/shared/SeasonPicker.js",
+        "src/shared/NotificationCenter.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/tmdb-integration.js"
@@ -87,6 +90,7 @@
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
         "src/shared/SeasonPicker.js",
+        "src/shared/NotificationCenter.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/letterboxd-integration.js"
@@ -104,6 +108,7 @@
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
         "src/shared/SeasonPicker.js",
+        "src/shared/NotificationCenter.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/metacritic-integration.js"
@@ -123,6 +128,7 @@
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
         "src/shared/SeasonPicker.js",
+        "src/shared/NotificationCenter.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/trakt-integration.js"
@@ -140,6 +146,7 @@
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
         "src/shared/SeasonPicker.js",
+        "src/shared/NotificationCenter.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/filmweb-integration.js"

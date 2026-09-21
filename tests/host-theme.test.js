@@ -12,6 +12,7 @@ function page({ bodyBackground = '', htmlBackground = '', prefersDark = false } 
   if (bodyBackground) window.document.body.style.background = bodyBackground;
   if (htmlBackground) window.document.documentElement.style.background = htmlBackground;
   window.matchMedia = query => ({ matches: prefersDark && query.includes('dark'), media: query });
+  window.eval(fs.readFileSync('src/shared/NotificationCenter.js', 'utf8'));
   window.eval(fs.readFileSync('src/shared/UIComponents.js', 'utf8'));
   window.eval('window.__ui = new UIComponents({ siteName: "IMDB", theme: "flyout" });');
   return { dom, window, ui: window.__ui };

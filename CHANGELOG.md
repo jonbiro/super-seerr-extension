@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.30]
+
+- Pause notification dismissal while hovered or keyboard-focused, and keep errors visible until dismissed.
+- Share notification behavior between site flyouts and the Seerr overlay, including accessible dismissal controls.
+- Insert empty live regions before updating message text, and preserve focused notifications during bursts.
+- Add browser checks for timing, persistent errors, dismissal and live-region initialization; VoiceOver verification remains separate.
+
 ## [3.5.29]
 
 - Serialize preset saves and deletions in the worker so simultaneous tabs preserve each other’s changes.

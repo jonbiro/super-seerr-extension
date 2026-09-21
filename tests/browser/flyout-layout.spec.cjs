@@ -5,6 +5,7 @@ test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 320 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setContent('<form id="host-form"></form>');
+  await page.addScriptTag({ path: path.resolve('src/shared/NotificationCenter.js') });
   await page.addScriptTag({ path: path.resolve('src/shared/UIComponents.js') });
 });
 
@@ -49,4 +50,38 @@ test('injected request buttons never submit a host page form', async ({ page }) 
   });
   await page.getByRole('button', { name: 'Request on Seerr' }).click();
   expect(await page.evaluate(() => window.submitted)).toBe(0);
+});
+
+test('notification timers pause for hover and focus; errors wait for dismissal', async ({ page }) => {
+  await page.clock.install();
+  await page.evaluate(() => {
+    new UIComponents().injectStyles();
+    new UIComponents().createNotification('Read this', 'Enough time to read', 'info', 5000);
+  });
+  await page.clock.runFor(10);
+  const note = page.locator('.seerr-notification');
+  await note.hover();
+  await page.clock.runFor(6000);
+  await expect(note).toBeVisible();
+  await note.getByRole('button', { name: 'Dismiss notification' }).focus();
+  await page.mouse.move(0, 0);
+  await page.clock.runFor(6000);
+  await expect(note).toBeVisible();
+  await page.evaluate(() => document.activeElement.blur());
+  await page.clock.runFor(5100);
+  await expect(note).toHaveCount(0);
+  await page.evaluate(() => new UIComponents().createNotification('Request failed', 'Check your connection and retry.', 'error'));
+  await page.clock.runFor(60000);
+  await expect(page.getByRole('alert')).toContainText('Request failed');
+  await page.getByRole('button', { name: 'Dismiss notification' }).click();
+  await expect(note).toHaveCount(0);
+});
+
+test('notifications establish an empty live region before updating its text', async ({ page }) => {
+  const initial = await page.evaluate(() => {
+    const note = new UIComponents().createNotification('Saved', 'Your changes are saved.', 'info', 0);
+    return { connected: note.isConnected, role: note.getAttribute('role'), text: note.textContent, atomic: note.getAttribute('aria-atomic') };
+  });
+  expect(initial).toEqual({ connected: true, role: 'status', text: '', atomic: 'true' });
+  await expect(page.getByRole('status')).toContainText('Your changes are saved.');
 });
