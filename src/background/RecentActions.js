@@ -4,7 +4,7 @@
   const kinds = new Set(['request', 'seerr-watchlist', 'plex-watchlist']);
   function clean(entry) {
     if (!entry || !kinds.has(entry.kind) || !['movie', 'tv'].includes(entry.mediaType) ||
-        !Number.isFinite(entry.at) || typeof entry.title !== 'string') return null;
+        !Number.isFinite(entry.at) || !Number.isFinite(new Date(entry.at).getTime()) || typeof entry.title !== 'string') return null;
     const result = { kind: entry.kind, mediaType: entry.mediaType, title: entry.title.slice(0, 200), at: entry.at };
     try {
       const url = new URL(entry.server);
@@ -38,7 +38,7 @@
       await Promise.all(Array.from({ length: Math.min(4, rows.length) }, async () => {
         while (cursor < rows.length) {
           const index = cursor++, entry = rows[index];
-          const result = { at: entry.at, title: entry.title, mediaType: entry.mediaType, status: 'Status unavailable', url: null };
+          const result = { ...entry, status: 'Status unavailable', url: null };
           if (server && entry.server === new URL(server).href && entry.tmdbId) {
             result.url = `${server.replace(/\/$/, '')}/${entry.mediaType}/${entry.tmdbId}`;
             try {

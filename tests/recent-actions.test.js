@@ -76,3 +76,57 @@ test('popup history renders title text safely and clears through worker messages
   assert.match(dom.window.document.getElementById('recentActionsStatus').textContent, /No confirmed/);
   dom.window.close();
 });
+
+test('history rejects timestamps outside the Date range without losing valid entries', async () => {
+  const entry = { kind: 'request', title: 'Film', mediaType: 'movie', at: 0 };
+  const worker = await setup({ local: { recentActionsV1: [{ ...entry, at: 1e30 }, entry] } });
+  assert.equal((await worker.api.getRecentActions()).length, 1);
+});
+
+test('popup matches status snapshots by identity when new actions arrive', async () => {
+  const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
+  const old = { kind: 'request', title: 'Old film', mediaType: 'movie', at: 1, tmdbId: 1, server: 'https://seerr.test/' };
+  const newer = { ...old, title: 'New film', at: 2, tmdbId: 2 };
+  dom.window.chrome = { runtime: { sendMessage: async ({ action }) => ({ success: true, data: action === 'getRecentActions' ? [old, { ...old, at: 1e30 }] : [
+    { ...newer, status: 'Requested', url: 'https://seerr.test/movie/2' },
+    { ...old, status: 'Available', url: 'https://seerr.test/movie/1' }
+  ] }) } };
+  dom.window.eval(fs.readFileSync('src/popup/recent-actions.js', 'utf8'));
+  await new Promise(resolve => setImmediate(resolve));
+  const rows = dom.window.document.querySelectorAll('#recentActionsList li');
+  assert.equal(rows.length, 1);
+  assert.match(rows[0].textContent, /Old film.*Available/s);
+  assert.equal(rows[0].querySelector('a').href, 'https://seerr.test/movie/1');
+  dom.window.close();
+});
+
+test('late initial history cannot restore entries after clearing', async () => {
+  const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
+  let resolveInitial; let reads = 0;
+  dom.window.chrome = { runtime: { sendMessage: async ({ action }) => {
+    if (action === 'getRecentActions' && !reads++) return new Promise(resolve => { resolveInitial = resolve; });
+    return { success: true, data: [] };
+  } } };
+  dom.window.eval(fs.readFileSync('src/popup/recent-actions.js', 'utf8'));
+  dom.window.document.getElementById('clearRecentActions').click();
+  await new Promise(resolve => setImmediate(resolve));
+  resolveInitial({ success: true, data: [{ kind: 'request', title: 'Cleared film', mediaType: 'movie', at: 1 }] });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(dom.window.document.querySelectorAll('#recentActionsList li').length, 0);
+  assert.match(dom.window.document.getElementById('recentActionsStatus').textContent, /No confirmed/);
+  dom.window.close();
+});
+
+test('saved match inspection handles transport failures and can retry', async () => {
+  const dom = new JSDOM('<main></main>', { runScripts: 'outside-only' });
+  let fail = true;
+  dom.window.chrome = { runtime: { sendMessage: async () => { if (fail) throw new Error('Disconnected'); return { success: true, data: [] }; } } };
+  dom.window.eval(fs.readFileSync('src/options/support-tools.js', 'utf8'));
+  const button = dom.window.document.querySelector('button');
+  button.click(); await new Promise(resolve => setImmediate(resolve));
+  assert.match(dom.window.document.querySelector('[role=status]').textContent, /Could not load/);
+  assert.equal(button.disabled, false);
+  fail = false; button.click(); await new Promise(resolve => setImmediate(resolve));
+  assert.match(dom.window.document.querySelector('[role=status]').textContent, /No saved/);
+  dom.window.close();
+});

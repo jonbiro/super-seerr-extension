@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.14]
+
+- Match refreshed history statuses and links to stable action identities, and prevent delayed reads from restoring cleared history. Ignore invalid timestamps safely.
+- Make saved-match inspection recover from connection failures with retry feedback.
+- Give support tools a spaced, responsive Settings card and improve history controls, status/link separation and keyboard focus visibility.
+
 ## [3.5.13]
 
 - Keep automatic refreshes of aging cached cards inside the same four-job viewport queue. Navigation cancels waiting refreshes as well as first-time lookups.

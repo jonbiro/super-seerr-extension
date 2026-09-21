@@ -268,3 +268,9 @@ body {
 .diagnostic-row { margin: 12px 0; font-size: 12px; }
 .diagnostic-row p { margin: 4px 0 8px; }
 .diagnostic-row .button { padding: 6px 10px; font-size: 12px; }
+
+.recent-action-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.recent-action-controls .button { min-height: 40px; font-size: 12px; }
+.recent-action-state { display: block; margin-top: 6px; font-size: 12px; font-weight: 600; color: #374151; }
+.recent-actions li a { display: inline-block; padding: 5px 0; font-size: 12px; }
+.recent-actions button:focus-visible, .recent-actions a:focus-visible { outline: 3px solid #7c3aed; outline-offset: 2px; }

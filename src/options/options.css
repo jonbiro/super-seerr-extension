@@ -343,3 +343,14 @@ footer a:hover {
 .permission-warning-text { flex: 1 1 260px; line-height: 1.5; }
 .cache-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
 .cache-count { opacity: 0.75; }
+
+.support-tools { margin-top: 24px; padding: 20px; border: 1px solid #ddd6fe; border-radius: 12px; background: #faf8ff; }
+.support-tools h2 { margin: 0 0 10px; font-size: 18px; }
+.support-tools p { font-size: 13px; line-height: 1.6; color: #4b5563; margin: 10px 0; }
+.support-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.support-tools .button { min-height: 44px; white-space: normal; text-align: center; }
+.support-tools ul { list-style: none; padding: 0; margin: 16px 0 0; }
+.support-tools li { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid #e5e7eb; }
+.support-tools li span { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+.support-tools textarea { box-sizing: border-box; max-width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; margin-bottom: 12px; font: 12px/1.5 monospace; resize: vertical; }
+.support-tools button:focus-visible, .support-tools textarea:focus-visible { outline: 3px solid #7c3aed; outline-offset: 3px; }
