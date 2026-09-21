@@ -60,7 +60,7 @@
 
   // Update when settings change (e.g., user configures from options page).
   // The URL and feature flags sync; the API keys are device-local.
-  chrome.storage.onChanged.addListener((changes, namespace) => {
+  function handleSettingsChange(changes, namespace) {
     // Settings clears the cache by removing the key. Our own flushes always
     // write a value, so only a removal counts as a clear.
     if (namespace === 'local' && (changes.ratingsCacheEpoch ||
@@ -81,9 +81,14 @@
       injectOverlay();
       return;
     }
-    const relevant = (namespace === 'sync' && (changes.seerrUrl || changes.overlayFeatures)) ||
-      (namespace === 'local' && (changes.seerrApiKey || changes.plexToken));
+    const relevant = namespace === 'sync' && (changes.seerrUrl || changes.overlayFeatures);
     if (relevant) checkApiConfig().then(() => { cleanupOverlay(); injectOverlay(); });
+  }
+  chrome.storage.onChanged.addListener(handleSettingsChange);
+  chrome.runtime.onMessage?.addListener(message => {
+    if (message?.action !== 'seerrStateChanged') return;
+    if (message.cacheCleared) handleSettingsChange({ ratingsCacheEpoch: {} }, 'local');
+    else checkApiConfig().then(() => { cleanupOverlay(); injectOverlay(); });
   });
 
   const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';

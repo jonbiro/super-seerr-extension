@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.8]
+
+- Content-script ratings persistence now uses a validated worker bridge with origin/path/frame checks, bounded allowlisted data, and serialized cache clearing.
+- Local storage is restricted to trusted extension contexts before startup where supported. Chromium rejects content-script secret reads; Firefox 147.0.3 uses the bridge but does not expose this access-control API.
+- Safe worker notifications keep cache clearing and configuration changes working without exposing credentials through local-storage events. Legacy ratings verdict cleanup moved into the worker.
+
 ## [3.5.7]
 
 - TV flyouts and bulk requests now offer season selection with existing standard-quality availability before confirmation. TV requests send an explicit season array instead of requesting all seasons.

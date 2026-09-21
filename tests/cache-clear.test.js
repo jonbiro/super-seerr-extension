@@ -9,7 +9,10 @@ test('one clear operation invalidates worker memory, persisted layers and endpoi
   const worker = loadWorker({ local: { rtCacheV1: {}, overlayRatingsV1: {}, seerrRatingsUnavailableV1: {} } });
   await worker.ready;
   worker.api.cacheRottenTomatoesResult('movie:Old:', { rtCriticsScore: 1 }, Config.rtCacheTtlMs);
-  const reply = await new Promise(resolve => worker.listeners.message({ action: 'clearRatingsCache' }, {}, resolve));
+  const denied = await new Promise(resolve => worker.listeners.message({ action: 'clearRatingsCache' }, { url: 'https://seerr.example/discover', tab: { id: 1 } }, resolve));
+  assert.equal(denied.success, false);
+  assert.equal(worker.api.rtCache.size, 1);
+  const reply = await new Promise(resolve => worker.listeners.message({ action: 'clearRatingsCache' }, { url: 'chrome-extension://test/src/options/options.html' }, resolve));
   assert.equal(reply.success, true);
   assert.equal(worker.api.rtCache.size, 0);
   assert.equal(worker.api.rtCacheFlushTimer, null);

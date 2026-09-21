@@ -105,6 +105,7 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     const optionsUrl = `moz-extension://${uuid}/src/options/options.html`;
     await navigate(optionsUrl);
     assert.equal((await message({ action: 'ping' })).success, true);
+    const localAccessControls = await extensionScript('return typeof api.storage.local.setAccessLevel === "function";');
     assert.equal(await extensionScript('return await api.permissions.contains({ origins: ["http://127.0.0.1/*"] });'), false);
     await extensionScript('await api.storage.sync.set({ seerrUrl: arguments[0] }); await api.storage.local.set({ seerrApiKey: "smoke-key" });', [origin]);
     await message({ action: 'reloadSettings' });
@@ -168,6 +169,10 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
       });
       await api.scripting.executeScript({ target: { tabId: tab.id }, func: async () => {
         const result = await chrome.runtime.sendMessage({ action: 'getMediaCandidates', data: { title: 'The Thing', mediaType: 'movie' } });
+        const cache = await chrome.runtime.sendMessage({ action: 'getOverlayCache' });
+        document.body.dataset.cacheBridge = String(cache.success);
+        try { await chrome.storage.local.get('seerrApiKey'); document.body.dataset.localReadBlocked = 'no'; }
+        catch (_) { document.body.dataset.localReadBlocked = 'yes'; }
         const ui = new window.UIComponents();
         ui.chooseTitle(result.data, { title: 'The Thing' }).then(async choice => {
           document.body.dataset.chosenTitle = choice ? String(choice.tmdbId) : 'cancelled';
@@ -181,6 +186,9 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     const pickerHandle = (await action('/window/handles')).find(handle => !previousHandles.includes(handle));
     await action('/window', { handle: pickerHandle });
     await eventually(() => script('return document.querySelectorAll(".seerr-title-choice").length;'), 2, 'Firefox renders ambiguous title candidates');
+    assert.equal(await script('return document.body.dataset.cacheBridge;'), 'true');
+    if (localAccessControls) assert.equal(await script('return document.body.dataset.localReadBlocked;'), 'yes');
+    t.diagnostic(`Firefox local storage access controls available: ${localAccessControls}`);
     await script('document.querySelectorAll(".seerr-title-choice")[1].click();');
     await eventually(() => script('return document.body.dataset.chosenTitle;'), '911', 'Firefox picker returns the explicit choice');
     await eventually(() => script('return document.querySelectorAll(".seerr-season-picker input").length;'), 3, 'Firefox renders season availability');

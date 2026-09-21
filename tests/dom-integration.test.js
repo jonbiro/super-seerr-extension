@@ -53,6 +53,9 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
     script.textContent = JSON.stringify(embedded);
     window.document.head.append(script);
   }
+  const cacheMessage = require('./helpers/cache-bridge').cacheBridge({ settings: syncedStorage(), local: window.chrome.storage.local, url: window.location.href });
+  const send = window.chrome.runtime.sendMessage;
+  window.chrome.runtime.sendMessage = message => ['getOverlayCache', 'putOverlayCache'].includes(message.action) ? cacheMessage(message) : send(message);
   for (const file of ['RatingsModel', 'RatingsConfig']) window.eval(source(`src/shared/${file}.js`));
   require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(source('src/content/seerr-integration.js').replace(/\}\)\(\);\s*$/, `window.testOverlay = { injectCardBadges, injectSortFilterControls, handleRouteChange, extractSeerrNativeRatings, loadMoreCards, scoreAllCards }; })();`));
@@ -142,7 +145,11 @@ test('bulk dialog supports keyboard selection and cancellation stops subsequent 
   assert.equal(doc.querySelector('[role="dialog"]').getAttribute('aria-modal'), 'true');
   assert.equal(doc.activeElement.className, 'cancel-btn');
   let requests = 0, release;
-  fixture.window.chrome.runtime.sendMessage = () => { requests++; return new Promise(resolve => { release = resolve; }); };
+  const originalSend = fixture.window.chrome.runtime.sendMessage;
+  fixture.window.chrome.runtime.sendMessage = message => {
+    if (message.action !== 'requestMedia') return originalSend(message);
+    requests++; return new Promise(resolve => { release = resolve; });
+  };
   doc.querySelector('.confirm-btn').click();
   assert.equal(requests, 1);
   doc.querySelector('[role="dialog"]').dispatchEvent(new fixture.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

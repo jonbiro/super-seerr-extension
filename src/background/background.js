@@ -11,6 +11,7 @@ import './PlexWatchlist.js';
 import './RecentActions.js';
 import './PopupDiagnostics.js';
 import './SeasonRequests.js';
+import './OverlayStorage.js';
 const RatingsConfig = globalThis.RatingsConfig;
 const MediaValidation = globalThis.MediaValidation;
 
@@ -255,6 +256,15 @@ class SeerrAPI {
           break;
         }
 
+        case 'getOverlayCache': {
+          sendResponse({ success: true, data: await this.getOverlayCache(sender) });
+          break;
+        }
+        case 'putOverlayCache': {
+          sendResponse({ success: true, data: await this.putOverlayCache(request.data, sender) });
+          break;
+        }
+
         case 'getSeasonOptions': {
           sendResponse({ success: true, data: await this.getSeasonOptions(request.data) });
           break;
@@ -360,6 +370,7 @@ class SeerrAPI {
         }
 
         case 'clearRatingsCache': {
+          this.requireExtensionPage(sender);
           await this.clearRatingsCache();
           sendResponse({ success: true });
           break;
@@ -715,7 +726,7 @@ class SeerrAPI {
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
 
-Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests);
+Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests, globalThis.OverlayStorage);
 
 const seerrAPI = new SeerrAPI();
 let initializing = true;
@@ -729,6 +740,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
   seerrAPI.log('🔄 [Background] Settings changed, reloading...');
   seerrAPI.loadSettings()
     .then(() => seerrAPI.syncOverlayRegistration())
+    .then(() => seerrAPI.notifyContentState())
     .then(() => {
       seerrAPI.log('🔄 [Background] Settings reloaded. Current URL:', seerrAPI.baseUrl);
       seerrAPI.log('🔄 [Background] Settings reloaded. API Key set:', !!seerrAPI.apiKey);
@@ -754,7 +766,9 @@ chrome.runtime.onInstalled.addListener((details) => {
 
 // Async init — runs migration and loads settings after listeners are registered
 const settingsReady = (async () => {
+  await seerrAPI.restrictLocalStorage();
   await seerrAPI.migrateStorage();
+  await chrome.storage.local.remove('seerrRatingsUnavailableV1');
   await seerrAPI.loadSettings();
   await seerrAPI.syncOverlayRegistration();
 })().finally(() => { initializing = false; });

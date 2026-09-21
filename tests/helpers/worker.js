@@ -67,7 +67,7 @@ function loadWorker({
           for (const id of ids) registrations.splice(registrations.findIndex(script => script.id === id), 1);
         }
       },
-      runtime: { onMessage: { addListener: fn => { listeners.message = fn; } }, onInstalled: { addListener: fn => { listeners.installed = fn; } } }
+      runtime: { id: 'test', getURL: path => `chrome-extension://test/${path}`, onMessage: { addListener: fn => { listeners.message = fn; } }, onInstalled: { addListener: fn => { listeners.installed = fn; } } }
     }
   });
   // Simulate a browser that does not expose an API the worker reaches for.

@@ -58,6 +58,9 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
   for (const file of ['RatingsModel', 'RatingsConfig']) {
     window.eval(fs.readFileSync(`src/shared/${file}.js`, 'utf8'));
   }
+  const cacheMessage = require('./helpers/cache-bridge').cacheBridge({ settings: () => window.chrome.storage.sync.get(), local: window.chrome.storage.local, url: window.location.href });
+  const send = window.chrome.runtime.sendMessage;
+  window.chrome.runtime.sendMessage = message => ['getOverlayCache', 'putOverlayCache'].includes(message.action) ? cacheMessage(message) : send(message);
   require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(fs.readFileSync('src/content/seerr-integration.js', 'utf8').replace(/\}\)\(\);\s*$/, `window.testOverlay = {
     injectCardBadges, injectPlexCardButtons, hydrateCardsFromListItems, getRatings,
@@ -291,6 +294,9 @@ test('poster matching ignores query strings and shared filenames', async t => {
   };
   window.fetch = async () => ({ ok: true, json: async () => ({ results: [] }) });
   for (const file of ['RatingsModel', 'RatingsConfig']) window.eval(fs.readFileSync('src/shared/' + file + '.js', 'utf8'));
+  const cacheMessage = require('./helpers/cache-bridge').cacheBridge({ settings: () => window.chrome.storage.sync.get(), local: window.chrome.storage.local, url: window.location.href });
+  const send = window.chrome.runtime.sendMessage;
+  window.chrome.runtime.sendMessage = message => ['getOverlayCache', 'putOverlayCache'].includes(message.action) ? cacheMessage(message) : send(message);
   require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(fs.readFileSync('src/content/seerr-integration.js', 'utf8').replace(/\}\)\(\);\s*$/, 'window.testOverlay = { hydrateCardsFromListItems, injectPlexCardButtons }; })();'));
   for (let i = 0; i < 30; i++) await new Promise(resolve => setImmediate(resolve));

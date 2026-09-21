@@ -28,7 +28,9 @@
       const expected = generation;
       persistedRatingsReady ??= (async () => {
         try {
-          const local = await chrome.storage.local.get([PERSISTED_RATINGS_KEY, 'ratingsCacheEpoch']);
+          const response = await chrome.runtime.sendMessage({ action: 'getOverlayCache' });
+          if (!response?.success) throw new Error(response?.error || 'Cache read unavailable');
+          const local = response.data;
           if (expected !== generation) return loadPersistedRatings();
           epoch = local.ratingsCacheEpoch ?? 0;
           const stored = local[PERSISTED_RATINGS_KEY];
@@ -94,8 +96,7 @@
       }
       persistedRatingsFlushing = (persistedRatingsFlushing ?? Promise.resolve()).then(async () => {
         try {
-          const local = await chrome.storage.local.get(['ratingsCacheEpoch']);
-          if (!server || expected !== generation || server !== getServer()?.href || (local.ratingsCacheEpoch ?? 0) !== writeEpoch) return;
+          if (!server || expected !== generation || server !== getServer()?.href) return;
           const entries = {};
           for (const [key, value] of ratingsCache) {
             if (key.startsWith('pending:') || !value) continue;
@@ -119,9 +120,10 @@
               log('Could not project the title index:', error);
             }
           }
-          await chrome.storage.local.set({
-            [PERSISTED_RATINGS_KEY]: { server, epoch: writeEpoch, matcher: Config.matcherVersion, entries, index }
+          const reply = await chrome.runtime.sendMessage({ action: 'putOverlayCache',
+            data: { server, epoch: writeEpoch, matcher: Config.matcherVersion, entries, index }
           });
+          if (!reply?.success) throw new Error(reply?.error || 'Cache write unavailable');
         } catch (error) {
           log('Could not persist the ratings cache:', error);
         }

@@ -88,6 +88,9 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local
     },
     window: { RatingsModel: Model, RatingsConfig: Config, location: { pathname, search: '', origin: 'https://seerr.example', href: `https://seerr.example${pathname}` }, addEventListener() {} }
   });
+  const cacheMessage = require('./cache-bridge').cacheBridge({ settings, local: context.chrome.storage.local, url: context.window.location.href });
+  const send = context.chrome.runtime.sendMessage;
+  context.chrome.runtime.sendMessage = message => ['getOverlayCache', 'putOverlayCache'].includes(message.action) ? cacheMessage(message) : send(message);
   require('./overlay-modules').loadOverlayModulesInContext(context);
   const source = fs.readFileSync(path.join(__dirname, '../../src/content/seerr-integration.js'), 'utf8');
   // Expose closure functions in the test VM only; execute the real production code.

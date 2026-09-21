@@ -35,8 +35,8 @@
 
     function loadRatingsAvailability() {
       // Retire legacy server-wide verdicts from older extension versions.
-      ratingsAvailabilityReady ??= chrome.storage.local.remove(['seerrRatingsUnavailableV1'])
-        .catch(error => log('Could not remove legacy ratings verdict:', error));
+      // Legacy storage cleanup belongs to the trusted worker at startup.
+      ratingsAvailabilityReady ??= Promise.resolve();
       return ratingsAvailabilityReady;
     }
 

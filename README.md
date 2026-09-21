@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.5.7-blue)
+![Version](https://img.shields.io/badge/version-3.5.8-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -115,3 +115,9 @@ The popup reports Seerr connectivity, host access, API-key acceptance, and Plex 
 Use **Choose TV seasons** in a TV flyout to see availability and select seasons, including when other seasons are already available. Only the selected seasons are requested after confirmation. Bulk review requires a season choice for each TV title before the final request button enables. Cancelling or navigating away sends nothing further.
 
 Availability is for standard quality. Already available, partially available, pending, processing, or already-requested seasons are disabled. The worker refreshes availability before posting; if it changed, review again. Specials require support in your Seerr settings. These restrictions follow [Seerr's request handling](https://github.com/seerr-team/seerr/blob/develop/server/entity/MediaRequest.ts).
+
+### Storage isolation
+
+Content scripts access cached ratings through worker messages restricted to the configured Seerr origin and base path. The worker validates and bounds the cache schema; it never returns arbitrary local storage. Cache clearing is limited to extension pages and serialized with cache writes. Settings-change notifications contain no keys or tokens.
+
+Where `storage.local.setAccessLevel` is available, local storage is restricted to trusted extension contexts before initialization. Chromium verification confirms content-script key reads are rejected. Firefox 147.0.3 lacks this API: the worker bridge works, but API-enforced local-storage isolation is unavailable there. This distinction follows the browser's [storage access controls](https://developer.chrome.com/docs/extensions/reference/api/storage#type-AccessLevel), not a claim that Firefox provides the same restriction.

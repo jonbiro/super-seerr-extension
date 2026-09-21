@@ -304,3 +304,39 @@ test('TV request review shows availability and posts only explicitly selected se
     expect(posts[0].seasons).toEqual([2]); expect(posts[0].mediaId).toBe(920);
   } finally { server.off('request', capture); await page.close(); }
 });
+
+test('content scripts cannot access local secrets; cache bridge and clear notifications still work', async () => {
+  const page = await context.newPage();
+  await page.goto(`${origin}/discover`); await page.bringToFront();
+  await expect(page.locator('.seerr-card-badge')).toHaveCount(2);
+  const tabId = await options.evaluate(async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0].id);
+  const result = await options.evaluate(async tabId => {
+    const [result] = await chrome.scripting.executeScript({ target: { tabId }, func: async () => {
+      let denied = false;
+      try { await chrome.storage.local.get('seerrApiKey'); } catch (_) { denied = true; }
+      const response = await chrome.runtime.sendMessage({ action: 'getOverlayCache' });
+      return { denied, success: response.success, keys: Object.keys(response.data || {}) };
+    } }); return result.result;
+  }, tabId);
+  expect(result.denied).toBe(true); expect(result.success).toBe(true);
+  expect(result.keys.sort()).toEqual(['overlayRatingsV1', 'ratingsCacheEpoch']);
+  await options.evaluate(async tabId => {
+    await chrome.scripting.executeScript({ target: { tabId }, func: () => {
+      document.body.dataset.cacheCleared = 'no';
+      chrome.runtime.onMessage.addListener(message => {
+        if (message.action !== 'seerrStateChanged') return;
+        if (message.cacheCleared) document.body.dataset.cacheCleared = 'yes';
+        else { document.body.dataset.configChanged = 'yes'; document.body.dataset.stateKeys = Object.keys(message).sort().join(','); }
+      });
+    } });
+  }, tabId);
+  await options.evaluate(() => chrome.runtime.sendMessage({ action: 'clearRatingsCache' }));
+  await expect(page.locator('body')).toHaveAttribute('data-cache-cleared', 'yes');
+  await expect(page.locator('.seerr-card-badge')).toHaveCount(2);
+  expect(await options.evaluate(async () => (await chrome.storage.local.get('seerrApiKey')).seerrApiKey)).toBe('smoke-key');
+  await options.evaluate(() => chrome.storage.local.set({ seerrApiKey: 'smoke-key-2' }));
+  await expect(page.locator('body')).toHaveAttribute('data-config-changed', 'yes');
+  await expect(page.locator('body')).toHaveAttribute('data-state-keys', 'action,cacheCleared');
+  await options.evaluate(() => chrome.storage.local.set({ seerrApiKey: 'smoke-key' }));
+  await page.close();
+});
