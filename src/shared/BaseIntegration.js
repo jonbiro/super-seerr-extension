@@ -312,6 +312,8 @@ class BaseIntegration {
   }
 
   async updateStatus() {
+    // The active Plex action owns its pending/result UI until it settles.
+    if (this._plexWatchlistAttempt) return;
     const generation = this._statusGeneration = (this._statusGeneration || 0) + 1;
     const media = this.mediaData;
     const elements = this.uiElements;

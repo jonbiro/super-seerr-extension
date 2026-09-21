@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.51]
+
+- Skip overlapping status refreshes while a Plex add is active so its pending label and disabled state cannot be reset by a stale watchlist read.
+- Add a regression covering refresh during an add and the final success state.
+
 ## [3.5.50]
 
 - Keep the Plex watchlist button disabled after successful or already-present adds instead of immediately allowing another click.
