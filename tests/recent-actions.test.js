@@ -130,3 +130,35 @@ test('saved match inspection handles transport failures and can retry', async ()
   assert.match(dom.window.document.querySelector('[role=status]').textContent, /No saved/);
   dom.window.close();
 });
+
+test('saved matches search server and title details without rendering markup or credentials', async t => {
+  const dom = new JSDOM('<main></main>', { runScripts: 'outside-only' });
+  t.after(() => dom.window.close());
+  const entries = [
+    { key: JSON.stringify(['https://seerr.example/base/', 'tv', 'Original']), title: 'Original', selectedTitle: '<b>Chosen</b>', mediaType: 'tv', tmdbId: 42, year: 2020 },
+    { key: JSON.stringify(['https://user:secret@private.example/']), title: 'Another', selectedTitle: 'Elsewhere', mediaType: 'movie', tmdbId: 55 }
+  ];
+  let removed;
+  dom.window.chrome = { runtime: { sendMessage: async message => {
+    if (message.action === 'removeTitleCorrection') { removed = message.key; return { success: true }; }
+    return { success: true, data: entries };
+  } } };
+  dom.window.eval(fs.readFileSync('src/options/support-tools.js', 'utf8'));
+  const doc = dom.window.document;
+  doc.querySelector('button').click(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(doc.querySelectorAll('li').length, 2);
+  assert.doesNotMatch(doc.body.textContent, /secret/);
+  assert.equal(doc.querySelector('b'), null);
+  const search = doc.querySelector('input[type=search]');
+  search.value = 'SEERR.EXAMPLE/base'; search.dispatchEvent(new dom.window.Event('input'));
+  assert.equal(doc.querySelectorAll('li').length, 1);
+  assert.match(doc.querySelector('details').textContent, /Original titleOriginalSelected title<b>Chosen<\/b>/);
+  search.value = 'nonexistent'; search.dispatchEvent(new dom.window.Event('input'));
+  assert.match(doc.querySelector('[role=status]').textContent, /0 of 2/);
+  search.value = '42'; search.dispatchEvent(new dom.window.Event('input'));
+  doc.querySelector('li button').click(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(removed, entries[0].key);
+  assert.equal(doc.activeElement, search);
+  search.value = ''; search.dispatchEvent(new dom.window.Event('input'));
+  assert.equal(doc.querySelectorAll('li').length, 1);
+});

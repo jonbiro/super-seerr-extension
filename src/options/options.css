@@ -354,3 +354,10 @@ footer a:hover {
 .support-tools li span { flex: 1 1 180px; min-width: 0; overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
 .support-tools textarea { box-sizing: border-box; max-width: 100%; padding: 12px; border: 1px solid #d1d5db; border-radius: 8px; margin-bottom: 12px; font: 12px/1.5 monospace; resize: vertical; }
 .support-tools button:focus-visible, .support-tools textarea:focus-visible { outline: 3px solid #7c3aed; outline-offset: 3px; }
+.support-tools input[type="search"] { box-sizing: border-box; width: 100%; margin-top: 16px; padding: 10px; border: 1px solid #d1d5db; border-radius: 6px; }
+.support-tools details { flex: 1 1 100%; min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+.support-tools summary { cursor: pointer; padding: 8px 0; }
+.support-tools dl { display: grid; grid-template-columns: minmax(80px, 1fr) minmax(0, 3fr); gap: 8px; }
+.support-tools dt { font-weight: 600; }
+.support-tools dd { margin: 0; }
+.support-tools input:focus-visible, .support-tools summary:focus-visible { outline: 3px solid #7c3aed; outline-offset: 3px; }

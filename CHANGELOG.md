@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.31]
+
+- Search saved title matches by original or selected title, server, year, type and TMDB ID.
+- Show server labels and expandable individual match details without exposing credentials from malformed saved URLs.
+- Keep filtering consistent after forgetting a match and return keyboard focus to search.
+- Add unit and browser coverage for search, details, deletion and safe text rendering.
+
 ## [3.5.30]
 
 - Pause notification dismissal while hovered or keyboard-focused, and keep errors visible until dismissed.

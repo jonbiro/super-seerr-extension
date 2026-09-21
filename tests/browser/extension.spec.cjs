@@ -372,6 +372,12 @@ test('Settings inspects and forgets remembered matches and exports a redacted di
   await options.getByRole('button', { name: 'Inspect saved title matches' }).click();
   const row = options.locator('li').filter({ hasText: 'TMDB 911' });
   await expect(row).toContainText('The Thing');
+  await options.getByRole('searchbox', { name: 'Search saved matches' }).fill('no matching title');
+  await expect(row).toHaveCount(0);
+  await options.getByRole('searchbox', { name: 'Search saved matches' }).fill('911');
+  await row.locator('summary').click();
+  await expect(row.locator('dl')).toBeVisible();
+  await expect(row.locator('dl')).toContainText(new URL(origin).host);
   await row.getByRole('button', { name: 'Forget match' }).click();
   await expect(row).toHaveCount(0);
   await options.getByRole('button', { name: 'Prepare diagnostic report' }).click();
