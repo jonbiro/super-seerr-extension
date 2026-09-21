@@ -180,7 +180,7 @@ class BaseIntegration {
         // A same-page retry must not replace the identity behind an open panel
         // while its status lookup is still using that identity.
         if (this.isFlyoutExpanded() && this.mediaData
-          && ['title', 'mediaType', 'tmdbId', 'year'].every(key => this.mediaData[key] === mediaData[key])) return;
+          && ['title', 'mediaType', 'tmdbId', 'imdbId', 'year'].every(key => this.mediaData[key] === mediaData[key])) return;
         if (this.isFlyoutExpanded()) this.cleanupUI();
         this.mediaData = mediaData;
         this.log('Valid media data found, setting up UI...');

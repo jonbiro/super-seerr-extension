@@ -193,3 +193,22 @@ test('an old extraction cannot replace a newer page identity', async t => {
   assert.equal(integration.mediaData.title, 'New title');
   assert.deepEqual(titles, ['New title']);
 });
+
+test('a newly discovered IMDb identity replaces an expanded same-page flyout', async t => {
+  const fixture = loadIntegration(); t.after(() => fixture.window.close());
+  const integration = new fixture.window.BaseIntegration('Probe', { uiTheme: 'flyout' });
+  t.after(() => integration.destroy());
+  let imdbId = null;
+  integration.extractMediaData = async () => ({ title: 'Example', mediaType: 'movie', year: 2020, imdbId });
+  integration.updateStatus = async () => {};
+  await integration.extractAndSetup();
+  const original = integration.uiElements.flyout;
+  original.classList.add('expanded');
+  await integration.extractAndSetup();
+  assert.equal(integration.uiElements.flyout, original, 'unchanged identity preserves the open panel');
+  imdbId = 'tt1234567';
+  await integration.extractAndSetup();
+  assert.equal(integration.mediaData.imdbId, imdbId);
+  assert.equal(original.isConnected, false, 'the old action identity is removed');
+  assert.equal(fixture.window.document.querySelectorAll('.seerr-flyout').length, 1);
+});

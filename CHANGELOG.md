@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.48]
+
+- Refresh an expanded flyout when its extracted IMDb ID changes, even if the title and year remain the same.
+- Add a lifecycle regression proving unchanged identities preserve the panel and newly discovered IDs replace stale action metadata.
+
 ## [3.5.47]
 
 - Scan all links in IMDb hero metadata for the release year when the first link is a media type or content rating.
