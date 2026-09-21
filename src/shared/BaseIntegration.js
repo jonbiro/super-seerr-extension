@@ -327,14 +327,14 @@ class BaseIntegration {
 
       // Plex token state is independent of Seerr status; the worker reports
       // only whether a token exists, never the token itself.
+      let plexConfigured = false;
       try {
         const config = await this.client.sendMessage({ action: 'getConfigState' });
-        this.plexConfigured = config?.success === true && config.data?.plexConfigured === true;
-      } catch (_) {
-        this.plexConfigured = false;
-      }
+        plexConfigured = config?.success === true && config.data?.plexConfigured === true;
+      } catch (_) { /* Treat current configuration failures as disconnected. */ }
 
       if (!isCurrent()) return;
+      this.plexConfigured = plexConfigured;
 
       // Plex state resolves alongside the Seerr lookup, never ahead of
       // rendering: a slow or failed lookup keeps the Add button rather than

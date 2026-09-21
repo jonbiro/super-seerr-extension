@@ -76,3 +76,21 @@ test('late Plex rendering changes only its own button', t => {
   assert.equal(plexButton.textContent, 'On Plex Watchlist ✓');
   assert.equal(plexButton.disabled, true);
 });
+
+for (const outcome of ['unconfigured', 'failure']) {
+  test(`obsolete config ${outcome} cannot overwrite current Plex state`, async t => {
+    const f = fixture(t);
+    let resolveOld, rejectOld;
+    f.integration.client.sendMessage = () => new Promise((resolve, reject) => { resolveOld = resolve; rejectOld = reject; });
+    const old = f.integration.updateStatus();
+    f.integration.client.sendMessage = async () => ({ success: true, data: { plexConfigured: true } });
+    await f.integration.updateStatus();
+    if (outcome === 'failure') rejectOld(new Error('old request failed'));
+    else resolveOld({ success: true, data: { plexConfigured: false } });
+    await old;
+    assert.equal(f.integration.plexConfigured, true);
+    f.resolve({ onWatchlist: true });
+    await settle();
+    assert.equal(f.plexUpdates.at(-1)[2].plexConfigured, true);
+  });
+}

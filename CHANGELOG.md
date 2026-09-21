@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.49]
+
+- Ignore stale Plex configuration responses and failures before mutating the current connection state.
+- Add race regressions verifying older disconnected results cannot override a newer connected state or its subsequent Plex rendering.
+
 ## [3.5.48]
 
 - Refresh an expanded flyout when its extracted IMDb ID changes, even if the title and year remain the same.
