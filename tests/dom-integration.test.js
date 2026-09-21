@@ -791,3 +791,32 @@ test('manual refresh preserves release years and cancels queued work on navigati
   release.forEach(done => done()); await settle();
   assert.equal(started, 4);
 });
+
+test('navigating during loading stops scrolling and never restores the old page position', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle(); withFastPaging(f);
+  const scrolls = [];
+  f.window.scrollTo = (...args) => scrolls.push(args);
+  const loading = f.window.testOverlay.loadMoreCards({ cancelled: false }, () => assert.fail('obsolete progress'));
+  assert.equal(scrolls.length, 1);
+  f.window.history.replaceState({}, '', '/settings'); f.window.testOverlay.handleRouteChange();
+  assert.equal(await loading, 0);
+  assert.equal(scrolls.length, 1, 'no scroll restoration on the new page');
+});
+
+test('page exit cancels the active Load more button run and permits a fresh run on return', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle(); withFastPaging(f);
+  const scrolls = []; f.window.scrollTo = (...args) => scrolls.push(args);
+  const button = f.window.document.querySelector('.seerr-load-all');
+  button.click(); assert.equal(scrolls.length, 1);
+  f.window.dispatchEvent(new f.window.Event('pagehide'));
+  f.window.dispatchEvent(new f.window.Event('pageshow'));
+  button.click(); assert.equal(scrolls.length, 2, 'starts a new run instead of stopping the abandoned run');
+  await new Promise(resolve => setTimeout(resolve, 180));
+  // The old run finishing must not clear the newer run's ownership or label.
+  assert.equal(button.textContent, 'Loading…');
+  button.click(); assert.match(button.textContent, /Stopping/);
+  await new Promise(resolve => setTimeout(resolve, 180));
+  assert.equal(scrolls.length, 3, 'only the current run restores its position');
+});

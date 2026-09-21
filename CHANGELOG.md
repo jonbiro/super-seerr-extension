@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.19]
+
+- Stop Load more on navigation and page exit, without scrolling the new page or painting obsolete results.
+- Prevent an abandoned run from resetting a newer run, restore controls on page exit, and show Loading immediately after starting.
+
 ## [3.5.18]
 
 - Run manual grid refreshes through the four-job viewport queue, preserving release years and cancelling queued refreshes after navigation.

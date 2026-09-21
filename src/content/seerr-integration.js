@@ -24,6 +24,7 @@
   };
 
   let activeBulkSeasonController = null;
+  let bulkRun = null;
   let apiConfigured = false;
   let plexConfigured = false;
   let configuredServer = null;
@@ -157,6 +158,7 @@
   // Isolated content scripts cannot reliably patch the page's history methods.
   let navigationTimer = setInterval(handleRouteChange, 1000);
   window.addEventListener('pagehide', () => {
+    abandonBulkRun();
     cardRatingQueue.clear();
     clearInterval(navigationTimer); navigationTimer = null;
     // A debounced write still waiting would die with this context, taking the
@@ -199,6 +201,7 @@
   window.addEventListener('scroll', () => cardRatingQueue.reprioritize(), { passive: true, capture: true });
 
   function cleanupOverlay() {
+    abandonBulkRun();
     activeBulkSeasonController?.abort();
     activeBulkSeasonController = null;
     routeGeneration++;
@@ -847,13 +850,23 @@
   // 200px of the bottom (its useVerticalScroll hook), so loading more means
   // scrolling there and waiting, not calling an endpoint: the cards have to
   // exist in the DOM for sorting to reach them.
-  let bulkRun = null;
+  function abandonBulkRun() {
+    if (bulkRun) {
+      bulkRun.cancelled = true; bulkRun.abandoned = true;
+      if (bulkRun.button) bulkRun.button.textContent = bulkRun.label;
+    }
+    bulkRun = null;
+  }
+
+  function bulkRunIsCurrent(run) {
+    return !run.abandoned && run.generation === routeGeneration;
+  }
 
   function waitForMoreCards(previous, run) {
     return new Promise(resolve => {
       const deadline = Date.now() + Config.bulkLoadWaitMs;
       const poll = () => {
-        if (run.cancelled) return resolve(false);
+        if (run.cancelled || !bulkRunIsCurrent(run)) return resolve(false);
         if (getMediaCards().length > previous) return resolve(true);
         if (Date.now() >= deadline) return resolve(false);
         setTimeout(poll, 150);
@@ -863,12 +876,13 @@
   }
 
   async function loadMoreCards(run, onProgress) {
+    run.generation ??= routeGeneration;
     const startCount = getMediaCards().length;
     // Returning the reader to where they were: this scrolls the page for real.
     const restoreX = window.scrollX, restoreY = window.scrollY;
     let previous = startCount;
     try {
-      while (!run.cancelled && getMediaCards().length - startCount < Config.bulkLoadTarget) {
+      while (!run.cancelled && bulkRunIsCurrent(run) && getMediaCards().length - startCount < Config.bulkLoadTarget) {
         window.scrollTo(0, document.documentElement.scrollHeight);
         // No new cards means the list has ended; there is nothing more to ask for.
         if (!await waitForMoreCards(previous, run)) break;
@@ -876,22 +890,25 @@
         onProgress(previous - startCount);
       }
     } finally {
-      window.scrollTo(restoreX, restoreY);
+      if (bulkRunIsCurrent(run)) window.scrollTo(restoreX, restoreY);
     }
-    return getMediaCards().length - startCount;
+    return bulkRunIsCurrent(run) ? getMediaCards().length - startCount : 0;
   }
 
   async function scoreAllCards(run, onProgress) {
+    run.generation ??= routeGeneration;
+    if (run.cancelled || !bulkRunIsCurrent(run)) return 0;
     const titles = getMediaCards()
       .filter(card => getCardAnyScore(card) === null)
       .map(card => getCardMediaInfo(card))
       .filter(info => info && info.tmdbId);
     let done = 0;
     for (let index = 0; index < titles.length; index += Config.bulkScoreBatch) {
-      if (run.cancelled) break;
+      if (run.cancelled || !bulkRunIsCurrent(run)) break;
       const batch = titles.slice(index, index + Config.bulkScoreBatch);
       await Promise.all(batch.map(info =>
         getRatings(info.tmdbId, info.title, info.year ?? null, info.mediaType).catch(() => null)));
+      if (run.cancelled || !bulkRunIsCurrent(run)) break;
       done += batch.length;
       onProgress(done, titles.length);
       // Paints whatever the batch resolved; cards already carrying a badge are
@@ -1902,19 +1919,21 @@
         button.textContent = 'Stopping...';
         return;
       }
-      const run = bulkRun = { cancelled: false };
       const label = button.textContent;
+      const run = bulkRun = { cancelled: false, generation: routeGeneration, button, label };
+      button.textContent = 'Loading…';
       try {
         await loadMoreCards(run, added => { button.textContent = `Loaded ${added}...`; });
         await scoreAllCards(run, (done, total) => { button.textContent = `Scored ${done}/${total}...`; });
       } catch (error) {
         log('Loading the rest of the grid failed:', error);
       } finally {
-        bulkRun = null;
-        button.textContent = label;
-        injectCardBadges();
-        updateCoverage();
-        applyScoreFilters(grid);
+        if (bulkRun === run) { bulkRun = null; button.textContent = label; }
+        if (bulkRunIsCurrent(run) && button.isConnected) {
+          injectCardBadges();
+          updateCoverage();
+          applyScoreFilters(grid);
+        }
       }
     });
 
