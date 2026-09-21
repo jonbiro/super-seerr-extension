@@ -13,32 +13,45 @@
         localStorageIsolationSupported: typeof chrome.storage.local.setAccessLevel === 'function', checks };
     },
     async getPopupDiagnostics() {
+      // A settings reload invalidates this report even when values change back.
+      const snapshot = {
+        baseUrl: this.baseUrl, apiKey: this.apiKey, plexToken: this.plexToken,
+        settingsLoadGeneration: this.settingsLoadGeneration
+      };
+      const client = Object.assign(Object.create(this), snapshot);
+      const assertCurrent = () => {
+        if (Object.keys(snapshot).some(key => this[key] !== snapshot[key])) {
+          throw new Error('Settings changed during diagnostics. Run the checks again.');
+        }
+      };
       const result = { serverUrl: null, checks: {} };
       const checks = result.checks;
       let url;
       try {
-        url = new URL(this.baseUrl);
+        url = new URL(snapshot.baseUrl);
         if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) url = null;
       } catch (_) { url = null; }
       result.serverUrl = url?.href || null;
       const permission = url && await chrome.permissions.contains({ origins: [`${url.protocol}//${url.hostname}/*`] });
+      assertCurrent();
       checks.permission = !url ? row('warning', 'Set a valid Seerr URL first.', 'serverUrl')
         : permission ? row('ok', 'Seerr host access granted.') : row('error', 'Seerr host access is missing.', 'permissionWarning');
-      checks.apiKey = this.apiKey ? row('warning', 'Saved; not verified yet.', 'apiKey') : row('warning', 'No API key. Requests are disabled; ratings can still work.', 'apiKey');
+      checks.apiKey = snapshot.apiKey ? row('warning', 'Saved; not verified yet.', 'apiKey') : row('warning', 'No API key. Requests are disabled; ratings can still work.', 'apiKey');
       checks.seerr = !url ? row('warning', 'Seerr URL is not configured.', 'serverUrl')
         : !permission ? row('warning', 'Grant host access before testing connectivity.', 'permissionWarning') : row('warning', 'Not checked.');
       await Promise.all([
         (async () => {
           if (!permission) return;
           try {
-            const response = await fetch(`${this.baseUrl.replace(/\/$/, '')}/api/v1/settings/public`, {
+            const response = await fetch(`${snapshot.baseUrl.replace(/\/$/, '')}/api/v1/settings/public`, {
               redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(root.RatingsConfig.requestTimeoutMs)
             });
             checks.seerr = response.ok ? row('ok', 'Seerr is reachable.') : row('error', `Seerr returned HTTP ${response.status}. Check the server URL and proxy.`, 'serverUrl');
           } catch (_) { checks.seerr = row('error', 'Cannot reach Seerr. Check the URL, network, and server.', 'serverUrl'); }
-          if (!this.apiKey) return;
+          assertCurrent();
+          if (!snapshot.apiKey) return;
           try {
-            await this.makeAPIRequest('GET', '/api/v1/auth/me');
+            await client.makeAPIRequest('GET', '/api/v1/auth/me');
             checks.apiKey = row('ok', 'API key accepted.');
             checks.seerr = row('ok', 'Seerr is reachable.');
           } catch (error) {
@@ -48,13 +61,15 @@
           }
         })(),
         (async () => {
-          if (!this.plexToken) { checks.plex = row('warning', 'No Plex token. Plex watchlist is optional.', 'plexToken'); return; }
+          if (!snapshot.plexToken) { checks.plex = row('warning', 'No Plex token. Plex watchlist is optional.', 'plexToken'); return; }
           const allowed = await chrome.permissions.contains({ origins: ['https://plex.tv/*', 'https://discover.provider.plex.tv/*', 'https://metadata.provider.plex.tv/*'] });
+          assertCurrent();
           if (!allowed) { checks.plex = row('error', 'Plex host access is missing. Save the token in Settings to grant access.', 'plexToken'); return; }
-          try { await this.plexTestConnection(); checks.plex = row('ok', 'Plex account connection verified.'); }
+          try { await client.plexTestConnection({ plexToken: snapshot.plexToken }); checks.plex = row('ok', 'Plex account connection verified.'); }
           catch (_) { checks.plex = row('error', 'Plex connection failed. Check the token and network, then test again.', 'plexToken'); }
         })()
       ]);
+      assertCurrent();
       return result;
     }
   };

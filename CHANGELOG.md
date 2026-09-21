@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.28]
+
+- Run popup diagnostics against a single settings snapshot and discard results when settings change during the check.
+- Stop obsolete diagnostics before authentication and prevent mixed-server or mixed-credential reports.
+- Add regressions for changes to the server, Seerr key, Plex token, settings reload, and in-flight authentication.
+
 ## [3.5.27]
 
 - Keep external-site flyouts and notifications inside narrow or short windows, with scrollable content and wrapping long titles.

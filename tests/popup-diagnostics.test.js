@@ -45,3 +45,32 @@ test('diagnostics preserve independent Plex and Seerr failures and successes', a
   assert.equal(second.checks.plex.state, 'error');
   assert.doesNotMatch(JSON.stringify(second), /plex-secret/);
 });
+
+for (const field of ['baseUrl', 'apiKey', 'plexToken', 'settingsLoadGeneration']) {
+  test(`diagnostics discard a report when ${field} changes during a check`, async () => {
+    const w = await worker();
+    let release;
+    const pending = new Promise(resolve => { release = resolve; });
+    const requests = [];
+    w.context.fetch = async url => { requests.push(url); await pending; return { ok: true }; };
+    const report = w.api.getPopupDiagnostics();
+    await new Promise(resolve => setImmediate(resolve));
+    w.api[field] = field === 'settingsLoadGeneration' ? w.api[field] + 1 : 'changed';
+    release();
+    await assert.rejects(report, /Settings changed during diagnostics/);
+    assert.equal(requests.length, 1, 'obsolete checks must not start authentication');
+    assert.equal(requests[0], `${origin}/api/v1/settings/public`);
+  });
+}
+
+test('a change during authentication discards the completed report', async () => {
+  const w = await worker();
+  w.context.fetch = async (url, options) => {
+    if (url.includes('/auth/me')) {
+      assert.equal(options.headers['X-Api-Key'], 'secret');
+      w.api.apiKey = 'replacement';
+    }
+    return { ok: true, json: async () => ({ id: 1 }) };
+  };
+  await assert.rejects(w.api.getPopupDiagnostics(), /Settings changed during diagnostics/);
+});
