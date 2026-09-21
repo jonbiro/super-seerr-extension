@@ -401,12 +401,24 @@ class BaseIntegration {
     }
   }
 
-  /**
-   * Handle request button click
-   */
+  // Async actions belong to the title and UI that started them.
+  captureActionView() {
+    const media = this.mediaData;
+    const elements = this.uiElements;
+    const url = window.location.href;
+    return { media, elements, isCurrent: () => !this.destroyed && this.mediaData === media
+      && this.uiElements === elements && window.location.href === url };
+  }
+
+  deferViewAction(view, callback, delay) {
+    this.deferRetry(() => { if (view.isCurrent()) callback(); }, delay);
+  }
+
   async handleRequest() {
     if (this._requestInFlight) return;
     this._requestInFlight = true;
+    const attempt = this._requestAttempt = {};
+    const view = this.captureActionView();
 
     if (!this.mediaData) {
       this._requestInFlight = false;
@@ -429,10 +441,11 @@ class BaseIntegration {
         await this.updateStatus();
       } else if (this.currentStatusData?.action === 'choose') {
         const response = await this.client.sendMessage({ action: 'getConfigState' });
+        if (!view.isCurrent()) return;
         const server = new URL(response?.data?.serverUrl);
         if (!['http:', 'https:'].includes(server.protocol)) throw new Error('Invalid Seerr URL');
         server.pathname = `${server.pathname.replace(/\/$/, '')}/search`;
-        server.search = new URLSearchParams({ query: this.mediaData.title }).toString();
+        server.search = new URLSearchParams({ query: view.media.title }).toString();
         window.open(server.href, '_blank', 'noopener,noreferrer');
       } else if (isWatchButton) {
         await this.handleWatchButtonClick();
@@ -440,9 +453,12 @@ class BaseIntegration {
         await this.handleRequestButtonClick();
       }
     } catch (error) {
-      this.ui.createNotification('Seerr', error.message, 'error');
+      if (view.isCurrent()) this.ui.createNotification('Seerr', error.message, 'error');
     } finally {
-      this._requestInFlight = false;
+      if (this._requestAttempt === attempt) {
+        this._requestInFlight = false;
+        this._requestAttempt = null;
+      }
     }
   }
 
@@ -452,6 +468,7 @@ class BaseIntegration {
    */
   async handleWatchButtonClick() {
     this.log('Detected watch button click');
+    const view = this.captureActionView();
 
     this.setUILoading(`Opening "${this.mediaData.title}"...`, 'Opening...');
 
@@ -465,7 +482,8 @@ class BaseIntegration {
     // Fall back to API call
     this.log('No cached watch URL, fetching from API');
     try {
-      const statusData = await this.client.getMediaStatus(this.mediaData);
+      const statusData = await this.client.getMediaStatus(view.media);
+      if (!view.isCurrent()) return;
 
       if (statusData.watchUrl) {
         await this.openMediaServer(statusData.watchUrl);
@@ -475,6 +493,7 @@ class BaseIntegration {
       this.error('Failed to get watch URL from API:', err);
     }
 
+    if (!view.isCurrent()) return;
     // A watch click is not permission to create a request. A failed status
     // read or a missing playback URL must remain a read-only failure.
     this.currentStatusData = this.getErrorStatus(new Error('Watch URL unavailable. Retry the status lookup.'));
@@ -487,47 +506,33 @@ class BaseIntegration {
    * Plex, Jellyfin or Emby, so nothing here names a particular product.
    */
   async openMediaServer(watchUrl) {
-    this.log('Opening media server URL:', watchUrl);
-
-    setTimeout(() => {
-      const opened = window.open(watchUrl, '_blank');
-
-      // A strict popup blocker answers null instead of a window: saying
-      // "opening" then would be a lie the user cannot act on.
-      if (!opened) {
-        this.ui.createNotification(
-            'Popup Blocked',
-            `Allow popups for this site to open "${this.mediaData.title}"`,
-            'warning',
-            4000
-        );
-      } else {
-        this.ui.createNotification(
-            'Opening media server',
-            `Opening "${this.mediaData.title}"`,
-            'success',
-            3000
-        );
-      }
-
-      // Reset button state after a short delay
-      setTimeout(() => {
-        if (this.currentStatusData) {
-          this.updateUIFromStatus(this.currentStatusData);
-        }
-      }, 500);
-    }, 100); // Very short delay for visual feedback
+    const view = this.captureActionView();
+    if (!view.media || !view.isCurrent()) return;
+    // Open while the click gesture is still active, not from a timer.
+    const opened = window.open(watchUrl, '_blank');
+    if (!opened) {
+      this.ui.createNotification('Popup Blocked',
+        `Allow popups for this site to open "${view.media.title}"`, 'warning', 4000);
+    } else {
+      this.ui.createNotification('Opening media server',
+        `Opening "${view.media.title}"`, 'success', 3000);
+    }
+    this.deferViewAction(view, () => {
+      if (this.currentStatusData) this.updateUIFromStatus(this.currentStatusData);
+    }, 500);
   }
 
   /**
    * Handle regular request button click
    */
   async handleRequestButtonClick() {
+    const view = this.captureActionView();
     try {
       this.setUILoading(`Requesting "${this.mediaData.title}"...`, 'Requesting...');
 
       // Send request
-      const result = await this.client.requestMedia(this.mediaData);
+      const result = await this.client.requestMedia(view.media);
+      if (!view.isCurrent()) return;
       this.log('Request successful:', result);
 
       // Show success notification
@@ -539,19 +544,19 @@ class BaseIntegration {
 
       // Auto-close flyout after success
       if (this.uiTheme === 'flyout' && this.isFlyoutExpanded()) {
-        setTimeout(() => {
-          this.uiElements.flyout.classList.remove('expanded');
-          this.uiElements.flyout.classList.add('collapsed');
+        this.deferViewAction(view, () => {
+          view.elements.flyout.classList.remove('expanded');
+          view.elements.flyout.classList.add('collapsed');
           this.log('Auto-closing flyout after successful request');
         }, 4000);
       }
 
       // Update status after delay
-      setTimeout(() => this.updateStatus().catch(err => this.error('Status refresh failed:', err)), 2000);
+      this.deferViewAction(view, () => this.updateStatus().catch(err => this.error('Status refresh failed:', err)), 2000);
 
     } catch (err) {
+      if (!view.isCurrent()) return;
       this.error('Request failed:', err);
-      this._requestInFlight = false;
 
       this.ui.createNotification(
           'Request Failed',
@@ -560,40 +565,50 @@ class BaseIntegration {
       );
 
       // Reset UI after delay
-      setTimeout(() => this.updateStatus().catch(err => this.error('UI reset failed:', err)), 3000);
+      this.deferViewAction(view, () => this.updateStatus().catch(err => this.error('UI reset failed:', err)), 3000);
     }
   }
 
   async handleWatchlistClick() {
+    if (this._watchlistAttempt) return;
+    const view = this.captureActionView();
+    if (!view.media) return;
+    const attempt = this._watchlistAttempt = {};
+    const button = view.elements.watchlistButton;
+    if (button) button.disabled = true;
     try {
-      await this.client.addToWatchlist(this.mediaData);
-      this.ui.createNotification(
-        'Added to Watchlist',
-        `${this.mediaData.title} has been added to your Seerr watchlist`,
-        'success'
-      );
+      await this.client.addToWatchlist(view.media);
+      if (!view.isCurrent()) return;
+      this.ui.createNotification('Added to Watchlist',
+        `${view.media.title} has been added to your Seerr watchlist`, 'success');
     } catch (err) {
-      this.ui.createNotification(
-        'Watchlist Failed',
-        err.message || 'Failed to add to watchlist',
-        'error'
-      );
+      if (view.isCurrent()) this.ui.createNotification('Watchlist Failed',
+        err.message || 'Failed to add to watchlist', 'error');
+    } finally {
+      if (this._watchlistAttempt === attempt) {
+        this._watchlistAttempt = null;
+        if (view.isCurrent() && button) button.disabled = false;
+      }
     }
   }
 
   async handlePlexWatchlistClick() {
+    if (this._plexWatchlistAttempt) return;
+    const view = this.captureActionView();
     this._statusGeneration = (this._statusGeneration || 0) + 1;
     if (!this.mediaData) {
       this.ui.createNotification('Error', 'Could not extract media information', 'error');
       return;
     }
-    const plexButton = this.uiElements.plexButton;
+    const attempt = this._plexWatchlistAttempt = {};
+    const plexButton = view.elements.plexButton;
     const label = plexButton ? plexButton.querySelector('span') : null;
     const original = label ? label.textContent : null;
     try {
       if (label) label.textContent = 'Adding to Plex…';
       if (plexButton) plexButton.disabled = true;
-      const result = await this.client.plexAddToWatchlist(this.mediaData);
+      const result = await this.client.plexAddToWatchlist(view.media);
+      if (!view.isCurrent()) return;
       this.ui.createNotification(
         result && result.already ? 'Already on Plex Watchlist' : 'Added to Plex Watchlist',
         result && result.already
@@ -603,6 +618,7 @@ class BaseIntegration {
       );
       if (label) label.textContent = result && result.already ? 'On Plex Watchlist' : 'Added to Plex ✓';
     } catch (err) {
+      if (!view.isCurrent()) return;
       this.ui.createNotification(
         'Plex Watchlist Failed',
         err.message || 'Failed to add to Plex Watchlist',
@@ -610,7 +626,10 @@ class BaseIntegration {
       );
       if (label && original) label.textContent = original;
     } finally {
-      if (plexButton) plexButton.disabled = false;
+      if (this._plexWatchlistAttempt === attempt) {
+        this._plexWatchlistAttempt = null;
+        if (view.isCurrent() && plexButton) plexButton.disabled = false;
+      }
     }
   }
 
@@ -844,6 +863,9 @@ class BaseIntegration {
     // A request in flight belongs to the old page: navigating mid-request
     // must not wedge the new page's button shut forever.
     this._requestInFlight = false;
+    this._requestAttempt = null;
+    this._watchlistAttempt = null;
+    this._plexWatchlistAttempt = null;
   }
 
   /**

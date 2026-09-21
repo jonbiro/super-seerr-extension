@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.2]
+
+- Requests retain their own in-flight guard across navigation; an old success or failure cannot unlock or relabel a newer request.
+- Seerr and Plex watchlist actions ignore duplicate clicks while pending and discard UI updates for a previous page.
+- Late watch lookups and delayed request UI callbacks no longer act on a different title after navigation. Cached watch links open directly from the click instead of a timer.
+- Saving a Plex token and Seerr URL requests their host permissions together, preserving the click gesture and retaining existing grants when the combined request is declined.
+
 ## [3.5.1]
 
 - Seerr watchlist actions resolve title-only entries using title, type, and year, and reject ambiguous matches.

@@ -196,15 +196,21 @@ class OptionsManager {
       return;
     }
 
-    // Ask for the host permission first: everything above is synchronous, so
-    // the submit that triggered this is still the active user gesture, which
-    // Chrome requires. It resolves true without prompting when the origin is
-    // already granted, so there is no pre-check to await the gesture away.
-    const granted = await this.requestOverlayPermission(this.originPattern(serverUrl));
-    // Plex calls go to plex.tv hosts from the worker; request those too so the
-    // first watchlist add does not fail for a missing grant. Only when a token
-    // is actually being saved: no token, no prompt.
-    const plexGranted = plexToken ? await this.requestPlexPermission() : true;
+    // One request keeps every new origin under the submit's user gesture.
+    // Awaiting the Seerr prompt before asking for Plex can lose that gesture.
+    const pattern = this.originPattern(serverUrl);
+    const origins = [...new Set([pattern, ...(plexToken ? this.plexPermissionOrigins() : [])])];
+    let allGranted = false;
+    try {
+      allGranted = await chrome.permissions.request({ origins });
+    } catch (error) {
+      console.error('Host permission request failed:', error);
+    }
+    // A declined combined request does not revoke origins already granted.
+    const granted = allGranted || await this.hasOverlayPermission(pattern);
+    const plexGranted = !plexToken || allGranted || await chrome.permissions.contains({
+      origins: this.plexPermissionOrigins()
+    }).catch(() => false);
 
     try {
       // The keys are secrets, so they stay on this device.

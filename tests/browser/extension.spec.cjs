@@ -142,6 +142,19 @@ test('an expanded site flyout follows SPA navigation and is removed on destroy',
   await expect(page.locator('.seerr-title')).toHaveText('Second title');
   await expect(page.locator('.seerr-flyout')).toHaveCount(1);
   await page.locator('.seerr-tab').click();
+  let watchlistPosts = 0;
+  const countPost = request => {
+    if (request.method === 'POST' && request.url === '/api/v1/watchlist') watchlistPosts++;
+  };
+  server.on('request', countPost);
+  try {
+    await expect(page.locator('.seerr-watchlist-button')).toBeVisible();
+    await page.locator('.seerr-watchlist-button').evaluate(button => { button.click(); button.click(); });
+    await expect(page.locator('.seerr-notification')).toContainText('Added to Watchlist');
+    expect(watchlistPosts).toBe(1);
+  } finally {
+    server.off('request', countPost);
+  }
   await options.evaluate(tabId => chrome.scripting.executeScript({ target: { tabId }, func: () => window.navigationProbe.destroy() }), tabId);
   await expect(page.locator('.seerr-flyout')).toHaveCount(0);
   await page.close();

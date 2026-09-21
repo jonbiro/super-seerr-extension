@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Super Seerr",
-  "version": "3.5.1",
+  "version": "3.5.2",
   "description": "Add movies and TV shows to Seerr directly from IMDB, Rotten Tomatoes, TheMovieDB, Letterboxd, Metacritic, Trakt and Filmweb.pl",
   "permissions": [
     "storage",

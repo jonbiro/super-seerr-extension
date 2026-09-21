@@ -520,7 +520,7 @@ test('saving with a token but a declined Plex grant says so instead of success-a
     },
     // Overlay origin granted, Plex origins declined.
     permissions: {
-      contains: async () => true,
+      contains: async ({ origins }) => !origins.some(origin => origin.includes('plex')),
       request: async ({ origins }) => !origins.some(origin => origin.includes('plex'))
     },
     runtime: { sendMessage: async () => ({ success: true }) }

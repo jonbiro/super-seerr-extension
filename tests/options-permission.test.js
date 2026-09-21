@@ -260,3 +260,16 @@ test('Test Plex stops when host access is declined', async t => {
   assert.match(ctx.window.document.getElementById('status').textContent, /permission/i);
   assert.equal(ctx.window.document.getElementById('testPlexConnection').disabled, false);
 });
+
+test('saving Seerr and Plex permissions uses one user-gesture request', async t => {
+  const ctx = openOptions(); t.after(() => ctx.window.close());
+  await flush();
+  const requests = [];
+  ctx.window.chrome.permissions.request = async ({ origins }) => { requests.push([...origins]); return true; };
+  ctx.window.document.getElementById('serverUrl').value = 'https://seerr.example';
+  ctx.window.document.getElementById('plexToken').value = 'test-token';
+  ctx.window.document.getElementById('settingsForm').dispatchEvent(new ctx.window.Event('submit'));
+  await flush();
+  assert.equal(requests.length, 1, 'a second asynchronous permission prompt can lose the click gesture');
+  assert.deepEqual(new Set(requests[0]), new Set(['https://seerr.example/*', 'https://plex.tv/*', 'https://*.plex.tv/*']));
+});
