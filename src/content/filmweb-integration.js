@@ -23,7 +23,9 @@ class FilmwebIntegration extends BaseIntegration {
     this.log('Extracting media data from Filmweb page...');
 
     // Determine media type first to use correct selectors
-    const isTV = window.location.pathname.includes('/serial/');
+    const route = window.location.pathname.match(/^\/(film|serial)\/[^/]+\/?$/);
+    if (!route) return null;
+    const isTV = route[1] === 'serial';
     const mediaType = isTV ? 'tv' : 'movie';
     this.log('Detected media type:', mediaType);
 

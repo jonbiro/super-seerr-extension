@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.46]
+
+- Restrict Filmweb extraction to film and series detail routes so discussion and episode-list headings cannot become request metadata.
+- Reject unrelated routes after navigation while retaining encoded title slugs, trailing slashes and query parameters.
+- Add seven route regressions.
+
 ## [3.5.45]
 
 - Preserve numeric Filmweb titles in both original-title and localized-title extraction.
