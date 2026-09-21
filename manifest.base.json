@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Super Seerr",
-  "version": "3.5.6",
+  "version": "3.5.7",
   "description": "Add movies and TV shows to Seerr directly from IMDB, Rotten Tomatoes, TheMovieDB, Letterboxd, Metacritic, Trakt and Filmweb.pl",
   "permissions": [
     "storage",
@@ -37,6 +37,7 @@
       "js": [
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
+        "src/shared/SeasonPicker.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/imdb-integration.js"
@@ -53,6 +54,7 @@
       "js": [
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
+        "src/shared/SeasonPicker.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/rt-integration.js"
@@ -69,6 +71,7 @@
       "js": [
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
+        "src/shared/SeasonPicker.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/tmdb-integration.js"
@@ -83,6 +86,7 @@
       "js": [
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
+        "src/shared/SeasonPicker.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/letterboxd-integration.js"
@@ -99,6 +103,7 @@
       "js": [
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
+        "src/shared/SeasonPicker.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/metacritic-integration.js"
@@ -117,6 +122,7 @@
       "js": [
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
+        "src/shared/SeasonPicker.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/trakt-integration.js"
@@ -133,6 +139,7 @@
       "js": [
         "src/shared/SeerrClient.js",
         "src/shared/MediaExtractor.js",
+        "src/shared/SeasonPicker.js",
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/filmweb-integration.js"

@@ -23,6 +23,7 @@
     plexWatchlist: true,
   };
 
+  let activeBulkSeasonController = null;
   let apiConfigured = false;
   let plexConfigured = false;
   let configuredServer = null;
@@ -189,6 +190,8 @@
   }
 
   function cleanupOverlay() {
+    activeBulkSeasonController?.abort();
+    activeBulkSeasonController = null;
     routeGeneration++;
     const cards = getMediaCards();
     for (const grid of new Set(cards.map(card => getCardsGrid([card])).filter(Boolean))) {
@@ -2122,7 +2125,7 @@
         ${excludedTitles.length > 0 ? `<br><strong style="color:#f59e0b">⚠️ ${excludedTitles.length} titles excluded</strong>` : ''}
       </div>
       <ul>
-        ${readyTitles.map(t => `<li>• ${escapeHtml(t.title)}</li>`).join('')}
+        ${readyTitles.map((t, index) => `<li>• ${escapeHtml(t.title)}${t.mediaType === 'tv' ? ` <button type="button" data-season-index="${index}">Choose seasons</button><span class="seerr-season-choice"></span>` : ''}</li>`).join('')}
       </ul>
       ${excludedTitles.length > 0 ? `
         <details style="margin-bottom:12px;opacity:0.7">
@@ -2141,7 +2144,35 @@
     document.body.appendChild(modal);
 
     const previousFocus = document.activeElement;
-    const closeModal = () => { modal.remove(); previousFocus?.focus(); };
+    const closeModal = () => { activeBulkSeasonController?.abort(); activeBulkSeasonController = null; modal.remove(); previousFocus?.focus(); };
+    const confirmButton = modal.querySelector('.confirm-btn');
+    const refreshSeasonReadiness = () => {
+      confirmButton.disabled = !readyTitles.length || !!activeBulkSeasonController || readyTitles.some(t => t.mediaType === 'tv' && !t.seasons?.length);
+    };
+    refreshSeasonReadiness();
+    for (const button of modal.querySelectorAll('[data-season-index]')) {
+      button.addEventListener('click', async () => {
+        if (activeBulkSeasonController) return;
+        const controller = activeBulkSeasonController = new AbortController();
+        const t = readyTitles[Number(button.dataset.seasonIndex)];
+        const label = button.parentElement.querySelector('.seerr-season-choice');
+        const generation = routeGeneration;
+        button.disabled = true; refreshSeasonReadiness(); label.textContent = ' Loading availability…';
+        try {
+          const response = await chrome.runtime.sendMessage({ action: 'getSeasonOptions', data: t });
+          if (!modal.isConnected || generation !== routeGeneration) return;
+          if (!response?.success) throw new Error(response?.error || 'Could not load seasons');
+          const seasons = await window.chooseSeerrSeasons(response.data, { signal: controller.signal, confirmText: 'Use selected seasons' });
+          if (!modal.isConnected || generation !== routeGeneration) return;
+          if (seasons) { t.seasons = seasons; t.tmdbId = response.data.tmdbId; t.seasonServer = response.data.server; }
+          label.textContent = t.seasons?.length ? ` Seasons: ${t.seasons.join(', ')}` : ' Choose seasons before requesting.';
+        } catch (error) { if (modal.isConnected) label.textContent = ` ${error.message}`; }
+        finally {
+          if (activeBulkSeasonController === controller) activeBulkSeasonController = null;
+          button.disabled = false; refreshSeasonReadiness();
+        }
+      });
+    }
     modal.querySelector('.cancel-btn').addEventListener('click', closeModal);
     modal.querySelector('.cancel-btn').focus();
     modal.addEventListener('keydown', event => {
@@ -2165,6 +2196,8 @@
       const generation = routeGeneration;
       btn.disabled = true;
       btn.textContent = 'Requesting...';
+      const requestTitles = readyTitles.map(title => ({ ...title, seasons: title.seasons?.slice() }));
+      modal.querySelectorAll('[data-season-index]').forEach(button => { button.disabled = true; });
 
       let succeeded = 0;
       let failed = 0;
@@ -2172,7 +2205,7 @@
 
       for (let i = 0; i < readyTitles.length; i++) {
         if (!modal.isConnected || generation !== routeGeneration) return;
-        const t = readyTitles[i];
+        const t = requestTitles[i];
         btn.textContent = `Requesting ${i + 1}/${readyTitles.length}...`;
         const tmdbIdNum = parseInt(t.tmdbId, 10);
         if (!t.tmdbId || Number.isNaN(tmdbIdNum)) {
@@ -2182,7 +2215,7 @@
         try {
           const response = await chrome.runtime.sendMessage({
             action: 'requestMedia',
-            data: { title: t.title, mediaType: t.mediaType, tmdbId: tmdbIdNum }
+            data: { title: t.title, mediaType: t.mediaType, tmdbId: tmdbIdNum, ...(t.mediaType === 'tv' ? { seasons: t.seasons, seasonServer: t.seasonServer } : {}) }
           });
           if (response && response.success) {
             succeeded++;

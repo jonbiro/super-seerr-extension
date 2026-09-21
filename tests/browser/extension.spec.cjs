@@ -269,3 +269,38 @@ test('ambiguous title picker checks the chosen identity and sends only a separat
     await page.close();
   }
 });
+
+test('TV request review shows availability and posts only explicitly selected seasons', async () => {
+  const page = await context.newPage();
+  await page.goto(`${origin}/title/seasons`); await page.bringToFront();
+  const tabId = await options.evaluate(async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0].id);
+  await options.evaluate(async tabId => {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['src/shared/SeerrClient.js', 'src/shared/MediaExtractor.js', 'src/shared/SeasonPicker.js', 'src/shared/UIComponents.js', 'src/shared/BaseIntegration.js'] });
+    await chrome.scripting.executeScript({ target: { tabId }, func: async () => {
+      class SeasonProbe extends window.BaseIntegration {
+        constructor() { super('SeasonProbe', { uiTheme: 'flyout', retryDelay: 100000 }); }
+        async extractMediaData() { return { title: 'Example Series', mediaType: 'tv', tmdbId: 920 }; }
+      }
+      window.seasonProbe = new SeasonProbe(); await window.seasonProbe.init();
+    } });
+  }, tabId);
+  const posts = [];
+  const capture = request => {
+    if (request.method !== 'POST' || request.url !== '/api/v1/request') return;
+    let body = ''; request.on('data', chunk => { body += chunk; }); request.on('end', () => posts.push(JSON.parse(body)));
+  };
+  server.on('request', capture);
+  try {
+    await page.getByRole('button', { name: 'Open Super Seerr', exact: true }).click();
+    await page.getByRole('button', { name: 'Choose TV seasons', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Choose TV seasons' });
+    await expect(dialog.getByLabel('Season 1 (8 episodes) — Available', { exact: true })).toBeDisabled();
+    await expect(dialog.getByLabel('Season 3 (8 episodes) — Pending', { exact: true })).toBeDisabled();
+    await expect(dialog.getByRole('button', { name: 'Request selected seasons' })).toBeDisabled();
+    await dialog.getByLabel('Season 2 (8 episodes) — Not available', { exact: true }).check();
+    expect(posts).toHaveLength(0);
+    await dialog.getByRole('button', { name: 'Request selected seasons' }).click();
+    await expect.poll(() => posts.length).toBe(1);
+    expect(posts[0].seasons).toEqual([2]); expect(posts[0].mediaId).toBe(920);
+  } finally { server.off('request', capture); await page.close(); }
+});

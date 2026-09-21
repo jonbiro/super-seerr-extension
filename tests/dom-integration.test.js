@@ -8,8 +8,8 @@ const source = file => fs.readFileSync(file, 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 async function settle() { for (let i = 0; i < 12; i++) await flush(); }
 
-function createOverlay({ settings = {}, path = '/search?query=test', embedded = null, listItems = [], linkless = false, wrapped = false, posters = false, audience = false } = {}) {
-  const dom = new JSDOM(`<main><div id="grid">${['Low', 'High', 'Unknown'].map((title, index) => `<article data-testid="title-card" data-id="${index + 1}"><a href="/movie/${index + 1}"><h2>${title}</h2></a></article>`).join('')}</div></main>`, { url: `https://seerr.example${path}`, runScripts: 'outside-only' });
+function createOverlay({ settings = {}, path = '/search?query=test', embedded = null, listItems = [], linkless = false, wrapped = false, posters = false, audience = false, tv = false } = {}) {
+  const dom = new JSDOM(`<main><div id="grid">${['Low', 'High', 'Unknown'].map((title, index) => `<article data-testid="title-card" data-id="${index + 1}"><a href="/${tv && index === 0 ? 'tv' : 'movie'}/${index + 1}"><h2>${title}</h2></a></article>`).join('')}</div></main>`, { url: `https://seerr.example${path}`, runScripts: 'outside-only' });
   const { window } = dom;
   if (posters) window.document.querySelectorAll('[data-testid="title-card"]').forEach((card, index) => {
     card.innerHTML = `<div role="link"><img alt="" src="https://image.tmdb.org/t/p/w300/poster${index + 1}.jpg"></div>`;
@@ -700,4 +700,44 @@ test('filter presets persist, apply sorting and thresholds, and delete', async t
   assert.equal(doc.querySelector('[data-id="2"]').style.display, '');
   controls.querySelectorAll('button')[1].click(); await settle();
   assert.equal(fixture.storage.seerrFilterPresetsV1.length, 0);
+});
+
+
+test('bulk TV review requires season selection and sends only the reviewed seasons', async t => {
+  const fixture = createOverlay({ tv: true });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
+  await settle();
+  const doc = fixture.window.document;
+  const original = fixture.window.chrome.runtime.sendMessage;
+  const writes = [];
+  let finishRequest;
+  fixture.window.chrome.runtime.sendMessage = async message => {
+    if (message.action === 'getSeasonOptions') return { success: true, data: {
+      title: 'Low', tmdbId: 1, server: 'https://seerr.example', seasons: [
+        { number: 1, name: 'Season 1', episodeCount: 10, availability: 'Available', requestable: false },
+        { number: 2, name: 'Season 2', episodeCount: 10, availability: 'Not available', requestable: true }
+      ]
+    } };
+    if (message.action === 'requestMedia') { writes.push(message.data); return new Promise(resolve => { finishRequest = resolve; }); }
+    return original(message);
+  };
+  doc.querySelector('.seerr-toggle-select').click();
+  doc.querySelector('.seerr-select-checkbox').click();
+  doc.querySelector('.seerr-bulk-review').click();
+  const bulk = doc.querySelector('.seerr-confirmation-modal');
+  assert.equal(bulk.querySelector('.confirm-btn').disabled, true);
+  bulk.querySelector('[data-season-index]').click(); await settle();
+  const picker = doc.querySelector('.seerr-season-picker');
+  assert.match(picker.textContent, /Season 1.*Available/);
+  picker.querySelector('input[value="2"]').click();
+  [...picker.querySelectorAll('button')].find(button => button.textContent === 'Use selected seasons').click();
+  await settle();
+  assert.equal(writes.length, 0);
+  assert.equal(bulk.querySelector('.confirm-btn').disabled, false);
+  bulk.querySelector('.confirm-btn').click(); await settle();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].mediaType, 'tv');
+  assert.deepEqual(Array.from(writes[0].seasons), [2]);
+  assert.equal(bulk.querySelector('[data-season-index]').disabled, true);
+  finishRequest({ success: true }); await settle();
 });

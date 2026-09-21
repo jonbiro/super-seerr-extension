@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.7]
+
+- TV flyouts and bulk requests now offer season selection with existing standard-quality availability before confirmation. TV requests send an explicit season array instead of requesting all seasons.
+- Available, partial, processing, pending, and existing requested seasons cannot be selected. The worker refreshes availability before a write and refuses changed or invalid selections.
+- Season review supports keyboard navigation, cancellation, and navigation cleanup. A separate TV season button remains available when the main action opens the media server.
+
 ## [3.5.6]
 
 - Ambiguous titles open an in-extension picker with release year, type, and description. Candidate lookup retains strict identity matching and returns only display fields.

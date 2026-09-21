@@ -276,6 +276,7 @@ class BaseIntegration {
 
     // Add click handler to button
     elements.button.addEventListener('click', () => this.handleRequest());
+    elements.seasonButton?.addEventListener('click', () => this.handleRequest({ seasonsOnly: true }));
 
     // Add watchlist click handler
     if (elements.watchlistButton) {
@@ -414,7 +415,7 @@ class BaseIntegration {
     this.deferRetry(() => { if (view.isCurrent()) callback(); }, delay);
   }
 
-  async handleRequest() {
+  async handleRequest({ seasonsOnly = false } = {}) {
     if (this._requestInFlight) return;
     this._requestInFlight = true;
     const attempt = this._requestAttempt = {};
@@ -441,7 +442,7 @@ class BaseIntegration {
         await this.updateStatus();
       } else if (this.currentStatusData?.action === 'choose') {
         await this.handleTitleChoice();
-      } else if (isWatchButton) {
+      } else if (isWatchButton && !seasonsOnly) {
         await this.handleWatchButtonClick();
       } else {
         await this.handleRequestButtonClick();
@@ -542,10 +543,23 @@ class BaseIntegration {
   async handleRequestButtonClick() {
     const view = this.captureActionView();
     try {
+      let requestMedia = view.media;
+      if (view.media.mediaType === 'tv') {
+        this.setUILoading('Loading season availability…', 'Loading seasons…');
+        const response = await this.client.sendMessage({ action: 'getSeasonOptions', data: view.media });
+        if (!view.isCurrent()) return;
+        if (!response?.success) throw new Error(response?.error || 'Could not load seasons');
+        const controller = this._seasonPickerController = new AbortController();
+        const seasons = await this.ui.chooseSeasons(response.data, { signal: controller.signal });
+        if (this._seasonPickerController === controller) this._seasonPickerController = null;
+        if (!view.isCurrent()) return;
+        if (!seasons) { this.updateUIFromStatus(this.currentStatusData); return; }
+        requestMedia = { ...view.media, tmdbId: response.data.tmdbId, seasons, seasonServer: response.data.server };
+      }
       this.setUILoading(`Requesting "${this.mediaData.title}"...`, 'Requesting...');
 
-      // Send request
-      const result = await this.client.requestMedia(view.media);
+      // Send once, only after the explicit season confirmation for TV.
+      const result = await this.client.requestMedia(requestMedia);
       if (!view.isCurrent()) return;
       this.log('Request successful:', result);
 
@@ -853,6 +867,8 @@ class BaseIntegration {
     this.log('Cleaning up existing UI');
     this._titlePickerController?.abort();
     this._titlePickerController = null;
+    this._seasonPickerController?.abort();
+    this._seasonPickerController = null;
     this._extractionGeneration = (this._extractionGeneration || 0) + 1;
     this._statusGeneration = (this._statusGeneration || 0) + 1;
 

@@ -10,6 +10,7 @@ import './SeerrReadCache.js';
 import './PlexWatchlist.js';
 import './RecentActions.js';
 import './PopupDiagnostics.js';
+import './SeasonRequests.js';
 const RatingsConfig = globalThis.RatingsConfig;
 const MediaValidation = globalThis.MediaValidation;
 
@@ -18,7 +19,7 @@ const MediaValidation = globalThis.MediaValidation;
 // the saved origin instead, once the user grants that optional host permission.
 const OVERLAY_SCRIPT_ID = 'seerr-overlay';
 const OVERLAY_SCRIPT_FILES = {
-  js: ['src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/OverlayCache.js', 'src/content/RatingsPresentation.js', 'src/content/SeerrSession.js', 'src/content/FilterPresets.js', 'src/content/seerr-integration.js'],
+  js: ['src/shared/SeasonPicker.js', 'src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/OverlayCache.js', 'src/content/RatingsPresentation.js', 'src/content/SeerrSession.js', 'src/content/FilterPresets.js', 'src/content/seerr-integration.js'],
   css: ['src/content/seerr-overlay.css']
 };
 
@@ -254,6 +255,11 @@ class SeerrAPI {
           break;
         }
 
+        case 'getSeasonOptions': {
+          sendResponse({ success: true, data: await this.getSeasonOptions(request.data) });
+          break;
+        }
+
         case 'getMediaCandidates': {
           sendResponse({ success: true, data: await this.getMediaCandidates(request.data) });
           break;
@@ -378,6 +384,7 @@ class SeerrAPI {
 
   async requestMedia(mediaData) {
     mediaData = MediaValidation.media(mediaData);
+    if (mediaData.mediaType === 'tv') this.validateSeasonSelection(mediaData.seasons);
     if (!this.baseUrl || !this.apiKey) {
       throw new Error('Seerr server URL and API key are required. Please configure them in the extension options.');
     }
@@ -411,7 +418,7 @@ class SeerrAPI {
       mediaType: mediaData.mediaType,
       mediaId: tmdbId,
       tvdbId: undefined,
-      seasons: mediaData.mediaType === 'tv' ? 'all' : undefined
+      seasons: mediaData.mediaType === 'tv' ? await this.validateRequestSeasons(mediaData, tmdbId) : undefined
     };
 
     this.log('📡 [Background] Sending request to Seerr:', requestData);
@@ -708,7 +715,7 @@ class SeerrAPI {
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
 
-Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics);
+Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests);
 
 const seerrAPI = new SeerrAPI();
 let initializing = true;

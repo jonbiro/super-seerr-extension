@@ -30,6 +30,11 @@ async function startServer() {
       response.setHeader('Content-Type', 'application/json');
       response.end(JSON.stringify({ id, title: 'The Thing', releaseDate: id === 910 ? '1982-06-25' : '2011-10-14', mediaInfo: null })); return;
     }
+    if (request.url === '/api/v1/tv/920') {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify({ id: 920, name: 'Example Series', seasons: [1,2,3].map(seasonNumber => ({ seasonNumber, name: `Season ${seasonNumber}`, episodeCount: 8 })),
+        mediaInfo: { status: 4, seasons: [{ seasonNumber: 1, status: 5 }, { seasonNumber: 3, status: 2 }] } })); return;
+    }
     if (request.url.startsWith('/api/')) {
       response.setHeader('Content-Type', 'application/json');
       response.end(JSON.stringify(request.url.includes('/settings/public') ? { mediaServerType: 2 }

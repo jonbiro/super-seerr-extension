@@ -12,6 +12,10 @@ class UIComponents {
     if (this.debug) console.log(`🎨 [${this.siteName}]`, ...args);
   }
 
+  chooseSeasons(options, settings) {
+    return window.chooseSeerrSeasons(options, settings);
+  }
+
   // Explicit selection only; opening or cancelling this picker never writes.
   chooseTitle(candidates, { title, signal } = {}) {
     if (signal?.aborted) return Promise.resolve(null);
@@ -282,6 +286,9 @@ class UIComponents {
 
     panel.appendChild(statusSection);
     panel.appendChild(button);
+    const seasonButton = mediaData.mediaType === 'tv'
+      ? this.el('button', { type: 'button', className: 'seerr-watchlist-button seerr-seasons-button', textContent: 'Choose TV seasons' }) : null;
+    if (seasonButton) panel.appendChild(seasonButton);
 
     const watchlistButton = this.el('button', {
       className: 'seerr-watchlist-button',
@@ -303,7 +310,7 @@ class UIComponents {
     ]);
     panel.appendChild(plexButton);
 
-    return { statusSection, button, statusIcon, statusText, watchlistButton, plexButton };
+    return { statusSection, button, statusIcon, statusText, watchlistButton, plexButton, seasonButton };
   }
 
   updateFlyoutStatus(elements, statusData, options = {}) {

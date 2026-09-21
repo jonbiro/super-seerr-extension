@@ -163,14 +163,18 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
       }
       // Firefox executes this classic script but cannot serialize its final
       // class assignment. The next call uses the actual exported class.
-      await api.scripting.executeScript({ target: { tabId: tab.id }, files: ['/src/shared/UIComponents.js'] }).catch(error => {
+      await api.scripting.executeScript({ target: { tabId: tab.id }, files: ['/src/shared/SeasonPicker.js', '/src/shared/UIComponents.js'] }).catch(error => {
         if (!String(error).includes('non-structured-clonable')) throw error;
       });
       await api.scripting.executeScript({ target: { tabId: tab.id }, func: async () => {
         const result = await chrome.runtime.sendMessage({ action: 'getMediaCandidates', data: { title: 'The Thing', mediaType: 'movie' } });
         const ui = new window.UIComponents();
-        ui.chooseTitle(result.data, { title: 'The Thing' }).then(choice => {
+        ui.chooseTitle(result.data, { title: 'The Thing' }).then(async choice => {
           document.body.dataset.chosenTitle = choice ? String(choice.tmdbId) : 'cancelled';
+          if (!choice) return;
+          const options = await chrome.runtime.sendMessage({ action: 'getSeasonOptions', data: { title: 'Example Series', mediaType: 'tv', tmdbId: 920 } });
+          const selected = await window.chooseSeerrSeasons(options.data, { confirmText: 'Use selected seasons' });
+          document.body.dataset.chosenSeasons = JSON.stringify(selected);
         });
       } });
     `, [`${origin}/title/picker`]);
@@ -179,6 +183,10 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     await eventually(() => script('return document.querySelectorAll(".seerr-title-choice").length;'), 2, 'Firefox renders ambiguous title candidates');
     await script('document.querySelectorAll(".seerr-title-choice")[1].click();');
     await eventually(() => script('return document.body.dataset.chosenTitle;'), '911', 'Firefox picker returns the explicit choice');
+    await eventually(() => script('return document.querySelectorAll(".seerr-season-picker input").length;'), 3, 'Firefox renders season availability');
+    assert.equal(await script('return document.querySelectorAll(".seerr-season-picker input")[0].disabled;'), true);
+    await script('document.querySelectorAll(".seerr-season-picker input")[1].click(); Array.from(document.querySelectorAll(".seerr-season-picker button")).find(button => button.textContent === "Use selected seasons").click();');
+    await eventually(() => script('return document.body.dataset.chosenSeasons;'), '[2]', 'Firefox confirms only the selected season');
     await action('/window', undefined, 'DELETE');
     await action('/window', { handle: optionsHandle });
     await navigate(`moz-extension://${uuid}/src/popup/popup.html`);
