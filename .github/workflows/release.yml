@@ -30,6 +30,9 @@ jobs:
           WEB_EXT_API_KEY: ${{ secrets.WEB_EXT_API_KEY }}
           WEB_EXT_API_SECRET: ${{ secrets.WEB_EXT_API_SECRET }}
         run: node scripts/sign-firefox.cjs
+      - name: Prepare Firefox update metadata
+        if: inputs.sign_firefox
+        run: node scripts/prepare-firefox-updates.cjs dist/signed-firefox/*.xpi
       - uses: actions/upload-artifact@v4
         with:
           name: prepared-release
@@ -38,4 +41,5 @@ jobs:
             super-seerr-v*-firefox.xpi
             super-seerr-v*-SHA256SUMS.txt
             dist/signed-firefox/*.xpi
+            dist/firefox-distribution/*
           if-no-files-found: error

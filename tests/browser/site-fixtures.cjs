@@ -64,7 +64,7 @@ const SITES = [
   },
   {
     site: 'filmweb',
-    url: 'https://www.filmweb.pl/serial/Breaking+Bad-2008-388834',
+    url: 'https://www.filmweb.pl/serial/Breaking+Bad-2008-430668',
     html: '<h1 class="serialTitle__title">Breaking Bad</h1>',
     expect: { title: 'Breaking Bad', mediaType: 'tv' }
   }

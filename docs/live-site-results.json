@@ -1,0 +1,243 @@
+{
+  "checkedAt": "2026-09-21T06:06:04.239Z",
+  "version": "3.5.31",
+  "browser": "153.0.8010.12",
+  "results": [
+    {
+      "site": "imdb",
+      "mediaType": "movie",
+      "locale": "default",
+      "navigation": "initial load",
+      "requestedUrl": "https://www.imdb.com/title/tt0111161/",
+      "expectedTitle": "The Shawshank Redemption",
+      "httpStatus": 403,
+      "finalUrl": "https://www.imdb.com/title/tt0111161/",
+      "outcome": "blocked",
+      "reason": "HTTP 403",
+      "noFalseTitle": true,
+      "pageTitle": "403 Forbidden",
+      "extractedTitle": null,
+      "checkedAt": "2026-09-21T06:06:04.239Z"
+    },
+    {
+      "site": "tmdb",
+      "mediaType": "movie",
+      "locale": "default",
+      "navigation": "initial load",
+      "requestedUrl": "https://www.themoviedb.org/movie/550-fight-club",
+      "expectedTitle": "Fight Club",
+      "httpStatus": 200,
+      "finalUrl": "https://www.themoviedb.org/movie/550-fight-club",
+      "panelBounds": {
+        "x": 62,
+        "y": 168.0546875,
+        "width": 320,
+        "height": 263.890625
+      },
+      "layout": "390x600",
+      "outcome": "pass",
+      "pageTitle": "Fight Club (1999) — The Movie Database (TMDB)",
+      "extractedTitle": "Fight Club",
+      "checkedAt": "2026-09-21T06:06:04.239Z"
+    },
+    {
+      "site": "tmdb",
+      "mediaType": "tv",
+      "locale": "default",
+      "navigation": "same-tab navigation",
+      "requestedUrl": "https://www.themoviedb.org/tv/1396-breaking-bad",
+      "expectedTitle": "Breaking Bad",
+      "httpStatus": 200,
+      "finalUrl": "https://www.themoviedb.org/tv/1396-breaking-bad",
+      "panelBounds": {
+        "x": 62,
+        "y": 145.5546875,
+        "width": 320,
+        "height": 308.890625
+      },
+      "layout": "390x600",
+      "outcome": "pass",
+      "pageTitle": "Breaking Bad (TV Series 2008) — The Movie Database (TMDB)",
+      "extractedTitle": "Breaking Bad",
+      "checkedAt": "2026-09-21T06:06:04.239Z"
+    },
+    {
+      "site": "letterboxd",
+      "mediaType": "movie",
+      "locale": "default",
+      "navigation": "initial load",
+      "requestedUrl": "https://letterboxd.com/film/fight-club/",
+      "expectedTitle": "Fight Club",
+      "outcome": "site-unavailable",
+      "error": "page.goto: Timeout 20000ms exceeded.\nCall log:\n  - navigating to \"https://letterboxd.com/film/fight-club/\", waiting until \"domcontentloaded\"\n",
+      "pageTitle": "Loading https://letterboxd.com/film/fight-club/",
+      "extractedTitle": null,
+      "checkedAt": "2026-09-21T06:06:04.239Z"
+    },
+    {
+      "site": "rt",
+      "mediaType": "movie",
+      "locale": "default",
+      "navigation": "initial load",
+      "requestedUrl": "https://www.rottentomatoes.com/m/fight_club",
+      "expectedTitle": "Fight Club",
+      "httpStatus": 200,
+      "finalUrl": "https://www.rottentomatoes.com/m/fight_club",
+      "panelBounds": {
+        "x": 70,
+        "y": 178.0546875,
+        "width": 320,
+        "height": 243.890625
+      },
+      "layout": "390x600",
+      "outcome": "pass",
+      "pageTitle": "Fight Club | Rotten Tomatoes",
+      "extractedTitle": "Fight Club",
+      "checkedAt": "2026-09-21T06:06:04.239Z"
+    },
+    {
+      "site": "rt",
+      "mediaType": "tv",
+      "locale": "default",
+      "navigation": "same-tab navigation",
+      "requestedUrl": "https://www.rottentomatoes.com/tv/breaking_bad",
+      "expectedTitle": "Breaking Bad",
+      "httpStatus": 200,
+      "finalUrl": "https://www.rottentomatoes.com/tv/breaking_bad",
+      "outcome": "blocked",
+      "error": "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('.seerr-tab')\n    - locator resolved to <button type=\"button\" class=\"seerr-tab\" aria-expanded=\"false\" aria-label=\"Open Super Seerr\" title=\"Seerr server URL and API key are required\" aria-controls=\"seerr-flyout-rotten tomatoes-panel\">…</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is visible, enabled and stable\n      - scrolling into view if needed\n      - done scrolling\n      - <div id=\"onetrust-group-container\" class=\"ot-sdk-eight ot-sdk-columns\">…</div> from <div data-nosnippet=\"true\" id=\"onetrust-consent-sdk\">…</div> subtree intercepts pointer events\n    - retrying click action\n    - waiting 20ms",
+      "pageTitle": "Breaking Bad | Rotten Tomatoes",
+      "extractedTitle": "Breaking Bad",
+      "checkedAt": "2026-09-21T06:06:04.239Z",
+      "originalOutcome": "failed",
+      "reason": "Recorded click error identifies onetrust-consent-sdk intercepting pointer events; no consent choice made."
+    },
+    {
+      "site": "metacritic",
+      "mediaType": "movie",
+      "locale": "default",
+      "navigation": "initial load",
+      "requestedUrl": "https://www.metacritic.com/movie/fight-club",
+      "expectedTitle": "Fight Club",
+      "httpStatus": 200,
+      "finalUrl": "https://www.metacritic.com/movie/fight-club/",
+      "panelBounds": {
+        "x": 70,
+        "y": 165.3046875,
+        "width": 320,
+        "height": 269.390625
+      },
+      "layout": "390x600",
+      "outcome": "pass",
+      "pageTitle": "Fight Club Reviews - Metacritic",
+      "extractedTitle": "Fight Club",
+      "checkedAt": "2026-09-21T06:06:04.239Z"
+    },
+    {
+      "site": "trakt",
+      "mediaType": "movie",
+      "locale": "default",
+      "navigation": "initial load",
+      "requestedUrl": "https://trakt.tv/movies/fight-club-1999",
+      "expectedTitle": "Fight Club",
+      "httpStatus": 200,
+      "finalUrl": "https://app.trakt.tv/movies/fight-club-1999",
+      "panelBounds": {
+        "x": 70,
+        "y": 180.3046875,
+        "width": 320,
+        "height": 239.390625
+      },
+      "layout": "390x600",
+      "outcome": "pass",
+      "pageTitle": "Trakt Web: Fight Club",
+      "extractedTitle": "Fight Club",
+      "checkedAt": "2026-09-21T06:06:04.239Z"
+    },
+    {
+      "site": "trakt",
+      "mediaType": "tv",
+      "locale": "default",
+      "navigation": "same-tab navigation",
+      "requestedUrl": "https://trakt.tv/shows/breaking-bad",
+      "expectedTitle": "Breaking Bad",
+      "httpStatus": 200,
+      "finalUrl": "https://app.trakt.tv/shows/breaking-bad",
+      "panelBounds": {
+        "x": 70,
+        "y": 160.3046875,
+        "width": 320,
+        "height": 279.390625
+      },
+      "layout": "390x600",
+      "outcome": "pass",
+      "pageTitle": "Trakt Web: Breaking Bad",
+      "extractedTitle": "Breaking Bad",
+      "checkedAt": "2026-09-21T06:06:04.239Z"
+    },
+    {
+      "site": "filmweb",
+      "mediaType": "movie",
+      "locale": "pl-PL",
+      "navigation": "initial load",
+      "requestedUrl": "https://www.filmweb.pl/film/Podziemny+kr%C4%85g-1999-837",
+      "expectedTitle": "Fight Club",
+      "httpStatus": 200,
+      "finalUrl": "https://www.filmweb.pl/film/Podziemny+kr%C4%85g-1999-837",
+      "panelBounds": {
+        "x": 70,
+        "y": 177.703125,
+        "width": 320,
+        "height": 244.59375
+      },
+      "layout": "390x600",
+      "outcome": "pass",
+      "pageTitle": "Podziemny krąg (1999) - Filmweb",
+      "extractedTitle": "Fight Club",
+      "checkedAt": "2026-09-21T06:06:59.947Z"
+    },
+    {
+      "site": "filmweb",
+      "mediaType": "tv",
+      "locale": "pl-PL",
+      "navigation": "same-tab navigation",
+      "requestedUrl": "https://www.filmweb.pl/serial/Breaking+Bad-2008-430668",
+      "expectedTitle": "Breaking Bad",
+      "httpStatus": 200,
+      "finalUrl": "https://www.filmweb.pl/serial/Breaking+Bad-2008-430668",
+      "panelBounds": {
+        "x": 70.53385925292969,
+        "y": 157.65625,
+        "width": 320.00001525878906,
+        "height": 284.6875
+      },
+      "layout": "390x600",
+      "outcome": "pass",
+      "pageTitle": "Breaking Bad (Serial TV 2008-2013) - Filmweb",
+      "extractedTitle": "Breaking Bad",
+      "checkedAt": "2026-09-21T06:06:59.947Z"
+    },
+    {
+      "site": "tmdb",
+      "mediaType": "movie",
+      "locale": "es-ES",
+      "navigation": "same-tab navigation",
+      "requestedUrl": "https://www.themoviedb.org/movie/550-fight-club?language=es-ES",
+      "expectedTitle": "El club de la lucha",
+      "httpStatus": 200,
+      "finalUrl": "https://www.themoviedb.org/movie/550-fight-club?language=es-ES",
+      "panelBounds": {
+        "x": 62,
+        "y": 168.0546875,
+        "width": 320,
+        "height": 263.890625
+      },
+      "layout": "390x600",
+      "outcome": "pass",
+      "pageTitle": "El club de la lucha (1999) — The Movie Database (TMDB)",
+      "extractedTitle": "El club de la lucha",
+      "checkedAt": "2026-09-21T06:06:04.239Z"
+    }
+  ],
+  "note": "Combined full run and corrected Filmweb rerun; consent interception reclassified from recorded error. Runtime source v3.5.31."
+}

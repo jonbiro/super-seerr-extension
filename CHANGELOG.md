@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.32]
+
+- Expand live-site coverage to TV, same-tab navigation, Spanish and Polish pages, redirects and small-window layouts; report blocked/unavailable sites separately.
+- Correct the live Filmweb TV fixture identity and record nine passing live cases with three external access limitations.
+- Prepare Firefox self-distribution manifests and hashed update feeds from signed artifacts; reject unsigned update inputs.
+- Keep signing, publication and automatic-update verification as explicit external release gates.
+
 ## [3.5.31]
 
 - Search saved title matches by original or selected title, server, year, type and TMDB ID.

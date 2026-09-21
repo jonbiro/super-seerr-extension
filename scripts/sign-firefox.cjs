@@ -3,6 +3,7 @@
 const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const source = require('../manifest.base.json');
+const { distributionManifest } = require('./firefox-distribution.cjs');
 if (!process.env.WEB_EXT_API_KEY || !process.env.WEB_EXT_API_SECRET) {
   console.error('Set WEB_EXT_API_KEY and WEB_EXT_API_SECRET from your Mozilla account to sign the prepared Firefox build.'); process.exit(1);
 }
@@ -11,5 +12,9 @@ if (manifest.version !== source.version) throw new Error('Prepared Firefox build
 for (const file of fs.readdirSync('src', { recursive: true }).filter(file => fs.statSync(`src/${file}`).isFile())) {
   if (!fs.readFileSync(`src/${file}`).equals(fs.readFileSync(`dist/firefox/src/${file}`))) throw new Error('Prepared Firefox source is stale; run make release first.');
 }
-const result = spawnSync('npx', ['--yes', 'web-ext@10.6.0', 'sign', '--channel=unlisted', '--source-dir=dist/firefox', '--artifacts-dir=dist/signed-firefox'], { stdio: 'inherit', env: process.env });
+const signSource = 'dist/firefox-self-distributed';
+fs.rmSync(signSource, { recursive: true, force: true });
+fs.cpSync('dist/firefox', signSource, { recursive: true });
+fs.writeFileSync(`${signSource}/manifest.json`, JSON.stringify(distributionManifest(manifest), null, 2));
+const result = spawnSync('npx', ['--yes', 'web-ext@10.6.0', 'sign', '--channel=unlisted', `--source-dir=${signSource}`, '--artifacts-dir=dist/signed-firefox'], { stdio: 'inherit', env: process.env });
 process.exit(result.status ?? 1);
