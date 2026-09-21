@@ -1,65 +1,32 @@
-// Property test 10: In-Library badge idempotence and visibility
 const { test } = require('node:test');
-const assert = require('node:assert');
-const fc = require('fast-check');
+const assert = require('node:assert/strict');
+const { loadIntegration } = require('./helpers/integration');
 
-test('Property 10: Badge shown iff available_watch, hidden otherwise', () => {
-  function shouldShowBadge(status) {
-    return status === 'available_watch';
-  }
-
-  fc.assert(
-    fc.property(
-      fc.oneof(
-        fc.constant('available_watch'),
-        fc.constant('available'),
-        fc.constant('pending'),
-        fc.constant('downloading'),
-        fc.constant('ready'),
-        fc.constant('requested'),
-        fc.constant('partial'),
-        fc.constant('error'),
-        fc.constant('unknown'),
-        fc.string({ minLength: 1 })
-      ),
-      (status) => {
-        if (status === 'available_watch') {
-          assert.ok(shouldShowBadge(status), 'Badge should be shown for available_watch');
-        } else {
-          assert.ok(!shouldShowBadge(status), `Badge should NOT be shown for ${status}`);
-        }
-      }
-    )
-  );
+test('real library badge remains unique and can be removed and restored', t => {
+  const page = loadIntegration(); t.after(() => page.window.close());
+  const ui = new page.window.UIComponents();
+  const container = page.window.document.createElement('div');
+  container.innerHTML = '<span class="seerr-title">Example</span>';
+  page.window.document.body.append(container);
+  for (let i = 0; i < 10; i++) ui.showInLibraryBadge(container);
+  assert.equal(container.querySelectorAll('#seerr-in-library-badge').length, 1);
+  assert.match(container.textContent, /In Library/);
+  ui.hideInLibraryBadge(container); ui.hideInLibraryBadge(container);
+  assert.equal(container.querySelectorAll('#seerr-in-library-badge').length, 0);
+  ui.showInLibraryBadge(container);
+  assert.equal(container.querySelectorAll('#seerr-in-library-badge').length, 1);
 });
 
-test('Property 10b: Badge insertion is idempotent', () => {
-  // Simulate the guard check: if document.getElementById('seerr-in-library-badge') exists, return
-  function showBadge(existingBadgeCount) {
-    if (existingBadgeCount > 0) return 1; // idempotent — don't add another
-    return 1; // creates the badge
+test('production status updates show the library badge only for available media', async t => {
+  const page = loadIntegration(); t.after(() => page.window.close());
+  const integration = new page.window.BaseIntegration('Probe', { uiTheme: 'flyout' });
+  integration.mediaData = { title: 'Example', mediaType: 'movie', tmdbId: 1 };
+  let status = 'available_watch';
+  integration.client.getMediaStatus = async () => ({ status, buttonClass: 'request' });
+  await integration.setupFlyoutUI();
+  for (const next of ['available_watch', 'pending', 'available_watch', 'error', 'available']) {
+    status = next; await integration.updateStatus();
+    assert.equal(page.window.document.querySelectorAll('#seerr-in-library-badge').length, next === 'available_watch' ? 1 : 0);
   }
-
-  function hideBadge(existingBadgeCount) {
-    return 0; // removes the badge
-  }
-
-  // For any sequence of show/hide calls, there should never be more than 1 badge
-  fc.assert(
-    fc.property(
-      fc.array(fc.boolean()),
-      (showCalls) => {
-        let badgeCount = 0;
-        for (const show of showCalls) {
-          if (show) {
-            badgeCount = showBadge(badgeCount);
-          } else {
-            badgeCount = hideBadge(badgeCount);
-          }
-          assert.ok(badgeCount >= 0 && badgeCount <= 1,
-            `Badge count should be 0 or 1, got ${badgeCount}`);
-        }
-      }
-    )
-  );
+  integration.destroy();
 });

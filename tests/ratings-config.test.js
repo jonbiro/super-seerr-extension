@@ -4,35 +4,8 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fc = require('fast-check');
 
-// buildSummary logic replicated from seerr-integration.js
-const RatingsConfig = {
-  summary: {
-    criticsCertifiedFresh: 75,
-    criticsStrong: 60,
-    criticsMixed: 40,
-  },
-  audienceCriticsDelta: 15,
-};
-
-function buildSummary(bundle) {
-  const c = bundle.rtCriticsScore;
-  const a = bundle.rtAudienceScore;
-  if (c === null) return null;
-
-  const cfg = RatingsConfig.summary;
-  if (c >= cfg.criticsCertifiedFresh) {
-    if (a !== null && a - c >= RatingsConfig.audienceCriticsDelta) {
-      return 'Audience loves it even more than critics';
-    }
-    return 'Critics love it';
-  }
-  if (c >= cfg.criticsStrong)  return 'Strong reviews';
-  if (c >= cfg.criticsMixed)   return 'Mixed reviews';
-  if (a !== null && a - c >= RatingsConfig.audienceCriticsDelta) {
-    return 'Audience likes it more than critics';
-  }
-  return 'Mostly negative reviews';
-}
+const { loadOverlay } = require('./helpers/overlay');
+const { buildSummary } = loadOverlay();
 
 const VALID_LABELS = new Set([
   'Audience loves it even more than critics',
@@ -55,7 +28,7 @@ test('Property 14: Summary heuristic returns exactly one valid label or null', (
         fc.integer({ min: 0, max: 100 })
       ),
       (criticsScore, audienceScore) => {
-        const result = buildSummary({ rtCriticsScore: criticsScore, rtAudienceScore: audienceScore });
+        const result = buildSummary({ confidence: 1, rtCriticsScore: criticsScore, rtAudienceScore: audienceScore });
 
         if (criticsScore === null) {
           assert.strictEqual(result, null, 'Null critics score should return null');
@@ -70,9 +43,13 @@ test('Property 14: Summary heuristic returns exactly one valid label or null', (
 });
 
 test('0% RT critics score is treated as valid (not absent)', () => {
-  const result = buildSummary({ rtCriticsScore: 0, rtAudienceScore: null });
+  const result = buildSummary({ confidence: 1, rtCriticsScore: 0, rtAudienceScore: null });
   assert.strictEqual(result, 'Mostly negative reviews');
 
-  const result2 = buildSummary({ rtCriticsScore: 0, rtAudienceScore: 50 });
+  const result2 = buildSummary({ confidence: 1, rtCriticsScore: 0, rtAudienceScore: 50 });
   assert.strictEqual(result2, 'Audience likes it more than critics');
+});
+
+test('uncertain matches never receive a review summary', () => {
+  assert.equal(buildSummary({ confidence: 0.2, rtCriticsScore: 90, rtAudienceScore: 90 }), null);
 });

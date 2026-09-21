@@ -69,3 +69,19 @@ Coverage includes:
 Native permission bubbles are outside Playwright's page automation. Tests grant access through Chromium's extension-manager API (the same browser-side operation behind its site-access UI), then use the real Settings form and `chrome.permissions.remove`. Unit tests separately check the user-gesture ordering and declined-permission save behavior. No production permission API is mocked in the browser suite.
 
 Failures retain `test-results/**/trace.zip`; inspect with `npx playwright show-trace <path>`. CI uploads these artifacts. Chromium is the verified CI browser target. Firefox packaging and manifest checks run in CI; its runtime harness is verified locally and remains opt-in.
+
+## Read-only live-site check (opt-in)
+
+Run `node tests/browser/live-sites.cjs` to visit one movie page on each supported
+site with the current unpacked Chromium extension. It uses a disposable profile,
+no credentials, and no Seerr writes. Results go to `test-results/live-sites.json`.
+A blocked or failed site makes the command exit nonzero; blocked pages are never
+counted as working media integrations. Filmweb intentionally prefers the original
+English title when the page supplies it.
+
+The September 20, 2026 Chromium check passed title extraction on TMDB, Letterboxd, Rotten Tomatoes, Metacritic, Trakt, and Filmweb. It found that IMDb returned HTTP 403; its live media page
+therefore remains unverified. The extension now refuses that error-page title.
+Trakt's generic SPA page title previously became the movie name; its existing
+route-title fallback now recognizes that generic title. Automated regressions
+cover both cases. Synthetic browser fixtures still cover IMDb's supported markup;
+they do not bypass or stand in for the live-site block.

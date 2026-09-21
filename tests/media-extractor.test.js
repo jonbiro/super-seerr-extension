@@ -3,19 +3,9 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const fc = require('fast-check');
 
-// Replicate the createMediaData logic from MediaExtractor
-function createMediaData(rawData, source) {
-  return {
-    imdbId:    rawData.imdbId    || null,
-    title:     rawData.title     || null,
-    year:      rawData.year      || null,
-    mediaType: rawData.mediaType || 'movie',
-    posterUrl: rawData.posterUrl || null,
-    overview:  rawData.overview  || null,
-    tmdbId:    rawData.tmdbId    || null,
-    source:    source
-  };
-}
+const MediaExtractor = require('../src/shared/MediaExtractor');
+const extractor = new MediaExtractor();
+const createMediaData = (data, source) => extractor.createMediaData(data, source);
 
 test('Property 11: tmdbId round-trips through createMediaData', () => {
   fc.assert(
@@ -47,12 +37,4 @@ test('Property 11: tmdbId round-trips through createMediaData', () => {
       }
     )
   );
-});
-
-test('Property: tmdbId field exists in actual MediaExtractor source', () => {
-  const fs = require('fs');
-  const path = require('path');
-  const content = fs.readFileSync(path.join(__dirname, '..', 'src', 'shared', 'MediaExtractor.js'), 'utf-8');
-  assert.ok(content.includes('tmdbId:'), 'MediaExtractor.js should contain tmdbId field');
-  assert.ok(content.includes('rawData.tmdbId'), 'MediaExtractor.js should reference rawData.tmdbId');
 });

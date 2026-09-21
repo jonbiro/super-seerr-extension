@@ -2,55 +2,20 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { loadWorker } = require('./helpers/worker');
-const fc = require('fast-check');
 
-test('Property 8: Watchlist button visible iff requestable', () => {
-  // The showWatchlist logic from UIComponents.updateFlyoutStatus:
-  // showWatchlist = statusData.status === 'available' || statusData.buttonClass === 'request'
-  function shouldShowWatchlist(statusData) {
-    return statusData.status === 'available' || statusData.buttonClass === 'request';
+test('watchlist visibility follows actual flyout status and disables recovery states', t => {
+  const page = require('./helpers/integration').loadIntegration();
+  t.after(() => page.window.close());
+  const ui = new page.window.UIComponents();
+  const watchlistButton = page.window.document.createElement('button');
+  for (const [status, buttonClass, action, visible] of [
+    ['available', 'request', null, true], ['pending', 'pending', null, false],
+    ['downloading', 'downloading', null, false], ['available_watch', 'watch', null, false],
+    ['error', 'request', 'retryStatus', false], ['unknown', 'request', 'chooseTitle', false]
+  ]) {
+    ui.updateFlyoutStatus({ watchlistButton }, { status, buttonClass, action });
+    assert.equal(watchlistButton.style.display, visible ? 'flex' : 'none');
   }
-
-  fc.assert(
-    fc.property(
-      fc.record({
-        status: fc.oneof(
-          fc.constant('available'),
-          fc.constant('pending'),
-          fc.constant('downloading'),
-          fc.constant('available_watch'),
-          fc.constant('requested'),
-          fc.constant('unknown'),
-          fc.string({ minLength: 1 })
-        ),
-        buttonClass: fc.oneof(
-          fc.constant('request'),
-          fc.constant('pending'),
-          fc.constant('downloading'),
-          fc.constant('watch'),
-          fc.constant('error'),
-          fc.constant('partial'),
-          fc.constant('available'),
-          fc.string({ minLength: 1 })
-        )
-      }),
-      (statusData) => {
-        const result = shouldShowWatchlist(statusData);
-
-        // Only visible when status is 'available' OR buttonClass is 'request'
-        if (statusData.status === 'available' || statusData.buttonClass === 'request') {
-          assert.ok(result, `Watchlist should be visible when status=${statusData.status} or buttonClass=${statusData.buttonClass}`);
-        }
-
-        // For pending, downloading, available_watch — should be hidden
-        if (['pending', 'downloading', 'available_watch'].includes(statusData.status)) {
-          if (statusData.buttonClass !== 'request') {
-            assert.ok(!result, `Watchlist should be hidden when status=${statusData.status} and buttonClass=${statusData.buttonClass}`);
-          }
-        }
-      }
-    )
-  );
 });
 
 test('the watchlist body is the one Seerr will accept', async () => {

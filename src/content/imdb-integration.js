@@ -45,6 +45,8 @@ class IMDBIntegration extends BaseIntegration {
     ];
 
     const title = this.extractor.extractTitle(titleSelectors, {
+      // Error/challenge pages retain the title URL but are not media records.
+      fallbackToPageTitle: /\s[-|]\sIMDb\s*$/i.test(document.title),
       cleanupPatterns: [
         /\s*\(\d{4}\)\s*$/, // Remove year in parentheses
         /\s*\d{4}\s*$/, // Remove trailing year

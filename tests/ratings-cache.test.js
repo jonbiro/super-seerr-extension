@@ -1,79 +1,24 @@
-// Property test 13: Session cache coalescing
-// Never issues more than one concurrent request per TMDB ID
 const { test } = require('node:test');
-const assert = require('node:assert');
+const assert = require('node:assert/strict');
+const { loadOverlay } = require('./helpers/overlay');
 
-test('Property 13: Session cache coalesces concurrent requests', async () => {
-  // Simulate the cache + coalescing logic
-  const cache = new Map();
-  let requestCount = 0;
-
-  async function resolveRatings(tmdbId) {
-    requestCount++;
-    await new Promise(r => setTimeout(r, 50)); // simulate network
-    return { rtCriticsScore: 84, confidence: 1.0 };
-  }
-
-  async function getRatings(tmdbId) {
-    const key = String(tmdbId);
-    const cached = cache.get(key);
-    if (cached) return cached;
-
-    const pendingKey = `pending:${key}`;
-    if (cache.has(pendingKey)) {
-      return cache.get(pendingKey);
-    }
-
-    const promise = resolveRatings(tmdbId);
-    cache.set(pendingKey, promise);
-
-    const bundle = await promise;
-    cache.delete(pendingKey);
-    cache.set(key, bundle);
-    return bundle;
-  }
-
-  // Fire N concurrent requests for the same TMDB ID
-  const promises = Array.from({ length: 10 }, () => getRatings(12345));
-  const results = await Promise.all(promises);
-
-  // All 10 callers should get the same result
-  results.forEach(r => {
-    assert.strictEqual(r.rtCriticsScore, 84);
+test('production ratings cache coalesces concurrent lookups and separates identities', async () => {
+  const overlay = loadOverlay();
+  const calls = [];
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  overlay.setResolver(async (id, title, year, type) => {
+    calls.push({ id, type }); await gate;
+    return overlay.Model.createRatingsBundle({ rtCriticsScore: id === 550 ? 90 : 70, confidence: 1 });
   });
-
-  // Only 1 network request should have been issued
-  assert.strictEqual(requestCount, 1, 'Only one network request should be issued for concurrent lookups');
-});
-
-test('Property 13b: Different TMDB IDs issue separate requests', async () => {
-  const cache = new Map();
-  let requestCount = 0;
-
-  async function resolveRatings(tmdbId) {
-    requestCount++;
-    await new Promise(r => setTimeout(r, 20));
-    return { rtCriticsScore: tmdbId === 1 ? 90 : 70, confidence: 1.0 };
-  }
-
-  async function getRatings(tmdbId) {
-    const key = String(tmdbId);
-    const cached = cache.get(key);
-    if (cached) return cached;
-
-    const pendingKey = `pending:${key}`;
-    if (cache.has(pendingKey)) return cache.get(pendingKey);
-
-    const promise = resolveRatings(tmdbId);
-    cache.set(pendingKey, promise);
-    const bundle = await promise;
-    cache.delete(pendingKey);
-    cache.set(key, bundle);
-    return bundle;
-  }
-
-  const [r1, r2] = await Promise.all([getRatings(1), getRatings(2)]);
-  assert.strictEqual(r1.rtCriticsScore, 90);
-  assert.strictEqual(r2.rtCriticsScore, 70);
-  assert.strictEqual(requestCount, 2, 'Different TMDB IDs should issue separate requests');
+  const reads = Array.from({ length: 10 }, () => overlay.getRatings(550, 'Fight Club', 1999, 'movie'));
+  reads.push(overlay.getRatings(551, 'Other', 2020, 'movie'));
+  release();
+  const results = await Promise.all(reads);
+  assert.equal(calls.filter(call => call.id === 550).length, 1);
+  assert.equal(calls.filter(call => call.id === 551).length, 1);
+  assert.ok(results.slice(0, 10).every(result => result.rtCriticsScore === 90));
+  assert.equal(results[10].rtCriticsScore, 70);
+  assert.equal((await overlay.getRatings(550, 'Fight Club', 1999, 'movie')).rtCriticsScore, 90);
+  assert.equal(calls.length, 2);
 });

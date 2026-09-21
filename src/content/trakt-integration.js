@@ -89,7 +89,7 @@ class TraktIntegration extends BaseIntegration {
     this.log('Extracted title before cleanup:', title);
 
     // For app.trakt.tv React SPA, if we only got generic title, extract from URL
-    if (!title || title === 'Trakt Web' || title.trim() === '') {
+    if (!title || /^(?:Trakt(?: Web)?|Track Your Shows & Movies)$/i.test(title.trim()) || title.trim() === '') {
       this.log('Title extraction failed, trying to extract from URL slug');
       if (urlMatch && urlMatch[2]) {
         // Convert URL slug to title (e.g., "peacemaker-2022" -> "Peacemaker")

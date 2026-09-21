@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.10]
+
+- IMDb no longer treats unbranded error/challenge page titles as movies. Trakt ignores its generic application title and uses its existing route-title fallback. Both were found during live-site checks.
+- Replaced nine suites of copied/simulated implementation logic with tests executing production migration, cache, extraction, summaries, debug controls, watchlist visibility, badges, and flyout lifecycle.
+- Added an opt-in live-site smoke command that reports blocked sites separately from passing title extraction, without credentials or request writes.
+
 ## [3.5.9]
 
 - Added real-extension Chromium and Firefox coverage for eleven synthetic movie/TV pages across all seven supported sites, including Polish Unicode titles. Fixtures verify production bootstrap and extraction, not current live-site markup.

@@ -46,3 +46,18 @@ test('every integration returns null rather than guessing on an unrelated page',
     assert.equal(data, null, `${site} should not extract from ${new URL(url).pathname}`);
   }
 });
+
+for (const title of ['403 Forbidden', 'Just a moment...', 'Access Denied']) {
+  test(`IMDb rejects a non-media page titled ${title}`, async t => {
+    const page = loadIntegration({ site: 'imdb', title, html: `<h1>${title}</h1>` });
+    t.after(() => page.window.close());
+    assert.equal(await page.integration().extractMediaData(), null);
+  });
+}
+
+test('Trakt generic application title cannot become the movie identity', async t => {
+  const page = loadIntegration({ site: 'trakt', url: 'https://app.trakt.tv/movies/fight-club-1999', title: 'Trakt Web: Track Your Shows & Movies', html: '<main></main>' });
+  t.after(() => page.window.close());
+  const media = await page.integration().extractMediaData();
+  assert.equal(media.title, 'Fight Club');
+});
