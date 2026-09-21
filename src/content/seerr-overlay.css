@@ -630,3 +630,9 @@
 .seerr-filter-presets { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
 .seerr-filter-presets input { width: 120px; }
 .seerr-filter-presets input:focus-visible { outline: 3px solid #f59e0b; }
+
+/* Long preset names and storage messages must wrap within the toolbar. */
+.seerr-filter-presets { min-width: 0; max-width: 100%; }
+.seerr-filter-presets select, .seerr-filter-presets input { box-sizing: border-box; min-width: 0; max-width: 100%; }
+.seerr-filter-presets [role="status"] { flex-basis: 100%; overflow-wrap: anywhere; line-height: 1.5; }
+.seerr-filter-presets [role="status"]:empty { display: none; }

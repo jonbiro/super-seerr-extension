@@ -16,6 +16,13 @@
     const sorts = new Set([...bar.querySelector('.seerr-sort-select').options].map(option => option.value));
     const limits = { minCritics: 100, minAudience: 100, minTmdb: 10, minImdb: 10 };
     let presets = [];
+    let busy = false;
+    function setBusy(value) {
+      busy = value;
+      wrapper.setAttribute('aria-busy', String(value));
+      select.disabled = value; name.disabled = value; save.disabled = value;
+      remove.disabled = value || !select.value;
+    }
     function validate(value) {
       if (!value || typeof value.name !== 'string' || !value.name.trim() || !sorts.has(value.sort)) return null;
       const filters = {};
@@ -28,7 +35,7 @@
     }
     async function load() {
       const stored = (await chrome.storage.sync.get([KEY]))[KEY];
-      presets = Array.isArray(stored) ? stored.slice(0, 20).map(validate).filter(Boolean) : [];
+      return Array.isArray(stored) ? stored.slice(0, 20).map(validate).filter(Boolean) : [];
     }
     function render(selected = '') {
       select.replaceChildren();
@@ -37,39 +44,46 @@
         const option = document.createElement('option'); option.value = preset.name; option.textContent = preset.name; select.appendChild(option);
       }
       select.value = selected;
-      remove.disabled = !select.value;
+      remove.disabled = busy || !select.value;
     }
     select.addEventListener('change', () => {
+      if (busy) return;
       const preset = presets.find(item => item.name === select.value);
       remove.disabled = !preset;
       if (preset) { name.value = preset.name; apply(preset); status.textContent = `Applied ${preset.name}`; }
     });
     save.addEventListener('click', async () => {
+      if (busy) return;
       const preset = validate({ name: name.value, ...readCurrent() });
       if (!preset) { status.textContent = 'Enter a name for this preset.'; name.focus(); return; }
-      save.disabled = true; remove.disabled = true;
+      setBusy(true);
       try {
-        await load();
-        const index = presets.findIndex(item => item.name === preset.name);
-        if (index >= 0) presets[index] = preset;
+        const next = await load();
+        const index = next.findIndex(item => item.name === preset.name);
+        if (index >= 0) next[index] = preset;
         else {
-          if (presets.length >= 20) throw new Error('Delete a preset before adding another (maximum 20).');
-          presets.push(preset);
+          if (next.length >= 20) throw new Error('Delete a preset before adding another (maximum 20).');
+          next.push(preset);
         }
-        await chrome.storage.sync.set({ [KEY]: presets }); render(preset.name);
+        await chrome.storage.sync.set({ [KEY]: next });
+        presets = next; render(preset.name);
         status.textContent = `Saved ${preset.name}`;
       } catch (error) { status.textContent = error.message || 'Could not save preset.'; }
-      finally { save.disabled = false; remove.disabled = !select.value; }
+      finally { setBusy(false); }
     });
     remove.addEventListener('click', async () => {
-      const selected = select.value; if (!selected) return;
-      remove.disabled = true; save.disabled = true;
+      const selected = select.value; if (busy || !selected) return;
+      setBusy(true);
       try {
-        await load(); presets = presets.filter(item => item.name !== selected);
-        await chrome.storage.sync.set({ [KEY]: presets }); render(); status.textContent = `Deleted ${selected}`;
+        const next = (await load()).filter(item => item.name !== selected);
+        await chrome.storage.sync.set({ [KEY]: next });
+        presets = next; render(); name.value = ''; status.textContent = `Deleted ${selected}`;
       } catch (_) { status.textContent = 'Could not delete preset.'; }
-      finally { save.disabled = false; remove.disabled = !select.value; }
+      finally { setBusy(false); }
     });
-    void load().then(() => render()).catch(() => { status.textContent = 'Could not load presets.'; });
+    render(); setBusy(true);
+    void load().then(value => { presets = value; render(); })
+      .catch(() => { status.textContent = 'Could not load presets. Save retries loading before making changes.'; })
+      .finally(() => setBusy(false));
   };
 })(typeof window !== 'undefined' ? window : globalThis);

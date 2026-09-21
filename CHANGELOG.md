@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.16]
+
+- Keep saved filter presets unchanged in memory when saving or deleting fails. Disable preset controls during initial loading and writes to prevent overlapping operations.
+- Clear the preset name after successful deletion and keep long names and storage feedback inside narrow toolbars.
+- Add regression coverage for failed writes, delayed loading and narrow-screen preset controls.
+
 ## [3.5.15]
 
 - Keep title and season dialogs inside narrow viewports regardless of host-page box sizing, wrap long titles, and improve action button contrast and sizing.
