@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.61]
+
+- Skip null search results and candidates without valid TMDB IDs, and safely handle non-string release dates.
+- Add regressions ensuring malformed candidates do not mask a valid title match.
+
 ## [3.5.60]
 
 - Skip null and untyped request-history entries instead of aborting the lookup or treating unknown types as TV.

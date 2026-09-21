@@ -82,7 +82,8 @@
       // Writes demand stronger evidence than a ratings badge. Never fall back
       // to search ordering, year alone, a substring, or another media type.
       const candidates = (searchResults || []).filter(result => {
-        if (result.mediaType !== mediaData.mediaType) return false;
+        if (!result || result.mediaType !== mediaData.mediaType) return false;
+        try { root.MediaValidation.tmdbId(result.id); } catch (_) { return false; }
         const titles = [result.title, result.originalTitle, result.name, result.originalName].filter(Boolean);
         if (!titles.some(title => this.areTitlesSimilar(title, mediaData.title))) return false;
         if (mediaData.year) {
@@ -103,7 +104,7 @@
     },
 
     extractYear(dateString) {
-      if (!dateString) return null;
+      if (typeof dateString !== 'string' || !dateString) return null;
       const year = parseInt(dateString.substring(0, 4));
       return isNaN(year) ? null : year;
     },
