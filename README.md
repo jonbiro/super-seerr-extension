@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.1.79-blue)
+![Version](https://img.shields.io/badge/version-3.5.0-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -12,7 +12,7 @@ Request movies and TV shows from the pages where you discover them, and bring Ro
 2. In Chrome, open `chrome://extensions`, enable **Developer mode**, select **Load unpacked**, and choose `dist/chrome`.
 3. Open Super Seerr’s **Settings**, enter your Seerr server URL, and click **Save Settings**.
 4. Approve the permission prompt for your Seerr server. Super Seerr only asks for the one origin you saved, and the ratings overlay cannot run until you approve it.
-5. Refresh Seerr. For request and Seerr-watchlist actions, add a Seerr API key from Seerr Settings → General → API Key. For the Plex Watchlist button, add a Plex token: sign in at app.plex.tv, open the DevTools Console (F12), run `localStorage.getItem('myPlexAccessToken')`, and paste the value.
+5. Refresh Seerr. For request and Seerr-watchlist actions, add a Seerr API key from Seerr Settings → General → API Key. For the Plex Watchlist button, add a Plex token: sign in at app.plex.tv, open the DevTools Console (F12), run `localStorage.getItem('myPlexAccessToken')`, paste the value, then **Test Plex** to verify it.
 
 If you dismiss the permission prompt, your settings are still saved and the site integrations keep working; Settings then shows a standing notice with a **Grant access** button. Changing the server URL asks again for the new origin and drops the old one.
 
@@ -34,7 +34,7 @@ This has **not been validated against a running Firefox**. An opt-in `npm run te
 | Letterboxd | Movie detection and a themed request flyout |
 | Your configured Seerr server | Ratings on cards and detail pages, quality summaries, sorting, filters, bulk review, and Plex Watchlist buttons on cards and movie/TV detail pages — on discover, search, requests, collections, people, the blocklist and your watchlist |
 
-The flyout reports request status, supports Seerr watchlisting, offers a separate Plex Watchlist button when a Plex token is configured (visible even for available titles, where the Seerr button hides), and links to your media server when Seerr supplies a playable URL. Seerr can be backed by Plex, Jellyfin or Emby; Super Seerr asks your server which one it uses and names it accordingly, or says simply “Watch” if it cannot tell. Those are separate products; their names and links are intentional. Seerr's watchlist and Plex's Universal Watchlist are different lists: the extension writes the first via your Seerr server and the second via plex.tv with your Plex token.
+The flyout reports request status, supports Seerr watchlisting, offers a separate Plex Watchlist button when a Plex token is configured (visible even for available titles, where the Seerr button hides), and links to your media server when Seerr supplies a playable URL. Where a single lookup answers it — detail pages and the flyout — the Plex button shows the current state up front (`✓ On Plex Watchlist`, disabled) instead of an action; grids keep the lightweight add button, which reports an already-listed title distinctly when clicked. Seerr can be backed by Plex, Jellyfin or Emby; Super Seerr asks your server which one it uses and names it accordingly, or says simply “Watch” if it cannot tell. Those are separate products; their names and links are intentional. Seerr's watchlist and Plex's Universal Watchlist are different lists: the extension writes the first via your Seerr server and the second via plex.tv with your Plex token.
 
 Requests only use a known TMDB ID or an unambiguous title/type/year match. If matching is uncertain, **Choose in Seerr** opens search so you can select the right title. Failed status lookups offer **Retry status**, not a media request. A lost response to a request is an unknown outcome: check Seerr before requesting again; the extension never automatically resends that POST.
 
@@ -56,7 +56,7 @@ Choose **Select titles**, select cards, then **Review & Request**. Titles with m
 
 ### Preferences
 
-Settings includes separate switches for card badges, detail ratings, summaries, sort/filter controls, and bulk selection. Save to apply them. Hiding card badges does not disable sorting by their underlying scores.
+Settings includes separate switches for card badges, detail ratings, summaries, sort/filter controls, bulk selection, and Plex Watchlist buttons. Save to apply them. Hiding card badges does not disable sorting by their underlying scores.
 
 ## Development
 
@@ -84,11 +84,11 @@ See [architecture](docs/design.md), [requirements and limits](docs/requirements.
 
 ## Data and permissions
 
-Seerr requests use your configured URL and API key. Overlay session requests use the logged-in Seerr page session. RT lookup sends a title search to Rotten Tomatoes.
+Seerr requests use your configured URL and API key. Overlay session requests use the logged-in Seerr page session. RT lookup sends a title search to Rotten Tomatoes. Plex Watchlist adds resolve the title through Plex Discover and write via plex.tv, authenticated with your Plex token.
 
 Super Seerr does not request access to all websites. The site integrations run only on the seven supported sites listed above. Because a self-hosted Seerr can live on any domain, access to your server is an *optional* permission requested at the moment you save its URL, and the overlay is registered against that one origin at runtime. Revoking the permission in your browser removes the overlay registration.
 
-The server URL and your feature toggles use browser sync storage, so they follow your browser profile across devices. **The API key is stored in device-local storage and does not sync** — enter it once per device. An API key saved by an earlier version is moved out of sync storage automatically on upgrade. Treat exported profiles and shared machines accordingly.
+The server URL and your feature toggles use browser sync storage, so they follow your browser profile across devices. **The API key and the Plex token are stored in device-local storage and do not sync** — enter them once per device. An API key saved by an earlier version is moved out of sync storage automatically on upgrade. Saving a Plex token also requests host permission for plex.tv, without which Plex actions cannot reach the network; declining still saves everything else. Treat exported profiles and shared machines accordingly.
 
 No telemetry service is configured by this project. The background worker is quiet by default; **Settings → Troubleshooting → Verbose logging** turns tracing on while you reproduce a problem. Debug output can include media titles and server responses, so review logs before sharing them.
 

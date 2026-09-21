@@ -6,7 +6,7 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
-## [Unreleased]
+## [3.5.0]
 
 - Options: the Plex Token hint and its Show/Test Plex buttons no longer collide. The hint flows full-width with the actions on their own row.
 
