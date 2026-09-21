@@ -170,3 +170,30 @@ test('resolveRatings hands the session lookup what it already knows', async () =
   assert.equal(bundle.rtCriticsScore, 88);
   assert.equal(bundle.imdbRating, 8.2);
 });
+
+test('sparse rating objects are incomplete until every score exists', () => {
+  const { overlay } = overlayWithSeerr({});
+  assert.equal(overlay.isBundleComplete({}), false);
+  assert.equal(overlay.isBundleComplete({ rtCriticsScore: 90 }), false);
+  assert.equal(overlay.isBundleComplete({ ...COMPLETE, imdbRating: undefined }), false);
+});
+
+test('newly fetched RT scores skip redundant ratings while still collecting missing TMDB', async () => {
+  const { overlay, callsForTitle } = overlayWithSeerr({
+    [RATINGS_COMBINED]: { rtCriticsScore: 88, rtAudienceScore: 91, imdbRating: 8.2 },
+    [DETAILS]: { voteAverage: 7.9 }
+  });
+  const bundle = await overlay.fetchSeerrSessionRatings(TMDB_ID, 'movie');
+  assert.deepEqual(callsForTitle(), [RATINGS_COMBINED, DETAILS]);
+  assert.equal(bundle.rtCriticsScore, 88); assert.equal(bundle.tmdbRating, 7.9);
+});
+
+test('resetting a failed session lookup stops its remaining endpoints', async () => {
+  let started = 0, reject;
+  const overlay = loadOverlay({ fetch: () => { started++; return new Promise((_, fail) => { reject = fail; }); } });
+  const outcome = {};
+  const lookup = overlay.fetchSeerrSessionRatings(TMDB_ID, 'movie', null, outcome);
+  overlay.resetSeerrRatings(); reject(new Error('Old connection failed'));
+  assert.equal(await lookup, null);
+  assert.equal(started, 1); assert.equal(outcome.conclusive, false);
+});

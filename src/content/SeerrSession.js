@@ -59,14 +59,13 @@
         : [[`/api/v1/movie/${tmdbId}/ratingscombined`, 'ratingscombined'],
            [`/api/v1/movie/${tmdbId}/ratings`, 'ratings'],
            [`/api/v1/movie/${tmdbId}`, 'detail']];
-      const endpoints = all
-        .filter(([, kind]) => endpointCanHelp(known, SESSION_ENDPOINT_FIELDS[kind]))
-        .map(([endpoint]) => endpoint);
-
       let bundle = null;
       let ratingsAreAbsent = false;
-      for (const endpoint of endpoints) {
-        if (outcome.signal?.aborted) { outcome.conclusive = false; return null; }
+      for (const [endpoint, endpointKind] of all) {
+        if (expected !== generation || outcome.signal?.aborted) { outcome.conclusive = false; return null; }
+        // Re-evaluate after every response: earlier endpoints may have filled
+        // the fields that a later endpoint could contribute.
+        if (!endpointCanHelp(mergeBundles(known, bundle), SESSION_ENDPOINT_FIELDS[endpointKind])) continue;
         // Seerr answers /ratingscombined with 404 only when it has neither RT
         // nor IMDb, and /ratings with 404 when it has no RT. So once combined
         // has 404ed, /ratings cannot succeed; asking is a guaranteed second
@@ -80,7 +79,7 @@
             : endpoint.endsWith('/ratings') ? 'ratings' : null;
           if (kind) seerrRatingsRequests[kind]++;
           const result = await fetchJsonFromSeerr(endpoint, outcome.signal);
-          if (expected !== generation) { outcome.conclusive = false; return null; }
+          if (expected !== generation || outcome.signal?.aborted) { outcome.conclusive = false; return null; }
           if (!result.ok) {
             if (result.status === 404 && endpoint.endsWith('/ratingscombined')) ratingsAreAbsent = true;
             // 404 is Seerr saying it has nothing. A 500 or a 401 is Seerr failing
@@ -97,7 +96,7 @@
         }
         // These run once per card. Walking the remaining endpoints when there is
         // nothing left to fill multiplies load on a self-hosted server for free.
-        if (isBundleComplete(bundle)) {
+        if (isBundleComplete(mergeBundles(known, bundle))) {
           log(`Seerr ratings complete after ${endpoint}; skipping remaining endpoints`);
           break;
         }

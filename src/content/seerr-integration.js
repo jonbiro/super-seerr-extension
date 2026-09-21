@@ -237,6 +237,7 @@
     currentFilters.minCritics = 0;
     currentFilters.minAudience = 0;
     currentFilters.minTmdb = 0;
+    currentFilters.minImdb = 0;
     // Disconnect card mutation observer so it doesn't fire on the old page
     if (cardObserver) { cardObserver.disconnect(); cardObserver = null; }
     clearTimeout(cardObserverTimer);

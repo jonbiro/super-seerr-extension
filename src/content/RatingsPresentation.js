@@ -69,7 +69,7 @@
 
     // A bundle no further source can improve; nothing left to fill in.
     function isBundleComplete(bundle) {
-      return !!bundle && SCORE_FIELDS.every(field => bundle[field] !== null);
+      return !!bundle && SCORE_FIELDS.every(field => bundle[field] !== null && bundle[field] !== undefined);
     }
 
     function mergeBundles(primary, secondary) {

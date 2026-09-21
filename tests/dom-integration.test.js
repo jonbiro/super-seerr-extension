@@ -100,6 +100,8 @@ test('query navigation clears filters and base-path session requests stay under 
   assert.ok(fixture.urls.some(url => url === 'https://seerr.example/seerr/api/v1/search?query=test'));
   const input = fixture.window.document.querySelector('.seerr-min-critics');
   input.value = '80'; input.dispatchEvent(new fixture.window.Event('input'));
+  const imdb = fixture.window.document.querySelector('.seerr-min-imdb');
+  imdb.value = '9'; imdb.dispatchEvent(new fixture.window.Event('input'));
   assert.equal(fixture.window.document.querySelector('[data-id="1"]').style.display, 'none');
   fixture.window.history.pushState({}, '', '/seerr/search?query=next');
   fixture.window.testOverlay.handleRouteChange(); await settle();

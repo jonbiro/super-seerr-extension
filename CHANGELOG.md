@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.24]
+
+- Re-evaluate missing rating fields after each Seerr response to skip redundant endpoints while still filling gaps.
+- Treat sparse rating objects as incomplete and stop obsolete session lookups after reset or cancellation.
+- Clear the IMDb threshold on navigation so a hidden old filter cannot suppress the new page’s titles.
+
 ## [3.5.23]
 
 - Invalidate cached card identity, ratings, selection and Plex controls when a reused card links to a different title. Reject late rating results for the previous identity.
