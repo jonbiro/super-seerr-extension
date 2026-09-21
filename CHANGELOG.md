@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.50]
+
+- Keep the Plex watchlist button disabled after successful or already-present adds instead of immediately allowing another click.
+- Preserve retry behavior after failed adds, with three button-state regressions.
+
 ## [3.5.49]
 
 - Ignore stale Plex configuration responses and failures before mutating the current connection state.

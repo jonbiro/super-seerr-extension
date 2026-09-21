@@ -644,11 +644,13 @@ class BaseIntegration {
     const plexButton = view.elements.plexButton;
     const label = plexButton ? plexButton.querySelector('span') : null;
     const original = label ? label.textContent : null;
+    let added = false;
     try {
       if (label) label.textContent = 'Adding to Plex…';
       if (plexButton) plexButton.disabled = true;
       const result = await this.client.plexAddToWatchlist(view.media);
       if (!view.isCurrent()) return;
+      added = true;
       this.ui.createNotification(
         result && result.already ? 'Already on Plex Watchlist' : 'Added to Plex Watchlist',
         result && result.already
@@ -668,7 +670,7 @@ class BaseIntegration {
     } finally {
       if (this._plexWatchlistAttempt === attempt) {
         this._plexWatchlistAttempt = null;
-        if (view.isCurrent() && plexButton) plexButton.disabled = false;
+        if (view.isCurrent() && plexButton) plexButton.disabled = added;
       }
     }
   }
