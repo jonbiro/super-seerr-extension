@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Super Seerr",
-  "version": "3.5.56",
+  "version": "3.5.57",
   "description": "Request movies and TV from seven discovery sites, with ratings, filters and request management for your Seerr server.",
   "permissions": [
     "storage",

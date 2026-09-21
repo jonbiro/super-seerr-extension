@@ -8,6 +8,7 @@
   const search = document.createElement('input'); search.type = 'search';
   search.placeholder = 'Search title, server or TMDB ID'; search.setAttribute('aria-label', 'Search saved matches'); search.hidden = true;
   let matches = [];
+  let matchRevision = 0;
   function serverLabel(entry) {
     try {
       const parts = JSON.parse(entry.key);
@@ -38,6 +39,7 @@
         try {
           const result = await chrome.runtime.sendMessage({ action: 'removeTitleCorrection', key: entry.key });
           if (!result?.success) throw new Error();
+          matchRevision++;
           matches = matches.filter(item => item.key !== entry.key); render(); search.focus();
           status.textContent = 'Match forgotten. Reload its page to choose again.';
         } catch (_) { reset.disabled = false; status.textContent = 'Could not forget match.'; }
@@ -48,12 +50,14 @@
   }
   search.addEventListener('input', render);
   inspect.addEventListener('click', async () => {
+    const revision = matchRevision;
     inspect.disabled = true; list.setAttribute('aria-busy', 'true');
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getTitleCorrections' });
+      if (revision !== matchRevision) return;
       if (!response?.success || !Array.isArray(response.data)) throw new Error();
       matches = response.data; search.hidden = false; render();
-    } catch (_) { status.textContent = 'Could not load saved matches. Try again.'; }
+    } catch (_) { if (revision === matchRevision) status.textContent = 'Could not load saved matches. Try again.'; }
     finally { inspect.disabled = false; list.removeAttribute('aria-busy'); }
   });
   const prepare = document.createElement('button'); prepare.type = 'button'; prepare.textContent = 'Prepare diagnostic report';
