@@ -146,7 +146,7 @@ class UIComponents {
   }
 
   createRequestButton(options = {}) {
-    const button = this.el('button', { className: 'seerr-request-button request' }, [
+    const button = this.el('button', { type: 'button', className: 'seerr-request-button request' }, [
       this.svg('M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z'),
       this.el('span', { textContent: options.text || 'Request on Seerr' })
     ]);
@@ -281,7 +281,7 @@ class UIComponents {
       this.el('div', { className: 'seerr-status-indicator' }, [statusIcon, statusText])
     ]);
 
-    const button = this.el('button', { className: 'seerr-action-button loading', disabled: 'true' }, [
+    const button = this.el('button', { type: 'button', className: 'seerr-action-button loading', disabled: 'true' }, [
       this.svg('M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z', { size: 20 }),
       this.el('span', { textContent: 'Connecting to Seerr...' })
     ]);
@@ -293,7 +293,7 @@ class UIComponents {
     if (seasonButton) panel.appendChild(seasonButton);
 
     const watchlistButton = this.el('button', {
-      className: 'seerr-watchlist-button',
+      type: 'button', className: 'seerr-watchlist-button',
       style: 'display:none'
     }, [
       this.svg('M17 12h-5v5h-2v-5H5v-2h5V5h2v5h5v2z', { size: 18 }),
@@ -304,7 +304,7 @@ class UIComponents {
     // True Plex Watchlist: visible whenever a Plex token is configured,
     // including for available titles where the Seerr button hides.
     const plexButton = this.el('button', {
-      className: 'seerr-plex-button',
+      type: 'button', className: 'seerr-plex-button',
       style: 'display:none'
     }, [
       this.svg('M17 12h-5v5h-2v-5H5v-2h5V5h2v5h5v2z', { size: 18 }),
@@ -491,6 +491,9 @@ class UIComponents {
         gap: 0.75rem;
         align-items: flex-end;
         pointer-events: none;
+        max-height: calc(100dvh - 40px);
+        max-width: calc(100vw - 40px);
+        overflow-y: auto;
       }
 
       .seerr-notification-stack > * {
@@ -505,7 +508,13 @@ class UIComponents {
         padding: 1rem;
         box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
         z-index: 10000;
-        min-width: 300px;
+        box-sizing: border-box;
+        min-width: 0;
+        width: min(360px, calc(100vw - 40px));
+        max-height: calc(100dvh - 40px);
+        overflow: auto;
+        overflow-wrap: anywhere;
+        flex-shrink: 0;
         animation: slideIn 0.3s ease;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         color: #f9fafb;
@@ -564,16 +573,23 @@ class UIComponents {
         }
       }
 
+      @media (prefers-reduced-motion: reduce) {
+        .seerr-flyout, .seerr-flyout *, .seerr-notification {
+          animation: none !important;
+          transition: none !important;
+        }
+      }
+
       /* Flyout Components (imported from RT styles) */
       .seerr-flyout {
         position: fixed;
         right: 0;
-        top: 25%;
+        top: 50%;
         transform: translateY(-50%);
         z-index: 9999;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        max-width: 350px;
+        max-width: calc(100vw - 68px);
         transform: translateY(-50%) translateX(100%);
       }
 
@@ -609,7 +625,7 @@ class UIComponents {
         outline-offset: 3px;
       }
       .seerr-panel-close {
-        display: block; margin: 0 0 10px auto; padding: 5px 9px;
+        display: block; margin: 8px 8px 10px auto; padding: 8px 12px; min-height: 36px;
         border: 1px solid currentColor; border-radius: 4px;
         background: transparent; color: inherit; cursor: pointer;
       }
@@ -634,13 +650,17 @@ class UIComponents {
         text-transform: uppercase;
       }
 
+      .seerr-flyout, .seerr-flyout * { box-sizing: border-box; }
       .seerr-panel {
-        width: 320px;
+        color: #1a202c;
+        width: min(320px, calc(100vw - 68px));
+        max-height: calc(100dvh - 24px);
+        overflow-wrap: anywhere;
         background: white;
         border-radius: 8px 0 0 8px;
         box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
         border: 1px solid #e2e8f0;
-        overflow: hidden;
+        overflow-y: auto;
       }
 
       .seerr-status-section {
@@ -795,6 +815,7 @@ class UIComponents {
       /* Theme follows the page we are injected into, not the operating
          system: these sites are dark whatever the visitor prefers. */
       .seerr-theme-dark .seerr-panel {
+        color: #f9fafb;
         background: #1f2937;
         border-color: #374151;
       }
