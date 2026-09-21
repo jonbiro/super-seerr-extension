@@ -162,3 +162,27 @@ test('saved matches search server and title details without rendering markup or 
   search.value = ''; search.dispatchEvent(new dom.window.Event('input'));
   assert.equal(doc.querySelectorAll('li').length, 1);
 });
+
+test('an obsolete refresh cannot unlock controls while history is being cleared', async t => {
+  const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), {runScripts:'outside-only'});
+  t.after(() => dom.window.close());
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  let entries = [{kind:'request',title:'Example',mediaType:'movie',at:1}], reads = 0, finishStatus, finishClear;
+  dom.window.chrome = {runtime:{sendMessage:async ({action}) => {
+    if (action === 'getRecentActions') return {success:true,data:entries};
+    if (action === 'getRecentActionStatuses' && ++reads === 2) return new Promise(resolve => {finishStatus = resolve;});
+    if (action === 'clearRecentActions') return new Promise(resolve => {finishClear = () => {entries=[]; resolve({success:true});};});
+    return {success:true,data:[]};
+  }}};
+  dom.window.eval(fs.readFileSync('src/popup/recent-actions.js', 'utf8'));
+  await tick();
+  const clear = dom.window.document.getElementById('clearRecentActions');
+  const refresh = [...dom.window.document.querySelectorAll('button')].find(b => b.textContent === 'Refresh statuses');
+  refresh.click(); await tick();
+  clear.click();
+  finishStatus({success:true,data:[]}); await tick();
+  assert.equal(refresh.disabled, true);
+  finishClear(); await tick();
+  assert.equal(refresh.disabled, false);
+  assert.equal(dom.window.document.querySelectorAll('#recentActionsList li').length, 0);
+});

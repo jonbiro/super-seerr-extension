@@ -59,6 +59,12 @@
   clear.className = 'button secondary';
   const actions = document.createElement('div'); actions.className = 'recent-action-controls';
   clear.before(actions); actions.append(refresh, clear);
-  refresh.addEventListener('click', async () => { refresh.disabled = true; await load(); refresh.disabled = false; });
+  refresh.addEventListener('click', async () => {
+    refresh.disabled = true;
+    const pending = load();
+    const current = generation;
+    await pending;
+    if (current === generation) refresh.disabled = false;
+  });
   void load();
 })();
