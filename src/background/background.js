@@ -625,7 +625,7 @@ class SeerrAPI {
         this.log(`📊 [Background] Found ${requests.length} total requests`);
 
         if (requests.length > 0) {
-          this.log('📊 [Background] Sample requests:', requests.slice(0, 3).map(r => ({
+          this.log('📊 [Background] Sample requests:', requests.slice(0, 3).filter(Boolean).map(r => ({
             id: r.id, type: r.type, status: r.status,
             mediaId: r.media?.tmdbId || r.media?.id,
             title: r.media?.title || r.media?.name
@@ -633,9 +633,10 @@ class SeerrAPI {
         }
 
         const matchingRequest = requests.find(request => {
+          if (!request || !['movie', 'tv'].includes(request.type)) return false;
           // Extension requests use standard quality, independently of 4K.
           if (request.is4k) return false;
-          const requestMediaType = request.type === 'movie' ? 'movie' : 'tv';
+          const requestMediaType = request.type;
           const matchesType = requestMediaType === mediaType;
           // Only tmdbId identifies the title. request.media.id is Seerr's own
           // sequential row id, and comparing it here matched an unrelated

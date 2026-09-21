@@ -151,3 +151,11 @@ test('standard request history wins over an earlier 4K entry', async () => {
   ]}});
   assert.equal((await worker.api.searchRequests(550,'movie')).id, 2);
 });
+
+for (const bad of [null, {id:1,status:1,media:{tmdbId:1396}}, {id:1,type:'unknown',status:1,media:{tmdbId:1396}}]) {
+  test(`invalid history entry ${JSON.stringify(bad)} cannot mask a valid TV request`, async () => {
+    const worker = loadWorker(CONFIGURED); await worker.ready;
+    withApi(worker, {'/api/v1/request': {results:[bad, {id:2,type:'tv',status:4,media:{tmdbId:1396}}]}});
+    assert.equal((await worker.api.searchRequests(1396,'tv')).id, 2);
+  });
+}

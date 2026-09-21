@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.60]
+
+- Skip null and untyped request-history entries instead of aborting the lookup or treating unknown types as TV.
+- Add regressions proving valid requests remain discoverable after malformed entries.
+
 ## [3.5.59]
 
 - Exclude 4K entries from standard-quality request history matching so a pending 4K request cannot block a standard request.
