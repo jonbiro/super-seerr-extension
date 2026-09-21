@@ -748,3 +748,46 @@ test('bulk TV review requires season selection and sends only the reviewed seaso
   assert.equal(bulk.querySelector('[data-season-index]').disabled, true);
   finishRequest({ success: true }); await settle();
 });
+
+test('manual refresh keeps known scores visible and retains them when sources fail', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const doc = f.window.document;
+  const before = doc.querySelector('[data-id="1"] .seerr-card-badge').textContent;
+  let release;
+  // Every request shares one externally released failure, so the refresh can finish.
+  const waiting = new Promise(resolve => { release = resolve; });
+  f.window.chrome.runtime.sendMessage = async () => { await waiting; return { success: false }; };
+  f.window.fetch = async () => { throw new Error('Offline'); };
+  doc.querySelector('.seerr-refresh-scores').click(); await settle();
+  assert.equal(doc.querySelector('[data-id="1"] .seerr-card-badge').textContent, before);
+  release(); await settle();
+  assert.equal(doc.querySelector('[data-id="1"] .seerr-card-badge').textContent, before);
+  assert.equal(doc.querySelector('.seerr-refresh-scores').disabled, false);
+});
+
+test('manual refresh preserves release years and cancels queued work on navigation', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const doc = f.window.document, grid = doc.getElementById('grid');
+  for (let id = 4; id <= 10; id++) {
+    const card = doc.querySelector('article').cloneNode(true);
+    card.dataset.id = String(id); card.querySelector('a').href = `/movie/${id}`;
+    card.querySelector('h2').textContent = `Film ${id}`; grid.appendChild(card);
+  }
+  for (const card of grid.querySelectorAll('article')) {
+    card.__seerrMediaInfo = { tmdbId: Number(card.dataset.id), title: 'Film', year: 1999, mediaType: 'movie' };
+  }
+  let started = 0; const release = [];
+  f.window.chrome.runtime.sendMessage = async message => {
+    if (message.action !== 'getRottenTomatoesRatings') return { success: true };
+    assert.equal(message.data.year, 1999); started++;
+    return new Promise(resolve => release.push(() => resolve({ success: false })));
+  };
+  doc.querySelector('.seerr-refresh-scores').click(); await settle();
+  assert.equal(started, 4);
+  f.window.history.replaceState({}, '', '/settings');
+  f.window.testOverlay.handleRouteChange();
+  release.forEach(done => done()); await settle();
+  assert.equal(started, 4);
+});

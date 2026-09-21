@@ -804,11 +804,11 @@
   }
 
   // Drop the given titles so the next lookup resolves them again. Scoped to
-  // what the caller names, so refreshing a grid leaves the rest cached.
-  function forgetRatings(titles) {
+  // what the caller names. Manual refresh preserves resolved fallback bundles.
+  function forgetRatings(titles, { preserveCache = false } = {}) {
     let forgotten = 0;
     for (const { tmdbId, title = '', year = null, mediaType = null } of titles) {
-      if (ratingsCache.delete(ratingsCacheKey(tmdbId, title, year, mediaType))) forgotten++;
+      if (!preserveCache && ratingsCache.delete(ratingsCacheKey(tmdbId, title, year, mediaType))) forgotten++;
       // The page-level index would otherwise re-seed the same stale scores.
       pageRatingsByTmdbId.delete(ratingKey(tmdbId, mediaType));
       embeddedRatingsByTmdbId.delete(ratingKey(tmdbId, mediaType));
@@ -923,23 +923,18 @@
     const titles = loadedTitles(grid);
     if (titles.length === 0) return 0;
 
-    forgetRatings(titles);
-    // The page-level fetch is memoised per endpoint; drop it so the list
-    // ratings are re-read rather than replayed from this page load.
+    // Keep the previous bundle visible and available as a fallback on failure.
+    forgetRatings(titles, { preserveCache: true });
     pageRatingsFetches.clear();
-
-    const cards = getMediaCards(grid);
-    cards.forEach(card => {
-      card.querySelectorAll('[data-seerr-overlay="true"][class*="card-badge"], .seerr-rating-details').forEach(badge => badge.remove());
-      delete card.__seerrRatings;
-      card.__seerrBadgesResolving = false;
-      card.__seerrBadgesCleared = false;
-    });
-
     const generation = routeGeneration;
-    await Promise.all(titles.map(info =>
-      getRatings(info.tmdbId, info.title, null, info.mediaType, { refresh: true }).catch(() => null)
-    ));
+    const jobs = getMediaCards(grid).map(card => ({ card, info: getCardMediaInfo(card) }))
+      .filter(({ info }) => info?.tmdbId);
+    await Promise.all(jobs.map(({ card, info }) => cardRatingQueue.add(card, async signal => {
+      await getRatings(info.tmdbId, info.title, info.year ?? null, info.mediaType, { refresh: true, signal });
+      if (!signal.aborted && generation === routeGeneration && card.isConnected) {
+        repaintRatingTitle(info.tmdbId, info.mediaType);
+      }
+    }).catch(() => null)));
     if (generation !== routeGeneration) return 0;
 
     injectCardBadges();

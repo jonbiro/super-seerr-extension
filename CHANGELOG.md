@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.18]
+
+- Run manual grid refreshes through the four-job viewport queue, preserving release years and cancelling queued refreshes after navigation.
+- Keep known scores visible during refresh and retain them when sources fail, instead of deleting fallback data before fetching.
+
 ## [3.5.17]
 
 - Grant access from the Settings warning for the saved server, even when the URL field contains unsaved edits. Keep permission requests attached to the original click.
