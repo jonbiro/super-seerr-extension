@@ -470,6 +470,10 @@
 /* ─── Confirmation Modal ─── */
 
 .seerr-confirmation-modal {
+  box-sizing: border-box;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+  overflow-wrap: anywhere;
   position: fixed;
   top: 50%;
   left: 50%;
@@ -515,11 +519,15 @@
 
 .seerr-confirmation-modal .modal-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
 }
 
 .seerr-confirmation-modal button {
+  max-width: 100%;
+  min-height: 40px;
+  white-space: normal;
   padding: 7px 14px;
   border-radius: 8px;
   border: none;
@@ -636,3 +644,7 @@
 .seerr-filter-presets select, .seerr-filter-presets input { box-sizing: border-box; min-width: 0; max-width: 100%; }
 .seerr-filter-presets [role="status"] { flex-basis: 100%; overflow-wrap: anywhere; line-height: 1.5; }
 .seerr-filter-presets [role="status"]:empty { display: none; }
+
+.seerr-confirmation-modal button:focus-visible, .seerr-confirmation-modal summary:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
+
+.seerr-scored-card:has(> .seerr-select-checkbox) > .seerr-rating-details { left: 34px; max-width: calc(100% - 40px); }

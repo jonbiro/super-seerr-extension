@@ -820,3 +820,28 @@ test('page exit cancels the active Load more button run and permits a fresh run 
   await new Promise(resolve => setTimeout(resolve, 180));
   assert.equal(scrolls.length, 3, 'only the current run restores its position');
 });
+
+for (const [outcomes, kind, heading] of [
+  [[false], 'error', 'Bulk Request Failed'],
+  [[true, false], 'warning', 'Some Requests Failed'],
+  [[true], 'success', 'Bulk Request Complete']
+]) {
+  test(`bulk request reports ${kind} for ${outcomes.join(',')}`, async t => {
+    const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+    await settle(); const doc = f.window.document;
+    doc.querySelector('.seerr-toggle-select').click();
+    const boxes = doc.querySelectorAll('.seerr-select-checkbox');
+    outcomes.forEach((_, i) => boxes[i].click());
+    doc.querySelector('.seerr-bulk-review').click();
+    let sent = 0;
+    const original = f.window.chrome.runtime.sendMessage;
+    f.window.chrome.runtime.sendMessage = async message => message.action === 'requestMedia' ? { success: outcomes[sent++] } : original(message);
+    doc.querySelector('.confirm-btn').click();
+    await new Promise(resolve => setTimeout(resolve, outcomes.length > 1 ? 550 : 0)); await settle();
+    const note = doc.querySelector('.seerr-notification');
+    assert.equal(note.classList.contains(kind), true);
+    assert.equal(note.querySelector('.seerr-notification-title').textContent, heading);
+    assert.equal(note.getAttribute('role'), kind === 'error' ? 'alert' : 'status');
+    assert.equal(sent, outcomes.length);
+  });
+}

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.21]
+
+- Move score details aside during bulk selection so the selection checkbox remains clickable.
+- Report failed and partially failed bulk requests with the correct error or warning instead of a success notification, and announce results to assistive technology.
+- Keep bulk review inside short, narrow viewports with wrapping controls and long titles, scrolling, and visible keyboard focus. Escape no longer propagates to the host page.
+
 ## [3.5.19]
 
 - Stop Load more on navigation and page exit, without scrolling the new page or painting obsolete results.

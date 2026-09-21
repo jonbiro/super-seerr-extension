@@ -1504,6 +1504,7 @@
     }
     const note = document.createElement('div');
     note.className = `seerr-notification ${kind}`;
+    note.setAttribute('role', kind === 'error' ? 'alert' : 'status');
     const heading = document.createElement('div');
     heading.className = 'seerr-notification-title';
     heading.textContent = title;
@@ -2208,12 +2209,12 @@
     modal.querySelector('.cancel-btn').addEventListener('click', closeModal);
     modal.querySelector('.cancel-btn').focus();
     modal.addEventListener('keydown', event => {
-      if (event.key === 'Escape') { event.preventDefault(); closeModal(); }
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeModal(); }
       if (event.key === 'Tab') {
         const controls = [...modal.querySelectorAll('button:not(:disabled), summary')];
         const index = controls.indexOf(document.activeElement);
         if (event.shiftKey && index <= 0) { event.preventDefault(); controls.at(-1)?.focus(); }
-        else if (!event.shiftKey && index === controls.length - 1) { event.preventDefault(); controls[0]?.focus(); }
+        else if (!event.shiftKey && (index < 0 || index === controls.length - 1)) { event.preventDefault(); controls[0]?.focus(); }
       }
     });
 
@@ -2266,8 +2267,9 @@
       closeModal();
       hideBulkActionBar();
 
-      notifyResult('Bulk Request Complete',
-        `${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}`, 'success');
+      const resultKind = failed === 0 ? 'success' : succeeded === 0 ? 'error' : 'warning';
+      const resultTitle = failed === 0 ? 'Bulk Request Complete' : succeeded === 0 ? 'Bulk Request Failed' : 'Some Requests Failed';
+      notifyResult(resultTitle, `${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}`, resultKind);
 
       bulkMode = false;
       selectedCards.clear();

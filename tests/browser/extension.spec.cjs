@@ -400,3 +400,26 @@ test('recent confirmed requests show current status and exact Seerr title links'
   await expect(row.getByRole('link')).toHaveCount(1);
   await popup.close();
 });
+
+test('bulk review fits a short narrow viewport and Escape restores focus', async () => {
+  const page = await context.newPage();
+  try {
+    await page.setViewportSize({ width: 320, height: 320 });
+    await page.goto(`${origin}/discover`);
+    await page.getByRole('button', { name: 'Select titles', exact: true }).click();
+    await page.locator('.seerr-select-checkbox').click();
+    const review = page.locator('.seerr-bulk-review');
+    await review.click();
+    const dialog = page.getByRole('dialog', { name: 'Review your bulk request' });
+    await expect(dialog).toBeVisible();
+    await dialog.locator('li').first().evaluate(node => { node.textContent = 'VeryLongTitle'.repeat(40); });
+    const bounds = await dialog.boundingBox();
+    expect(bounds.x).toBeGreaterThanOrEqual(0); expect(bounds.y).toBeGreaterThanOrEqual(0);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(320);
+    expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await dialog.getByRole('button', { name: 'Cancel', exact: true }).focus();
+    await page.keyboard.press('Escape'); await expect(dialog).toHaveCount(0);
+    await expect(review).toBeFocused();
+  } finally { await page.close(); }
+});
