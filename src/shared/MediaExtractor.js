@@ -22,6 +22,18 @@ function findReleaseYear(text) {
   return null;
 }
 
+// Visible release metadata takes precedence; time elements may omit the year
+// from their label while retaining it in the machine-readable date.
+function releaseYearFromElement(element) {
+  const visibleYear = findReleaseYear(element.textContent);
+  if (visibleYear !== null) return visibleYear;
+  if (element.localName !== 'time') return null;
+  const date = element.getAttribute('datetime')?.trim();
+  const match = date?.match(/^(\d{4})(?:-\d{2}(?:-\d{2}(?:[T ].*)?)?)?$/);
+  const year = match ? Number(match[1]) : null;
+  return isPlausibleReleaseYear(year) ? year : null;
+}
+
 class MediaExtractor {
   constructor(options = {}) {
     this.debug = options.debug || false;
@@ -124,7 +136,7 @@ class MediaExtractor {
       const element = document.querySelector(selector);
       this.log(`Year selector "${selector}":`, element ? element.textContent.trim() : 'not found');
       if (element) {
-        const year = findReleaseYear(element.textContent);
+        const year = releaseYearFromElement(element);
         if (year !== null) {
           this.log('Found year using selector:', selector, '-> year:', year);
           return year;
@@ -138,7 +150,7 @@ class MediaExtractor {
       for (const element of elements) {
         const text = element.textContent.trim();
         this.log('Checking metadata element:', text);
-        const year = findReleaseYear(text);
+        const year = releaseYearFromElement(element);
         if (year !== null) {
           this.log('Found year in metadata:', text, '-> year:', year);
           return year;

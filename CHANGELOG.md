@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.38]
+
+- Read release years from selected time elements when their visible labels omit the year, preserving visible-year precedence and rejecting durations or implausible years.
+- Add regressions across Trakt, Metacritic, Letterboxd, Rotten Tomatoes and TMDB.
+
 ## [3.5.37]
 
 - Preserve numeric movie titles on IMDb, Letterboxd, Metacritic and Trakt while still removing parenthesized release-year labels.
