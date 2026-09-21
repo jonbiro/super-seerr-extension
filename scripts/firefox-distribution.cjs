@@ -1,6 +1,11 @@
 // Stable self-distribution location; publishing is a separate release gate.
 const base = 'https://github.com/jonbiro/super-seerr-extension/releases';
 const updateUrl = `${base}/latest/download/updates.json`;
+function assertPreparedManifest(manifest, expected) {
+  if (!require('node:util').isDeepStrictEqual(manifest, expected)) {
+    throw new Error('Prepared Firefox manifest differs from source; run make release first.');
+  }
+}
 function distributionManifest(manifest) {
   const copy = structuredClone(manifest);
   copy.browser_specific_settings.gecko.update_url = updateUrl;
@@ -16,4 +21,4 @@ function updatesFor(manifest, hash) {
     applications: { gecko: { strict_min_version: gecko.strict_min_version } }
   }] } } } };
 }
-module.exports = { updateUrl, distributionManifest, updatesFor };
+module.exports = { updateUrl, distributionManifest, updatesFor, assertPreparedManifest };

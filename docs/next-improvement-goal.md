@@ -1,22 +1,30 @@
-# Reliability, accessibility and distribution goal
+# Revised improvement goal
 
-This checklist tracks the seven-part improvement goal separately from earlier completed work.
+The active goal contains five requirements. VoiceOver testing is explicitly
+excluded at the user's request and must not be enabled for this goal.
 
-- [x] Serialize filter preset read-modify-write operations in the worker; synchronize open controls through storage change events. Concurrent-tab and failed-write regressions cover the queue.
-- [x] Run diagnostics against one settings snapshot and reject outdated reports. Added regressions for URL, credentials and settings reloads (3.5.28).
-- [x] Pause notification dismissal on hover and keyboard focus; retain actionable errors longer.
-- [x] Live regions are established before content updates (browser regression verified). VoiceOver verification was explicitly skipped at the user’s request.
-- [x] Expand read-only live-site coverage to TV, navigation, localized titles and changing layouts; separate blocked sites from failures.
-- [x] Add saved-match search, server labels and individual details.
-- [ ] Signing and update-feed preparation implemented and tested; actual signing/publication and Firefox automatic-update verification require unavailable publisher credentials.
+| Requirement | Implementation and verification |
+| --- | --- |
+| Safe presets across tabs | Worker serializes reads/writes, validates the sending Seerr page, recovers after failed writes; storage events synchronize controls. Worker tests and the two-tab Chromium regression pass. |
+| Consistent diagnostics | Snapshot binds URL, credentials and settings generation; obsolete checks reject. Tests cover URL/key/token/reload changes and in-flight authentication. |
+| Readable notifications | Production shared module pauses timers on hover/focus, keeps errors until dismissal, and protects focused notices during bursts. Chromium timer/focus/error regressions pass. |
+| Saved-match management | Search covers titles, server, year, type and ID; details disclose each match's server and identity. DOM and Chromium tests cover search, details and individual deletion. |
+| Signed-release preparation and update path | Signing copy has a stable HTTPS update URL; signer rejects stale source/manifest; update CLI checks identity/version and signature-file presence, copies exact artifact bytes, and generates a SHA-256 feed. Tests cover unsigned rejection, stale manifest and the CLI output. Manual CI workflow prepares these artifacts when publisher credentials are supplied. |
 
-Local automated checks and unpacked builds do not establish screen-reader behavior, live-site compatibility, signing, store approval or publication. Record those outcomes separately when verified.
+All implementation and local release-preparation work is complete. No claim is
+made that an unsigned archive is signed or that the update feed is published.
 
-## Remaining verification gates
+## External signing and publication gates
 
-- VoiceOver is disabled, verified in macOS Accessibility settings. The user explicitly requested that VoiceOver testing be skipped; do not enable it again for this goal. Spoken announcements are not claimed as verified.
-- Mozilla publisher credentials remain necessary for signing and testing an
-  installed-version update. Configure `WEB_EXT_API_KEY` and
-  `WEB_EXT_API_SECRET` as repository secrets or local environment variables;
-  do not paste their values into the task. The existing release scripts stop
-  before contacting Mozilla when they are absent.
+- Both Mozilla environment variables are absent and the repository secret list
+  is empty. Configure `WEB_EXT_API_KEY` and `WEB_EXT_API_SECRET` securely before
+  running signing; do not paste their values into the task.
+- Actual signing requires Mozilla credentials. Publishing the signed XPI and
+  `updates.json` to the configured release location and verifying a Firefox
+  installed-version update remain external release gates. See `releases.md`.
+- Update packaging tests use synthetic signature-file markers only to exercise
+  local packaging. They do not prove Mozilla signature validity.
+
+The earlier live-site audit is preserved in `live-site-results.json`: nine
+passing cases, two access/consent blocks, and one unavailable page. VoiceOver was
+restored to off and skipped; spoken announcements were not verified.

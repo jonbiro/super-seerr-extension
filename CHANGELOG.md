@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.33]
+
+- Reject stale Firefox manifests before signing, including same-version permission or identity changes.
+- Verify the update-preparation CLI copies exact archive bytes and writes their SHA-256 into the feed using a synthetic packaging fixture.
+- Document completion evidence for the revised five-part goal and retain explicit Mozilla-signing and publication gates.
+
 ## [3.5.32]
 
 - Expand live-site coverage to TV, same-tab navigation, Spanish and Polish pages, redirects and small-window layouts; report blocked/unavailable sites separately.
