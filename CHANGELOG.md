@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.39]
+
+- Validate Trakt external TMDB links against the actual hostname, complete title path and current media type.
+- Reject malformed, nonpositive and unsafe data-attribute IDs instead of truncating them to another title ID.
+- Add identity regressions for opposite media types, lookalike hosts, embedded URLs and malformed IDs.
+
 ## [3.5.38]
 
 - Read release years from selected time elements when their visible labels omit the year, preserving visible-year precedence and rejecting durations or implausible years.

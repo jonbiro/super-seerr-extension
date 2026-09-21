@@ -136,17 +136,27 @@ class TraktIntegration extends BaseIntegration {
       const elements = document.querySelectorAll(selector);
       for (const element of elements) {
         if (element.href) {
-          const match = element.href.match(/themoviedb\.org\/(movie|tv)\/(\d+)/);
-          if (match) {
-            tmdbId = parseInt(match[2]);
-            this.log('Found TMDb ID:', tmdbId, 'from link:', element.href);
+          try {
+            const external = new URL(element.href);
+            const match = external.pathname.match(/^\/(movie|tv)\/(\d+)(?:-[^/]+)?\/?$/);
+            if (['http:', 'https:'].includes(external.protocol) &&
+                ['themoviedb.org', 'www.themoviedb.org'].includes(external.hostname) &&
+                match?.[1] === mediaType) {
+              const id = Number(match[2]);
+              if (Number.isSafeInteger(id) && id > 0) {
+                tmdbId = id;
+                break;
+              }
+            }
+          } catch (_) { /* Ignore malformed external links. */ }
+        }
+        const rawId = element.dataset.tmdbId;
+        if (rawId && /^\d+$/.test(rawId)) {
+          const id = Number(rawId);
+          if (Number.isSafeInteger(id) && id > 0) {
+            tmdbId = id;
             break;
           }
-        }
-        if (element.dataset.tmdbId) {
-          tmdbId = parseInt(element.dataset.tmdbId);
-          this.log('Found TMDb ID from data attribute:', tmdbId);
-          break;
         }
       }
       if (tmdbId) break;
