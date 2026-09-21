@@ -28,8 +28,8 @@ class TMDbIntegration extends BaseIntegration {
     let tmdbId = null;
 
     // Parse URL patterns
-    const movieMatch = url.match(/^\/movie\/(\d+)/);
-    const tvMatch = url.match(/^\/tv\/(\d+)/);
+    const movieMatch = url.match(/^\/movie\/(\d+)(?:-[^/]+)?\/?$/);
+    const tvMatch = url.match(/^\/tv\/(\d+)(?:-[^/]+)?\/?$/);
     
     if (movieMatch) {
       mediaType = 'movie';
@@ -43,6 +43,8 @@ class TMDbIntegration extends BaseIntegration {
       this.log('URL does not match movie or TV pattern:', url);
       return null;
     }
+
+    if (!Number.isSafeInteger(tmdbId) || tmdbId <= 0) return null;
 
     // Extract title
     const titleSelectors = [

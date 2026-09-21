@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.41]
+
+- Restrict TMDB extraction to movie and series detail routes so cast, review and episode headings cannot become parent-title request metadata.
+- Reject malformed, zero and unsafe TMDB route IDs while retaining slugs, trailing slashes and query parameters.
+- Add nine route regressions.
+
 ## [3.5.40]
 
 - Validate actual IMDb hosts and complete title IDs in the shared extractor.
