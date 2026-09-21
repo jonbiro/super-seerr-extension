@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.54]
+
+- Update the flyout year and media type after choosing a title match, instead of leaving stale metadata and appending a conflicting year to the heading.
+- Add display regressions for a changed release year and an unknown year.
+
 ## [3.5.53]
 
 - Prevent new status refreshes from resetting an active media request or season review.

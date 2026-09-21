@@ -486,7 +486,9 @@ class BaseIntegration {
       }
       this.mediaData = { ...view.media, title: selected.title, tmdbId: selected.tmdbId, mediaType: selected.mediaType, year: selected.year };
       const heading = view.elements.flyout?.querySelector('.seerr-title');
-      if (heading) heading.textContent = `${selected.title}${selected.year ? ` (${selected.year})` : ''}`;
+      if (heading) heading.textContent = selected.title;
+      const metadata = view.elements.flyout?.querySelector('.seerr-year');
+      if (metadata) metadata.textContent = `${selected.year || 'Unknown Year'} • ${selected.mediaType === 'tv' ? 'TV Series' : 'Movie'}`;
       await this.updateStatus();
     } finally {
       if (this._titlePickerController === controller) this._titlePickerController = null;

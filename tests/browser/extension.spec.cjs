@@ -258,7 +258,8 @@ test('ambiguous title picker checks the chosen identity and sends only a separat
     await expect(page.getByRole('dialog', { name: 'Choose matching title' })).toBeVisible();
     await page.getByLabel('Remember this match on this device').check();
     await page.getByRole('button', { name: /The Thing \(2011\)/ }).click();
-    await expect(page.locator('.seerr-title')).toHaveText('The Thing (2011)');
+    await expect(page.locator('.seerr-title')).toHaveText('The Thing');
+    await expect(page.locator('.seerr-year')).toHaveText('2011 • Movie');
     await expect(page.getByRole('button', { name: 'Request on Seerr', exact: true })).toBeVisible();
     expect(posts).toHaveLength(0);
     await page.getByRole('button', { name: 'Request on Seerr', exact: true }).click();
