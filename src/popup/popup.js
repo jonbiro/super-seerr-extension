@@ -26,51 +26,48 @@ class PopupManager {
   }
 
   async checkStatus() {
+    this.setStatus('loading', 'Checking connections…');
     try {
-      // The URL syncs across devices; the API key is device-local.
-      const [settings, local] = await Promise.all([
-        chrome.storage.sync.get(['seerrUrl']),
-        chrome.storage.local.get(['seerrApiKey'])
-      ]);
-      settings.seerrApiKey = local.seerrApiKey;
-
-      if (!settings.seerrUrl) {
-        this.showNotConfiguredState();
-        return;
-      }
-
-      // Update server URL display
-      this.serverUrlSpan.textContent = this.formatServerUrl(settings.seerrUrl);
-      this.describeConfigured(!!settings.seerrApiKey);
-      if (!settings.seerrApiKey) {
+      const response = await this.sendMessage({ action: 'getPopupDiagnostics' });
+      if (!response?.success || !response.data?.checks) throw new Error('Unable to load diagnostics. Reopen the popup to retry.');
+      const { serverUrl, checks } = response.data;
+      this.renderDiagnostics(checks);
+      if (!serverUrl) this.showNotConfiguredState();
+      else {
+        this.serverUrlSpan.textContent = this.formatServerUrl(serverUrl);
+        this.describeConfigured(checks.apiKey.state === 'ok');
         this.showConfiguredState();
-        this.testConnectionButton.classList.add('hidden');
-        this.setStatus('connected', 'Ratings-only mode');
-        return;
-      }
-      
-      // Test connection
-      this.setStatus('loading', 'Checking connection...');
-      
-      try {
-        const response = await this.sendMessage({ action: 'testConnection' });
-        
-        if (response && response.success) {
-          this.showConfiguredState();
-          this.setStatus('connected', `Connected as ${response.data.user}`);
-        } else {
-          this.showErrorState((response && response.error) || 'Connection failed');
-          this.setStatus('error', 'Connection failed');
+        const issues = checks.seerr.state !== 'ok' || checks.permission.state !== 'ok' || Object.values(checks).some(check => check.state === 'error');
+        if (checks.seerr.state !== 'ok' || checks.permission.state !== 'ok') {
+          this.configuredHeading.textContent = 'Check your connection';
+          this.configuredDetail.textContent = 'Use the checks below to restore ratings and request access.';
         }
-      } catch (error) {
-        this.showErrorState(error.message);
-        this.setStatus('error', 'Connection error');
+        this.setStatus(issues ? 'warning' : 'connected', issues ? 'Connection needs attention' : checks.apiKey.state === 'ok' ? 'Ready to request' : 'Ratings-only mode');
       }
-      
+      this.testConnectionButton.classList.remove('hidden');
     } catch (error) {
-      console.error('Error checking status:', error);
-      this.showErrorState('Failed to load extension status');
-      this.setStatus('error', 'Error');
+      this.showErrorState(error.message);
+      this.setStatus('error', 'Could not check connections');
+    }
+  }
+
+  renderDiagnostics(checks) {
+    const container = document.getElementById('diagnosticChecks');
+    container.replaceChildren();
+    const labels = { seerr: 'Seerr connection', permission: 'Host permission', apiKey: 'API key', plex: 'Plex' };
+    for (const [key, label] of Object.entries(labels)) {
+      const check = checks[key];
+      const row = document.createElement('div'); row.className = 'diagnostic-row';
+      const heading = document.createElement('strong'); heading.textContent = `${label}: ${check.state === 'ok' ? 'OK' : check.state === 'error' ? 'Needs fixing' : 'Needs attention'}`;
+      const detail = document.createElement('p'); detail.textContent = check.message;
+      row.append(heading, detail);
+      if (check.fix) {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'button secondary';
+        button.textContent = `Fix ${label.toLowerCase()}`;
+        button.addEventListener('click', () => chrome.tabs.create({ url: chrome.runtime.getURL(`src/options/options.html#${check.fix}`) }));
+        row.appendChild(button);
+      }
+      container.appendChild(row);
     }
   }
 
@@ -142,27 +139,13 @@ class PopupManager {
   }
 
   async testConnection() {
+    if (this.testConnectionButton.disabled) return;
     this.testConnectionButton.disabled = true;
-    this.testConnectionButton.textContent = 'Testing...';
-    this.setStatus('loading', 'Testing connection...');
-    
-    try {
-      const response = await this.sendMessage({ action: 'testConnection' });
-      
-      if (response && response.success) {
-        this.setStatus('connected', `Connected as ${response.data.user}`);
-        this.showConfiguredState();
-      } else {
-        this.setStatus('error', 'Connection failed');
-        this.showErrorState((response && response.error) || 'Connection test failed');
-      }
-    } catch (error) {
-      console.error('Connection test error:', error);
-      this.setStatus('error', 'Connection error');
-      this.showErrorState(error.message);
-    } finally {
+    this.testConnectionButton.textContent = 'Checking…';
+    try { await this.checkStatus(); }
+    finally {
       this.testConnectionButton.disabled = false;
-      this.testConnectionButton.textContent = 'Test Connection';
+      this.testConnectionButton.textContent = 'Check connections';
     }
   }
 

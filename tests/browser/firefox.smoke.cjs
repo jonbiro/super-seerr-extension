@@ -150,6 +150,13 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     assert.equal(state.data.serverUrl, origin);
     assert.equal((await message({ action: 'clearRatingsCache' })).success, true);
     assert.equal(await extensionScript('return (await api.storage.local.get("rtCacheV1")).rtCacheV1 ?? null;'), null);
+    assert.equal((await message({ action: 'addToWatchlist', data: { title: 'Fight Club', tmdbId: 550, mediaType: 'movie', year: 1999 } })).success, true);
+    await navigate(`moz-extension://${uuid}/src/popup/popup.html`);
+    await eventually(() => script('return document.getElementById("diagnosticChecks").textContent.includes("API key: OK");'), true, 'Firefox popup verifies the configured key');
+    await eventually(() => script('return document.getElementById("recentActionsList").textContent.includes("Fight Club");'), true, 'Firefox popup displays confirmed actions');
+    await script('document.getElementById("clearRecentActions").click();');
+    await eventually(() => script('return document.querySelectorAll("#recentActionsList li").length;'), 0, 'Firefox popup clears local history');
+    await navigate(optionsUrl);
     assert.equal(await extensionScript('return await api.permissions.remove({ origins: ["http://127.0.0.1/*"] });'), true);
     await eventually(() => extensionScript('return (await api.scripting.getRegisteredContentScripts()).length;'), 0, 'revocation removes registered scripts');
     await navigate(`${origin}/discover`);

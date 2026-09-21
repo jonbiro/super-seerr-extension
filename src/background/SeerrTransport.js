@@ -50,7 +50,9 @@
             const errorData = await response.json();
             if (errorData.message) errorMessage = errorData.message;
           } catch (_) {}
-          throw new Error(errorMessage);
+          const error = new Error(errorMessage);
+          error.status = response.status;
+          throw error;
         }
 
         return response.status === 204 ? null : await response.json();

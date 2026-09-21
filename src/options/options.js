@@ -44,6 +44,17 @@ class OptionsManager {
 
     await this.refreshPermissionWarning();
     await this.refreshCacheCount();
+    this.focusDiagnosticSetting();
+    window.addEventListener('hashchange', () => this.focusDiagnosticSetting());
+  }
+
+  // Popup repair links focus controls after asynchronous settings have loaded.
+  focusDiagnosticSetting() {
+    const id = location.hash.slice(1);
+    if (!['serverUrl', 'apiKey', 'plexToken', 'permissionWarning'].includes(id)) return;
+    const target = document.getElementById(id === 'permissionWarning' ? 'grantPermission' : id);
+    target?.scrollIntoView?.({ block: 'center' });
+    target?.focus();
   }
 
   // Cached ratings persist until cleared, so show how many are held.

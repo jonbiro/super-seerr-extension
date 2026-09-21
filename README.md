@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.5.3-blue)
+![Version](https://img.shields.io/badge/version-3.5.5-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -103,3 +103,9 @@ No telemetry service is configured by this project. The background worker is qui
 ## License
 
 MIT; see [LICENSE](LICENSE). Required attribution is retained and included in build packages. Historical connection-key names remain only for compatibility and regression testing.
+
+### Connection checks and local history
+
+The popup reports Seerr connectivity, host access, API-key acceptance, and Plex separately. Each issue links to the relevant setting. **Check connections** retries these read-only checks.
+
+**Recent actions** shows the last 50 confirmed requests and Seerr/Plex watchlist additions on this device, with a clear-history button. History stores only action type, title, media type, and time; it does not sync or store credentials, API responses, or error bodies. Failed or uncertain requests are not presented as successes. Clearing history does not undo server actions.

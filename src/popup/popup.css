@@ -260,3 +260,11 @@ body {
 .popup-main::-webkit-scrollbar-thumb:hover {
     background: #a1a1a1;
 }
+.recent-actions { margin-top: 20px; border-top: 1px solid #d1d5db; padding-top: 12px; }
+.recent-actions p { font-size: 12px; margin: 8px 0; }
+.recent-actions ol { padding-left: 20px; max-height: 180px; overflow-y: auto; }
+.recent-actions li { margin-bottom: 10px; overflow-wrap: anywhere; }
+.recent-actions time { display: block; font-size: 11px; color: #6b7280; }
+.diagnostic-row { margin: 12px 0; font-size: 12px; }
+.diagnostic-row p { margin: 4px 0 8px; }
+.diagnostic-row .button { padding: 6px 10px; font-size: 12px; }

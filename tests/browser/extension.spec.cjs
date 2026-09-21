@@ -194,3 +194,33 @@ test('old ratings render immediately and update after the background refresh', a
     await page.screenshot({ path: 'test-results/ratings-details.png' });
   } finally { release(); await page.close(); }
 });
+
+test('popup diagnoses connections and shows confirmed local actions with working repairs and clearing', async () => {
+  const result = await options.evaluate(() => chrome.runtime.sendMessage({
+    action: 'addToWatchlist', data: { title: 'Fight Club', tmdbId: 550, mediaType: 'movie', year: 1999 }
+  }));
+  expect(result.success).toBe(true);
+  const popup = await context.newPage();
+  await popup.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
+  await expect(popup.locator('#diagnosticChecks')).toContainText('Seerr connection: OK');
+  await expect(popup.locator('#diagnosticChecks')).toContainText('API key: OK');
+  await expect(popup.locator('#recentActionsList')).toContainText('Added to Seerr watchlist: Fight Club');
+  const settingsPromise = context.waitForEvent('page');
+  await popup.getByRole('button', { name: 'Fix plex', exact: true }).click();
+  const settingsPage = await settingsPromise;
+  await settingsPage.waitForLoadState('domcontentloaded');
+  await expect(settingsPage.locator('#plexToken')).toBeFocused();
+  await settingsPage.close();
+  await popup.getByRole('button', { name: 'Clear history', exact: true }).click();
+  await expect(popup.locator('#recentActionsList li')).toHaveCount(0);
+  await expect(popup.locator('#recentActionsStatus')).toHaveText('No confirmed actions yet.');
+  await options.evaluate(() => chrome.permissions.remove({ origins: ['http://127.0.0.1/*'] }));
+  await popup.locator('#testConnection').click();
+  await expect(popup.locator('#diagnosticChecks')).toContainText('Seerr host access is missing.');
+  const permissionPagePromise = context.waitForEvent('page');
+  await popup.getByRole('button', { name: 'Fix host permission', exact: true }).click();
+  const permissionPage = await permissionPagePromise;
+  await expect(permissionPage.locator('#grantPermission')).toBeFocused();
+  await permissionPage.close();
+  await popup.close();
+});

@@ -8,6 +8,8 @@ import './RottenTomatoes.js';
 import './SeerrTransport.js';
 import './SeerrReadCache.js';
 import './PlexWatchlist.js';
+import './RecentActions.js';
+import './PopupDiagnostics.js';
 const RatingsConfig = globalThis.RatingsConfig;
 const MediaValidation = globalThis.MediaValidation;
 
@@ -232,6 +234,7 @@ class SeerrAPI {
       switch (request.action) {
         case 'requestMedia': {
           const result = await this.requestMedia(request.data);
+          await this.recordRecentAction('request', request.data);
           sendResponse({ success: true, data: result });
           break;
         }
@@ -304,6 +307,7 @@ class SeerrAPI {
 
         case 'plexAddToWatchlist': {
           const plexWatchlistResult = await this.plexAddToWatchlist(request.data);
+          if (!plexWatchlistResult.already) await this.recordRecentAction('plex-watchlist', request.data);
           sendResponse({ success: true, data: plexWatchlistResult });
           break;
         }
@@ -316,7 +320,31 @@ class SeerrAPI {
 
         case 'addToWatchlist': {
           const watchlistResult = await this.addToWatchlist(request.data);
+          await this.recordRecentAction('seerr-watchlist', request.data);
           sendResponse({ success: true, data: watchlistResult });
+          break;
+        }
+
+        case 'getPopupDiagnostics': {
+          this.requireExtensionPage(sender);
+          const diagnosticClient = new SeerrAPI();
+          diagnosticClient.baseUrl = this.baseUrl;
+          diagnosticClient.apiKey = this.apiKey;
+          diagnosticClient.plexToken = this.plexToken;
+          sendResponse({ success: true, data: await diagnosticClient.getPopupDiagnostics() });
+          break;
+        }
+
+        case 'getRecentActions': {
+          this.requireExtensionPage(sender);
+          sendResponse({ success: true, data: await this.getRecentActions() });
+          break;
+        }
+
+        case 'clearRecentActions': {
+          this.requireExtensionPage(sender);
+          await this.clearRecentActions();
+          sendResponse({ success: true });
           break;
         }
 
@@ -675,7 +703,7 @@ class SeerrAPI {
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
 
-Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist);
+Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics);
 
 const seerrAPI = new SeerrAPI();
 let initializing = true;

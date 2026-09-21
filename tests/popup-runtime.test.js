@@ -1,65 +1,47 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const vm = require('node:vm');
+const { JSDOM } = require('jsdom');
 
-test('popup distinguishes ratings-only, unconfigured and request-enabled modes', async () => {
-  for (const [settings, expected, expectedCalls] of [
-    [{}, 'Set your Seerr server URL', 0],
-    [{ seerrUrl: 'https://seerr.example' }, 'Ratings-only mode', 0],
-    [{ seerrUrl: 'https://seerr.example', seerrApiKey: 'test-key' }, 'Connected as Tester', 1]
-  ]) {
-    const nodes = new Map();
-    function getNode(id) {
-      if (!nodes.has(id)) {
-        const classes = new Set(['hidden']);
-        nodes.set(id, { textContent: '', addEventListener() {}, classList: { add: name => classes.add(name), remove: (...names) => names.forEach(name => classes.delete(name)), contains: name => classes.has(name) }, querySelector: () => getNode(`${id}-text`) });
-      }
-      return nodes.get(id);
-    }
-    let calls = 0;
-    const context = vm.createContext({
-      URL, console, document: { readyState: 'loading', getElementById: getNode, addEventListener() {} },
-      chrome: {
-        // The URL syncs; the API key is device-local.
-        storage: {
-          sync: { get: async () => ({ seerrUrl: settings.seerrUrl }) },
-          local: { get: async () => (settings.seerrApiKey === undefined ? {} : { seerrApiKey: settings.seerrApiKey }) }
-        },
-        runtime: { sendMessage: async () => { calls++; return { success: true, data: { user: 'Tester' } }; } }
-      }
-    });
-    vm.runInContext(fs.readFileSync('src/popup/popup.js', 'utf8') + '\nglobalThis.manager = new PopupManager();', context);
-    await new Promise(resolve => setImmediate(resolve));
-    assert.equal(getNode('statusIndicator-text').textContent, expected);
-    assert.equal(calls, expectedCalls);
-    assert.equal(getNode('testConnection').classList.contains('hidden'), !settings.seerrApiKey);
-  }
+async function popup(data) {
+  const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
+  const links = [];
+  dom.window.chrome = { runtime: { sendMessage: async () => ({ success: true, data }), getURL: path => `chrome-extension://test/${path}` }, tabs: { create: value => links.push(value) } };
+  dom.window.eval(fs.readFileSync('src/popup/popup.js', 'utf8') + '\nwindow.PopupManager = PopupManager;');
+  await new Promise(resolve => setImmediate(resolve));
+  return { dom, document: dom.window.document, links };
+}
+const row = (state, message, fix) => ({ state, message, fix });
+
+test('popup renders independent connection checks and links to the exact repair setting', async () => {
+  const { dom, document, links } = await popup({ serverUrl: 'http://localhost:5055', checks: {
+    seerr: row('ok', 'Reachable'), permission: row('ok', 'Granted'),
+    apiKey: row('error', 'Key rejected', 'apiKey'), plex: row('warning', 'No token', 'plexToken')
+  } });
+  assert.equal(document.getElementById('serverUrl').textContent, 'localhost:5055');
+  assert.equal(document.querySelectorAll('.diagnostic-row').length, 4);
+  assert.match(document.getElementById('diagnosticChecks').textContent, /API key: Needs fixing/);
+  document.querySelector('.diagnostic-row button').click();
+  assert.equal(links[0].url, 'chrome-extension://test/src/options/options.html#apiKey');
+  assert.match(document.querySelector('.status-text').textContent, /attention/);
+  dom.window.close();
 });
 
-test('popup keeps the port when shortening the server URL', async () => {
-  const stub = () => ({
-    textContent: '',
-    addEventListener() {},
-    classList: { add() {}, remove() {}, contains: () => true },
-    querySelector: () => stub()
-  });
-  const context = vm.createContext({
-    URL, console,
-    document: {
-      readyState: 'complete',
-      getElementById: () => stub(),
-      addEventListener() {},
-      querySelector: () => null
-    },
-    chrome: {
-      storage: { sync: { get: async () => ({}) }, local: { get: async () => ({}) } },
-      runtime: { sendMessage: async () => ({ success: false }) }
-    }
-  });
-  vm.runInContext(fs.readFileSync('src/popup/popup.js', 'utf8') + '\nglobalThis.manager = new PopupManager();', context);
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(context.manager.formatServerUrl('http://127.0.0.1:5055'), '127.0.0.1:5055');
-  assert.equal(context.manager.formatServerUrl('https://seerr.example'), 'seerr.example');
-  assert.equal(context.manager.formatServerUrl('not a url'), 'not a url');
+test('popup does not claim ratings are working without server permission', async () => {
+  const { dom, document } = await popup({ serverUrl: 'https://seerr.example', checks: {
+    seerr: row('warning', 'Grant access'), permission: row('error', 'Missing permission', 'permissionWarning'),
+    apiKey: row('warning', 'No key', 'apiKey'), plex: row('warning', 'No token', 'plexToken')
+  } });
+  assert.equal(document.getElementById('configuredHeading').textContent, 'Check your connection');
+  dom.window.close();
+});
+
+test('popup ratings-only and request-ready states reflect verified checks', async () => {
+  for (const [state, expected] of [['warning', 'Ratings-only mode'], ['ok', 'Ready to request']]) {
+    const { dom, document } = await popup({ serverUrl: 'https://seerr.example', checks: {
+      seerr: row('ok', 'Reachable'), permission: row('ok', 'Granted'), apiKey: row(state, 'Key state'), plex: row('warning', 'Optional')
+    } });
+    assert.equal(document.querySelector('.status-text').textContent, expected);
+    dom.window.close();
+  }
 });

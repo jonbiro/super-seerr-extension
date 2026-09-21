@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.5]
+
+- Popup diagnostics separate Seerr reachability, host permission, API-key rejection, and optional Plex configuration, with repair links focused on the relevant Settings control.
+- Added a device-local list of the last 50 confirmed requests and watchlist additions, with clear history. Only title, media type, action type, and time are retained; history storage failure cannot report a successful server action as failed.
+- Chromium and Firefox real-extension fixture tests now exercise popup diagnostics and history rendering/clearing; Chromium also verifies Settings repair focus and missing host access.
+
 ## [3.5.3]
 
 - Cached ratings display immediately while aging full or partial bundles refresh in the background; failed refreshes preserve known scores and retry sooner.

@@ -16,7 +16,7 @@
                 </svg>
                 <h1>Super Seerr</h1>
             </div>
-            <div class="status-indicator" id="statusIndicator">
+            <div class="status-indicator" id="statusIndicator" role="status">
                 <div class="status-dot"></div>
                 <span class="status-text">Checking...</span>
             </div>
@@ -52,6 +52,17 @@
                     <p id="errorMessage">Unable to connect to your Seerr server.</p>
                 </div>
             </div>
+            <section aria-labelledby="diagnosticsHeading">
+                <h3 id="diagnosticsHeading">Connection checks</h3>
+                <div id="diagnosticChecks" aria-live="polite"></div>
+            </section>
+            <section class="recent-actions" aria-labelledby="recentActionsHeading">
+                <h3 id="recentActionsHeading">Recent actions</h3>
+                <p>Confirmed requests and watchlist additions on this device. Last 50 only.</p>
+                <p id="recentActionsStatus" role="status">Loading history…</p>
+                <ol id="recentActionsList"></ol>
+                <button id="clearRecentActions" class="button secondary" type="button">Clear history</button>
+            </section>
         </main>
 
         <footer class="popup-footer">
@@ -75,5 +86,6 @@
     </div>
 
     <script src="popup.js"></script>
+    <script src="recent-actions.js"></script>
 </body>
 </html>

@@ -7,13 +7,19 @@ const { JSDOM } = require('jsdom');
 
 const flush = async () => { for (let i = 0; i < 10; i++) await new Promise(r => setImmediate(r)); };
 
-async function openPopup({ synced = {}, local = {}, reply = { success: true, data: { user: 'yoni' } } } = {}) {
+async function openPopup({ synced = {}, local = {}, reply } = {}) {
   const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'),
     { url: 'chrome-extension://test/popup.html', runScripts: 'outside-only' });
   const { window } = dom;
   window.chrome = {
     storage: { sync: { get: async () => ({ ...synced }) }, local: { get: async () => ({ ...local }) } },
-    runtime: { sendMessage: async () => reply, openOptionsPage: async () => {} }
+    runtime: { sendMessage: async () => reply || { success: true, data: {
+      serverUrl: synced.seerrUrl, checks: {
+        seerr: { state: 'ok', message: 'Reachable' }, permission: { state: 'ok', message: 'Granted' },
+        apiKey: { state: local.seerrApiKey ? 'ok' : 'warning', message: 'Key state' },
+        plex: { state: 'warning', message: 'Optional' }
+      }
+    } }, openOptionsPage: async () => {} }
   };
   window.eval(fs.readFileSync('src/popup/popup.js', 'utf8'));
   await flush();
@@ -30,7 +36,7 @@ test('a connected user is not told what an API key would do', async t => {
   t.after(() => ctx.dom.window.close());
 
   const { body } = shown(ctx.window);
-  assert.doesNotMatch(body, /with an api key/i, `already has one, but was told: "${body}"`);
+  assert.doesNotMatch(body, /add an api key|with an api key/i, `already has one, but was told: "${body}"`);
 });
 
 test('a ratings-only user is told what an API key would add', async t => {
