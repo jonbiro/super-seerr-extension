@@ -34,12 +34,12 @@ class TraktIntegration extends BaseIntegration {
     // Check for movie pages (both /movies/ and /movie/ patterns)
     if (url.includes('/movies/') || url.includes('/movie/')) {
       mediaType = 'movie';
-      urlMatch = url.match(/\/(movies?)\/([^\/\?]+)/);
+      urlMatch = url.match(/^\/(movies?)\/([^/]+)\/?$/);
     }
     // Check for TV show pages (both /shows/ and /show/ patterns)
     else if (url.includes('/shows/') || url.includes('/show/')) {
       mediaType = 'tv';
-      urlMatch = url.match(/\/(shows?)\/([^\/\?]+)/);
+      urlMatch = url.match(/^\/(shows?)\/([^/]+)(?:\/seasons\/\d+)?\/?$/);
     }
     else {
       this.log('URL does not match movie or show pattern:', url);

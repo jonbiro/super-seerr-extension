@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.43]
+
+- Restrict Trakt extraction to movie, series and season detail routes; reject episode, comment and nested non-title routes before extracting request metadata.
+- Add nine route regressions, preserving singular and plural routes used by the Trakt integrations.
+
 ## [3.5.42]
 
 - Stop Rotten Tomatoes and Metacritic review subpages from producing requestable title metadata; reject RT episode subpages as well.
