@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.35]
+
+- Read Rotten Tomatoes release years from current hero metadata, including TV premiere ranges, without borrowing dates from related titles.
+- Add metadata regression coverage and assert the TV year in Chromium, Firefox and live-site checks.
+- Record consent controls and extracted years in blocked live-site diagnostics.
+
 ## [3.5.34]
 
 - Keep delayed preset reads from overwriting newer cross-tab state, and ignore obsolete refresh errors.

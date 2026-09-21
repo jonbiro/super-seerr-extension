@@ -96,7 +96,11 @@ class RottenTomatoesIntegration extends BaseIntegration {
       '.score-panel .info' // Score panel info
     ];
 
-    const year = this.extractor.extractYear(yearSelectors, {
+    // Current RT pages split rating, premiere range and season count across
+    // separate metadata elements. Only inspect the primary hero, not cards.
+    const year = this.extractor.extractYear([], {
+      multiElementSelector: 'media-hero > rt-text[slot="metadata-prop"]', fallback: false
+    }) ?? this.extractor.extractYear(yearSelectors, {
       fallback: true,
       multiElementSelector: '.scoreboard__info, .mop-ratings-wrap__info' // Check multiple info sections
     });

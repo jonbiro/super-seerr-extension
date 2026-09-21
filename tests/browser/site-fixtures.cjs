@@ -35,8 +35,8 @@ const SITES = [
   {
     site: 'rt',
     url: 'https://www.rottentomatoes.com/tv/breaking_bad',
-    html: '<h1 data-qa="score-panel-series-title">Breaking Bad</h1>',
-    expect: { title: 'Breaking Bad', mediaType: 'tv' }
+    html: '<h1 data-qa="score-panel-series-title">Breaking Bad</h1><media-hero><rt-text slot="metadata-prop">TV-14, </rt-text><rt-text slot="metadata-prop">2008 - 2013, </rt-text><rt-text slot="metadata-prop">5 Seasons</rt-text></media-hero>',
+    expect: { title: 'Breaking Bad', mediaType: 'tv', year: 2008 }
   },
   {
     site: 'metacritic',

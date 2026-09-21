@@ -45,6 +45,7 @@ const path = require('node:path');
           await expect(page.locator('.seerr-title')).toHaveText(result.expectedTitle, { timeout: 15000 });
           await expect(page.locator('.seerr-flyout')).toHaveCount(1);
           await expect(page.locator('.seerr-year')).toContainText(site.expect.mediaType === 'tv' ? 'TV Series' : 'Movie');
+          if (site.expect.year) await expect(page.locator('.seerr-year')).toContainText(String(site.expect.year));
           // A short viewport catches layout changes without issuing any action.
           await page.setViewportSize({ width: 390, height: 600 });
           await page.locator('.seerr-tab').click();
@@ -64,12 +65,14 @@ const path = require('node:path');
       }
       if (result.outcome === 'failed' && /onetrust-consent-sdk.*intercepts pointer events/.test(result.error || '')) {
         result.outcome = 'blocked'; result.reason = 'Host consent dialog requires a privacy choice';
+        result.consentControls = await page.locator('#onetrust-consent-sdk button').allTextContents();
       }
       result.pageTitle = await page.title().catch(() => null);
       if (result.outcome === 'failed' && /^(just a moment|access denied|attention required|verify you are human)/i.test(result.pageTitle || '')) {
         result.outcome = 'blocked'; result.reason = 'Access challenge';
       }
       result.extractedTitle = await page.locator('.seerr-title').textContent({ timeout: 500 }).catch(() => null);
+      result.extractedYear = await page.locator('.seerr-year').textContent({ timeout: 500 }).catch(() => null);
       results.push(result); console.log(JSON.stringify(result));
       // Keep this tab for subsequent TV/localized navigation cases.
     }
