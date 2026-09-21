@@ -972,7 +972,9 @@
         const generation = routeGeneration;
         // Return the current score immediately. Coalescing and the resolver
         // deadline still apply to this background update.
-        void getRatings(tmdbId, title, year, mediaType, { refresh: true, background: true })
+        const refresh = signal => getRatings(tmdbId, title, year, mediaType, { refresh: true, background: true, signal });
+        const refreshing = options.queueNode ? cardRatingQueue.add(options.queueNode, refresh) : refresh(options.signal);
+        void refreshing
           .then(() => {
             if (generation === routeGeneration && ratingsCache.has(key)) repaintRatingTitle(tmdbId, mediaType);
           })
@@ -1261,7 +1263,7 @@
 
       // Resolve ratings asynchronously
       if (mediaInfo.tmdbId) {
-        cardRatingQueue.add(card, signal => getRatings(mediaInfo.tmdbId, mediaInfo.title, null, mediaInfo.mediaType, { signal })).then(bundle => {
+        cardRatingQueue.add(card, signal => getRatings(mediaInfo.tmdbId, mediaInfo.title, null, mediaInfo.mediaType, { signal, queueNode: card })).then(bundle => {
           if (generation !== routeGeneration || !card.isConnected) return;
           // Re-check: a cleanup could have removed any previously-rendered
           // badges since this promise was queued.

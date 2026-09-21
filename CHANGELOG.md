@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.13]
+
+- Keep automatic refreshes of aging cached cards inside the same four-job viewport queue. Navigation cancels waiting refreshes as well as first-time lookups.
+
 ## [3.5.12]
 
 - Prioritize visible card ratings with four concurrent jobs per page, reprioritize on scroll, and cancel obsolete queued/page-side reads after navigation.

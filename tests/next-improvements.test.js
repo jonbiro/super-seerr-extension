@@ -96,3 +96,23 @@ test('a later page visit applies its saved choice without sending a request', as
   assert.equal(integration.mediaData.tmdbId, 2); assert.equal(integration.mediaData.year, 2011);
   integration.destroy();
 });
+
+test('aging cached card refreshes also obey the four-read queue limit', async () => {
+  const { loadOverlay } = require('./helpers/overlay');
+  const overlay = loadOverlay();
+  const full = overlay.Model.createRatingsBundle({ rtCriticsScore: 80, rtAudienceScore: 80, imdbRating: 8, tmdbRating: 8, confidence: 1 });
+  overlay.setResolver(async () => full);
+  for (let id = 1; id <= 10; id++) {
+    await overlay.getRatings(id, 'Film', 2020, 'movie');
+    overlay.ratingsCache.get(`movie:${id}`).retryAt = 0;
+  }
+  let started = 0; const release = [];
+  overlay.setResolver(() => { started++; return new Promise(resolve => release.push(resolve)); });
+  const node = { isConnected: true, getBoundingClientRect: () => ({ top: 0, bottom: 10, left: 0, right: 10 }) };
+  const cached = await Promise.all(Array.from({ length: 10 }, (_, i) => overlay.getRatings(i + 1, 'Film', 2020, 'movie', { queueNode: node })));
+  assert.ok(cached.every(bundle => bundle.rtCriticsScore === 80));
+  await tick(); assert.equal(started, 4);
+  overlay.cleanupOverlay();
+  release.forEach(resolve => resolve(full)); await tick();
+  assert.equal(started, 4, 'navigation discards pending refreshes');
+});
