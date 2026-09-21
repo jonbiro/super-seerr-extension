@@ -90,3 +90,41 @@ test('a title with no usable TMDB id is refused rather than posted', async () =>
   await assert.rejects(() => worker.api.addToWatchlist({ mediaType: 'movie' }));
   assert.equal(calls.filter(url => url.includes('/watchlist')).length, 0, 'nothing should reach the watchlist endpoint');
 });
+
+for (const mediaType of ['movie', 'tv']) {
+  test(`title-only ${mediaType} watchlist action resolves identity across client and worker`, async t => {
+    const { loadIntegration } = require('./helpers/integration');
+    const writes = [];
+    const worker = loadWorker({ get: async () => ({ seerrUrl: 'https://seerr.example', seerrApiKey: 'k' }) });
+    await worker.ready;
+    worker.api.makeAPIRequest = async (method, endpoint, body) => {
+      if (method === 'POST') { writes.push(body); return { id: 1 }; }
+      if (endpoint.startsWith('/api/v1/search')) return { results: [
+        { id: 550, mediaType, title: 'Example', releaseDate: '2020-01-01' },
+        { id: 551, mediaType, title: 'Example', releaseDate: '1990-01-01' }
+      ] };
+      throw new Error(`Unexpected read ${endpoint}`);
+    };
+    const page = loadIntegration({ sendMessage: async message => {
+      let response;
+      await worker.api.handleMessage(message, {}, result => { response = result; });
+      return response;
+    } });
+    t.after(() => page.window.close());
+    const client = new page.window.SeerrClient();
+    await client.addToWatchlist({ title: 'Example', year: 2020, mediaType });
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].tmdbId, 550);
+    assert.equal(writes[0].mediaType, mediaType);
+  });
+}
+
+test('ambiguous watchlist titles never issue a write', async () => {
+  const worker = loadWorker({ get: async () => ({ seerrUrl: 'https://seerr.example', seerrApiKey: 'k' }) });
+  await worker.ready;
+  worker.api.makeAPIRequest = async method => {
+    assert.equal(method, 'GET');
+    return { results: [1, 2].map(id => ({ id, mediaType: 'movie', title: 'Example' })) };
+  };
+  await assert.rejects(() => worker.api.addToWatchlist({ title: 'Example', mediaType: 'movie' }), /No unambiguous match/);
+});

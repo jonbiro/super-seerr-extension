@@ -78,7 +78,7 @@ test('invalid IDs and media types fail before any API traffic', async () => {
     }
   }
   for (const tmdbId of [null, undefined]) {
-    await assert.rejects(api.addToWatchlist({ ...wanted, tmdbId }), /positive integer TMDB id/);
+    await assert.rejects(api.addToWatchlist({ mediaType: 'movie', tmdbId }), /title or TMDB id/);
   }
   for (const mediaType of [undefined, null, 'person', '../settings', 1]) {
     for (const method of ['requestMedia', 'getMediaStatus', 'addToWatchlist']) {

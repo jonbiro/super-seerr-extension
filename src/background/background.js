@@ -640,7 +640,7 @@ class SeerrAPI {
   }
 
   async addToWatchlist(data) {
-    data = MediaValidation.media(data, { requireId: true });
+    data = MediaValidation.media(data);
     if (!this.baseUrl || !this.apiKey) {
       throw new Error('Seerr server URL and API key are required');
     }
@@ -648,7 +648,12 @@ class SeerrAPI {
     // mediaType; see server/interfaces/api/watchlistCreate.ts. We were sending
     // mediaId, which that schema has no field for, so every add was rejected.
     // title is optional and is what Seerr's own front end sends.
-    const tmdbId = data.tmdbId;
+    let tmdbId = data.tmdbId;
+    if (!tmdbId || !(await this.tmdbIdentityMatches(data))) {
+      const match = await this.resolveMediaMatch(data);
+      if (!match) throw new Error(`No unambiguous match for "${data.title}". Choose this title in Seerr before adding to your watchlist.`);
+      tmdbId = MediaValidation.tmdbId(match.id);
+    }
     const response = await this.makeAPIRequest('POST', '/api/v1/watchlist', {
       tmdbId,
       mediaType: data.mediaType,

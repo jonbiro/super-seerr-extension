@@ -326,7 +326,7 @@
     return embeddedRatingsByTmdbId.get(ratingKey(tmdbId, type)) || null;
   }
 
-  const { fetchJsonFromSeerr, loadRatingsAvailability, resetSeerrRatings, fetchSeerrSessionRatings, seerrRatingsFailures, seerrRatingsRequests, seerrRatingsGivenUp } = window.createSeerrSession({
+  const { fetchJsonFromSeerr, loadRatingsAvailability, resetSeerrRatings, fetchSeerrSessionRatings, seerrRatingsRequests } = window.createSeerrSession({
     Config, Model, log, getServer: () => configuredServer, bundleFromRatingObject, mergeBundles, isBundleComplete
   });
 
@@ -2115,9 +2115,7 @@
           byPath: Object.fromEntries(observedStats.byUrl)
         },
         seerrRatings: {
-          requestsMade: { ...seerrRatingsRequests },
-          consecutiveFailures: { ...seerrRatingsFailures },
-          givenUp: { ratings: seerrRatingsGivenUp('ratings'), ratingscombined: seerrRatingsGivenUp('ratingscombined') }
+          requestsMade: { ...seerrRatingsRequests }
         },
         listItems: lastListItems.length,
         cachedTitles: resolvedCacheSize(),

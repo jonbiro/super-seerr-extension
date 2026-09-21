@@ -178,7 +178,7 @@ class SeerrClient {
   async addToWatchlist(mediaData) {
     const response = await this.sendMessage({
       action: 'addToWatchlist',
-      data: { mediaType: mediaData.mediaType, tmdbId: mediaData.tmdbId }
+      data: { mediaType: mediaData.mediaType, tmdbId: mediaData.tmdbId, title: mediaData.title, year: mediaData.year ?? null }
     });
     if (response && response.success) {
       return response.data;

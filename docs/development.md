@@ -14,7 +14,7 @@ Runtime code remains plain JavaScript with no bundling step. The background entr
 | `src/background/RtCache.js` | Worker persistence, bounds, and coordinated cache clearing |
 | `src/shared/MediaValidation.js` | Positive safe-integer IDs, media types, and request payload validation |
 | `src/content/OverlayCache.js` | Per-tab ratings persistence and clear-generation handling |
-| `src/content/SeerrSession.js` | Session-authenticated reads and endpoint circuit breakers |
+| `src/content/SeerrSession.js` | Session-authenticated reads and per-title ratings resolution |
 | `src/content/RatingsPresentation.js` | Pure score parsing, bundle merging, quality summaries |
 | `src/content/seerr-integration.js` | Page indexing, navigation, DOM rendering, sorting and bulk actions |
 

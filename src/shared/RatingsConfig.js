@@ -44,12 +44,6 @@ const RatingsConfig = {
   //
   // The overlay ratings cache has no expiry by design, so this cap is its only
   // bound; eviction is least-recently-used.
-  // Seerr's two ratings endpoints share one backend, so where that backend is
-  // unreachable both 404 for every title. Stop asking after this many
-  // consecutive failures across the pair; any success resets it, and a refresh
-  // gives them another chance.
-  seerrRatingsFailureLimit: 12,
-
   // How long "nothing knows this title" stands before it is worth asking again.
   // Not remembering it at all meant a fresh round of requests, and a fresh 404
   // from Seerr's ratings endpoints, on every visit to the same page. A film

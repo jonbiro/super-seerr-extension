@@ -296,6 +296,11 @@ class BaseIntegration {
   }
 
   async updateStatus() {
+    const generation = this._statusGeneration = (this._statusGeneration || 0) + 1;
+    const media = this.mediaData;
+    const elements = this.uiElements;
+    const isCurrent = () => !this.destroyed && this._statusGeneration === generation
+      && this.mediaData === media && this.uiElements === elements;
     try {
       this.log('Updating status...');
 
@@ -313,23 +318,24 @@ class BaseIntegration {
         this.plexConfigured = false;
       }
 
+      if (!isCurrent()) return;
+
       // Plex state resolves alongside the Seerr lookup, never ahead of
       // rendering: a slow or failed lookup keeps the Add button rather than
       // blocking the flyout.
       const plexStatePromise = this.plexConfigured
-        ? this.client.plexWatchlistState(this.mediaData)
+        ? this.client.plexWatchlistState(media).catch(() => null)
         : Promise.resolve(null);
 
       // Get status from Seerr
-      const statusData = await this.client.getMediaStatus(this.mediaData);
+      const statusData = await this.client.getMediaStatus(media);
+      if (!isCurrent()) return;
       this.log('Status received:', statusData);
 
       // Cache status data for instant access during button clicks
       this.currentStatusData = statusData;
 
-      const plexState = await plexStatePromise;
-      const plexOnWatchlist = plexState ? plexState.onWatchlist === true : false;
-      if (this.destroyed) return;
+      const plexOnWatchlist = false;
 
       // Update UI based on theme
       if (this.uiTheme === 'flyout') {
@@ -346,11 +352,20 @@ class BaseIntegration {
             }
           }
         }
+        void plexStatePromise.then(plexState => {
+          if (!isCurrent() || this.currentStatusData !== statusData) return;
+          // Update only the Plex control; a late read must not reset Seerr UI.
+          this.ui.updatePlexWatchlistStatus(elements, statusData, {
+            plexConfigured: this.plexConfigured,
+            plexOnWatchlist: plexState?.onWatchlist === true
+          });
+        }).catch(err => this.log('Plex state update failed:', err));
       } else {
         this.ui.updateButtonStatus(this.uiElements.button, statusData);
       }
 
     } catch (err) {
+      if (!isCurrent()) return;
       this.error('Error updating status:', err);
       this.log('Error details:', err.message);
 
@@ -560,6 +575,7 @@ class BaseIntegration {
   }
 
   async handlePlexWatchlistClick() {
+    this._statusGeneration = (this._statusGeneration || 0) + 1;
     if (!this.mediaData) {
       this.ui.createNotification('Error', 'Could not extract media information', 'error');
       return;
@@ -802,6 +818,7 @@ class BaseIntegration {
    */
   cleanupUI() {
     this.log('Cleaning up existing UI');
+    this._statusGeneration = (this._statusGeneration || 0) + 1;
 
     // A new page supersedes every retry scheduled for the old one.
     this.clearPendingRetries();

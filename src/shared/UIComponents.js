@@ -262,6 +262,10 @@ class UIComponents {
     if (elements.watchlistButton) {
       elements.watchlistButton.style.display = showWatchlist ? 'flex' : 'none';
     }
+    this.updatePlexWatchlistStatus(elements, statusData, options);
+  }
+
+  updatePlexWatchlistStatus(elements, statusData, options = {}) {
     // Plex is independent of Seerr status: an available title is exactly what
     // the user wants to save to Plex. Only the token gates it, never the
     // request state. Error/loading states hide it to avoid a dead click.
