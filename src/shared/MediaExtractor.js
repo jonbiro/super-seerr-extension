@@ -199,12 +199,14 @@ class MediaExtractor {
       
       for (const link of imdbLinks) {
         this.log('Checking IMDB link:', link.href);
-        const match = link.href.match(/imdb\.com\/title\/(tt\d+)/);
-        if (match) {
-          const imdbId = match[1];
-          this.log('Found IMDB ID:', imdbId, 'from link:', link.href);
-          return imdbId;
-        }
+        try {
+          const external = new URL(link.href);
+          const match = external.pathname.match(/^\/title\/(tt\d+)(?:\/|$)/);
+          if (['http:', 'https:'].includes(external.protocol) &&
+              ['imdb.com', 'www.imdb.com', 'm.imdb.com'].includes(external.hostname) && match) {
+            return match[1];
+          }
+        } catch (_) { /* Ignore malformed links and elements without an href. */ }
       }
     }
     

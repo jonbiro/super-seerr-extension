@@ -84,12 +84,18 @@ class LetterboxdIntegration extends BaseIntegration {
     for (const selector of tmdbSelectors) {
       const tmdbLinks = document.querySelectorAll(selector);
       for (const link of tmdbLinks) {
-        const match = link.href.match(/themoviedb\.org\/movie\/(\d+)/);
-        if (match) {
-          tmdbId = parseInt(match[1]);
-          this.log('Found TMDb ID:', tmdbId, 'from link:', link.href);
-          break;
-        }
+        try {
+          const external = new URL(link.href);
+          const match = external.pathname.match(/^\/movie\/(\d+)(?:-[^/]+)?\/?$/);
+          if (['http:', 'https:'].includes(external.protocol) &&
+              ['themoviedb.org', 'www.themoviedb.org'].includes(external.hostname) && match) {
+            const id = Number(match[1]);
+            if (Number.isSafeInteger(id) && id > 0) {
+              tmdbId = id;
+              break;
+            }
+          }
+        } catch (_) { /* Ignore malformed external links. */ }
       }
       if (tmdbId) break;
     }

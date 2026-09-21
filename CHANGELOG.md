@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.40]
+
+- Validate actual IMDb hosts and complete title IDs in the shared extractor.
+- Validate Letterboxd TMDB movie links before accepting their IDs; reject lookalike domains, embedded URLs and partial numeric IDs.
+- Add six external-link identity regressions.
+
 ## [3.5.39]
 
 - Validate Trakt external TMDB links against the actual hostname, complete title path and current media type.
