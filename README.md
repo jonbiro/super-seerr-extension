@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.5.8-blue)
+![Version](https://img.shields.io/badge/version-3.5.9-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -24,7 +24,7 @@ After rebuilding, reload the extension in Chrome and refresh the pages using it.
 
 `make build` also produces `dist/firefox`. Its manifest now uses the `background.scripts` module configuration [Mozilla documents for Firefox](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background) instead of the `service_worker` entry Firefox ignores, so the previously known-broken background configuration is fixed.
 
-The real-extension smoke test passes in Firefox 147.0.3 with geckodriver 0.37.1: optional permissions, ratings injection, SPA navigation, addon reload, persisted cache clearing, and permission revocation. These are local HTTP fixtures, not authenticated live-site or all-seven-site validation. See [Firefox verification](docs/development.md#firefox-verification-opt-in) for prerequisites and remaining coverage.
+The real-extension smoke test passes in Firefox 147.0.3 with geckodriver 0.37.1: optional permissions, ratings injection, SPA navigation, addon reload, persisted cache clearing, and permission revocation. It also verifies an actual 3.5.2-to-current upgrade and manifest-driven integration on eleven synthetic movie/TV pages across all seven supported sites. These fixtures do not establish live-site compatibility. See [Firefox verification](docs/development.md#firefox-verification-opt-in) for prerequisites and remaining coverage.
 
 ## What it does
 

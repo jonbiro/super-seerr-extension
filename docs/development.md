@@ -22,7 +22,7 @@ The source check validates imported module paths as well as static and dynamical
 
 ## Safety contracts
 
-- Without a known ID, a request requires one distinct candidate matching the full normalized title and media type. A supplied year must agree within one year. Search variants change the query, never the identity being validated. Ambiguous/unmatched titles are selected explicitly in Seerr instead of guessed.
+- Without a known ID, a request requires one distinct candidate matching the full normalized title and media type. A supplied year must agree within one year. Search variants change the query, never the identity being validated. Ambiguous titles require an explicit in-extension selection before a separate request action; unmatched titles are never guessed.
 - Media POSTs are sent once. A missing message reply is an **unknown outcome**, not permission to retry. Read-only status messages retain bounded retries.
 - Failed search/detail/request-list reads produce an error with a status-retry action. They are not equivalent to an empty media record.
 - Startup waits for migration, configuration, and script registration, not public server metadata. Late metadata responses cannot override a newer server's name.
@@ -40,7 +40,7 @@ GECKODRIVER_PATH=/path/to/geckodriver FIREFOX_BINARY=/path/to/firefox npm run te
 
 This separate Node/WebDriver harness uses a temporary addon, profile, and the same local HTTP fixtures as Chromium. It is intended to cover optional permission grant/revocation, main- and isolated-world injection, SPA navigation, background restart via addon reload, and persisted cache clearing. Firefox permissions are granted through its own permission manager in the disposable test session, not by replacing extension API methods. Privileged WebDriver access is enabled solely for that test session.
 
-**Verified locally:** Firefox 147.0.3 and geckodriver 0.37.1 pass this test. Use a real-path temporary profile root and `--allow-system-access` as the harness does. The test does not modify existing browser profiles. This verifies the Seerr fixture; authenticated live sites, all seven external-site adapters, and extension-version upgrades still need separate coverage.
+**Verified locally:** Firefox 147.0.3 and geckodriver 0.37.1 pass this test. Use a real-path temporary profile root and `--allow-system-access` as the harness does. The test does not modify existing browser profiles. The harness also upgrades a real 3.5.2 addon to current source, checks saved preferences and legacy secret migration, and uses native WebDriver BiDi to serve eleven synthetic movie/TV pages at all seven supported origins. Manifest matching and production bootstrap run normally. These pages are contracts, not captured live-site snapshots; live-site compatibility remains a separate check.
 
 Failures save `test-results/firefox/geckodriver.log`; failures after session creation also capture browser console messages, isolated-world helper availability, and a screenshot when possible. The harness terminates its test process group and removes its temporary extension/profile on exit. No additional automation-library dependency is required.
 
@@ -60,10 +60,12 @@ Browser tests create a temporary unpacked extension and an isolated browser prof
 
 Coverage includes:
 
+- All seven site integrations, including TV variants and Polish Unicode titles, through real manifest injection on synthetic pages.
+- Upgrading actual 3.5.2 source (`4864269`) in the same profile, preserving settings and optional permissions, migrating legacy keys, and replacing dynamic script registrations. A full Git history is needed to archive this baseline; CI checks out that history. Chromium enables Developer mode only in its disposable profile to permit unpacked-addon reload.
 - Saving configuration without permission, granting optional host access, registering both isolated- and main-world scripts, and revocation.
 - Real isolated-world injection, SPA navigation to an unsupported route and back, and no duplicate badges.
 - Terminating the MV3 worker through CDP, observing fresh memory backed by persisted configuration/cache, and clearing the persisted cache.
 
 Native permission bubbles are outside Playwright's page automation. Tests grant access through Chromium's extension-manager API (the same browser-side operation behind its site-access UI), then use the real Settings form and `chrome.permissions.remove`. Unit tests separately check the user-gesture ordering and declined-permission save behavior. No production permission API is mocked in the browser suite.
 
-Failures retain `test-results/**/trace.zip`; inspect with `npx playwright show-trace <path>`. CI uploads these artifacts. Chromium is the verified CI browser target. Firefox packaging and manifest checks remain automated; the separate Firefox harness below is not yet a verified runtime check.
+Failures retain `test-results/**/trace.zip`; inspect with `npx playwright show-trace <path>`. CI uploads these artifacts. Chromium is the verified CI browser target. Firefox packaging and manifest checks run in CI; its runtime harness is verified locally and remains opt-in.

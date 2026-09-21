@@ -2,14 +2,26 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
+const { execFile } = require('node:child_process');
+const { promisify } = require('node:util');
+const exec = promisify(execFile);
 const root = path.resolve(__dirname, '../..');
 
-async function createExtension(browser) {
+async function createExtension(browser, { ref } = {}) {
   const temporary = await fs.mkdtemp(path.join(os.tmpdir(), `super-seerr-${browser}-`));
   const extension = path.join(temporary, 'extension');
   await fs.mkdir(extension);
-  for (const directory of ['src', 'icons']) await fs.cp(path.join(root, directory), path.join(extension, directory), { recursive: true });
-  const manifest = { ...require('../../manifest.base.json'), ...require(`../../manifest.${browser}.json`) };
+  if (ref) {
+    const archive = await exec('git', ['archive', '--format=tar', ref, 'src', 'icons', 'manifest.base.json', 'manifest.chrome.json', 'manifest.firefox.json'], { cwd: root, encoding: 'buffer', maxBuffer: 20 * 1024 * 1024 });
+    const archivePath = path.join(temporary, 'baseline.tar');
+    await fs.writeFile(archivePath, archive.stdout);
+    await exec('tar', ['-xf', archivePath, '-C', extension]);
+  } else {
+    for (const directory of ['src', 'icons']) await fs.cp(path.join(root, directory), path.join(extension, directory), { recursive: true });
+    for (const file of ['manifest.base.json', `manifest.${browser}.json`]) await fs.copyFile(path.join(root, file), path.join(extension, file));
+  }
+  const read = async file => JSON.parse(await fs.readFile(path.join(extension, file), 'utf8'));
+  const manifest = { ...await read('manifest.base.json'), ...await read(`manifest.${browser}.json`) };
   await fs.writeFile(path.join(extension, 'manifest.json'), JSON.stringify(manifest));
   return { temporary, extension, manifest };
 }

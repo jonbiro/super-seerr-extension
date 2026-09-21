@@ -32,13 +32,14 @@ async function unusedPort() {
 
 test('Firefox: permissions, real injection, SPA navigation, background reload and cache clearing', { timeout: 120000 }, async t => {
   const build = await createExtension('firefox');
+  const baseline = await createExtension('firefox', { ref: '4864269' });
   const { server, origin } = await startServer();
   const port = await unusedPort();
   const profileRoot = await fs.realpath(build.temporary);
   const driver = spawn(process.env.GECKODRIVER_PATH || 'geckodriver', ['--port', String(port), '--allow-system-access', '--profile-root', profileRoot, '--log', 'debug', '--log-no-truncate'], {
     stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32'
   });
-  let driverLog = '', driverError, session;
+  let driverLog = '', driverError, session, siteFixtures;
   driver.stdout.on('data', data => { driverLog += data; });
   driver.stderr.on('data', data => { driverLog += data; });
   driver.on('error', error => { driverError = error; });
@@ -68,6 +69,7 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
   const message = request => extensionScript('return await api.runtime.sendMessage(arguments[0]);', [request]);
 
   t.after(async () => {
+    siteFixtures?.close();
     if (session) await command(`/session/${session}`, undefined, 'DELETE').catch(() => {});
     // Also clean up the browser if startup failed before a session was made.
     try {
@@ -76,6 +78,7 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     } catch (_) { /* already exited */ }
     await new Promise(resolve => server.close(resolve));
     await fs.rm(build.temporary, { recursive: true, force: true });
+    await fs.rm(baseline.temporary, { recursive: true, force: true });
   });
 
   try {
@@ -87,7 +90,7 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     }
     assert.ok(listening, 'geckodriver should start');
     const started = await command('/session', { capabilities: { alwaysMatch: {
-      browserName: 'firefox',
+      browserName: 'firefox', webSocketUrl: true,
       'moz:firefoxOptions': {
         ...(process.env.FIREFOX_BINARY ? { binary: process.env.FIREFOX_BINARY } : {}),
         args: ['-headless'],
@@ -95,8 +98,9 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
       }
     } } });
     session = started.sessionId;
+    siteFixtures = await require('./bidi-fixtures.cjs').interceptSiteFixtures(started.capabilities.webSocketUrl);
     await action('/timeouts', { script: 15000, pageLoad: 15000 });
-    const addonId = await action('/moz/addon/install', { path: build.extension, temporary: true });
+    const addonId = await action('/moz/addon/install', { path: baseline.extension, temporary: true });
     assert.equal(addonId, build.manifest.browser_specific_settings.gecko.id);
     await context('chrome');
     const uuid = await script('return JSON.parse(Services.prefs.getStringPref("extensions.webextensions.uuids"))[arguments[0]];', [addonId]);
@@ -105,6 +109,25 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     const optionsUrl = `moz-extension://${uuid}/src/options/options.html`;
     await navigate(optionsUrl);
     assert.equal((await message({ action: 'ping' })).success, true);
+    assert.equal(await extensionScript('return api.runtime.getManifest().version;'), '3.5.2');
+    await extensionScript(`await api.storage.sync.set({ seerrUrl: arguments[0], jellyseerrUrl: arguments[0], jellyseerrApiKey: 'legacy-upgrade-key',
+      overlayFeatures: { cardBadges: false }, seerrFilterPresetsV1: [{ name: 'Keep me', sort: 'rt-critics-desc', filters: { minCritics: 70 } }] });
+      await api.storage.local.remove('seerrApiKey');
+      await api.storage.local.set({ plexToken: 'saved-plex-token' });`, [origin]);
+    await navigate(`${origin}/settings`);
+    assert.equal(await action('/moz/addon/install', { path: build.extension, temporary: true }), addonId);
+    await navigate(optionsUrl);
+    assert.equal((await message({ action: 'ping' })).success, true);
+    const upgraded = await extensionScript(`return { version: api.runtime.getManifest().version,
+      sync: await api.storage.sync.get(), local: await api.storage.local.get(['seerrApiKey', 'plexToken']) };`);
+    assert.equal(upgraded.version, build.manifest.version);
+    assert.equal(upgraded.sync.seerrUrl, origin);
+    assert.equal(upgraded.sync.overlayFeatures.cardBadges, false);
+    assert.equal(upgraded.sync.seerrFilterPresetsV1[0].name, 'Keep me');
+    for (const key of ['jellyseerrUrl', 'jellyseerrApiKey', 'seerrApiKey']) assert.equal(upgraded.sync[key], undefined);
+    assert.deepEqual(upgraded.local, { seerrApiKey: 'legacy-upgrade-key', plexToken: 'saved-plex-token' });
+    await extensionScript(`await api.storage.local.remove('plexToken'); await api.storage.sync.set({ overlayFeatures: { cardBadges: true } });`);
+    t.diagnostic('Actual 3.5.2 upgrade preserved settings and migrated legacy secrets');
     const localAccessControls = await extensionScript('return typeof api.storage.local.setAccessLevel === "function";');
     assert.equal(await extensionScript('return await api.permissions.contains({ origins: ["http://127.0.0.1/*"] });'), false);
     await extensionScript('await api.storage.sync.set({ seerrUrl: arguments[0] }); await api.storage.local.set({ seerrApiKey: "smoke-key" });', [origin]);
@@ -207,6 +230,24 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     await eventually(() => extensionScript('return (await api.scripting.getRegisteredContentScripts()).length;'), 0, 'revocation removes registered scripts');
     await navigate(`${origin}/discover`);
     assert.equal(await badges(), 0);
+    // Exercise the shipped manifest and complete bootstrap on all seven sites.
+    await context('chrome');
+    await asyncScript(`
+      const { ExtensionPermissions } = ChromeUtils.importESModule('resource://gre/modules/ExtensionPermissions.sys.mjs');
+      const policy = WebExtensionPolicy.getByID(arguments[0]);
+      await ExtensionPermissions.add(arguments[0], { permissions: [], origins: ['http://127.0.0.1/*'] }, policy.extension);
+    `, [addonId]);
+    await context('content');
+    for (const fixture of require('./site-fixtures.cjs').SITES) {
+      await navigate(fixture.url);
+      await eventually(() => script('return document.querySelectorAll(".seerr-flyout").length;'), 1, `${fixture.site} ${fixture.expect.mediaType}: one packaged flyout`);
+      assert.equal(await script('return document.querySelector(".seerr-title").textContent;'), fixture.expect.title);
+      assert.ok((await script('return document.querySelector(".seerr-year").textContent;')).includes(fixture.expect.mediaType === 'tv' ? 'TV Series' : 'Movie'));
+      await script('document.querySelector(".seerr-tab").click();');
+      assert.equal(await script('return document.querySelector(".seerr-tab").getAttribute("aria-expanded");'), 'true');
+      t.diagnostic(`Firefox packaged fixture passed: ${fixture.site} ${fixture.expect.mediaType}`);
+    }
+    assert.deepEqual(siteFixtures.errors, []);
     t.diagnostic(`Validated Firefox ${started.capabilities.browserVersion}`);
   } catch (error) {
     const artifacts = path.resolve('test-results/firefox');

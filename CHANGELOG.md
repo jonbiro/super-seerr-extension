@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.9]
+
+- Added real-extension Chromium and Firefox coverage for eleven synthetic movie/TV pages across all seven supported sites, including Polish Unicode titles. Fixtures verify production bootstrap and extraction, not current live-site markup.
+- Added actual 3.5.2-to-current upgrade tests for saved preferences and legacy secret migration, with Chromium optional-permission and dynamic-script retention checks. CI retains the Git history needed for the old-version fixture.
+
 ## [3.5.8]
 
 - Content-script ratings persistence now uses a validated worker bridge with origin/path/frame checks, bounded allowlisted data, and serialized cache clearing.

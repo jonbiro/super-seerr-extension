@@ -340,3 +340,25 @@ test('content scripts cannot access local secrets; cache bridge and clear notifi
   await options.evaluate(() => chrome.storage.local.set({ seerrApiKey: 'smoke-key' }));
   await page.close();
 });
+
+for (const fixture of require('./site-fixtures.cjs').SITES) {
+  test(`packaged ${fixture.site} integration boots on its ${fixture.expect.mediaType} fixture`, async () => {
+    const page = await context.newPage();
+    // Only the webpage is a fixture. Manifest matching, script order, bootstrap,
+    // DOM extraction, worker messages, and the rendered flyout are production.
+    await page.route('**/*', route => route.request().isNavigationRequest()
+      ? route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta charset="utf-8"><title>Decoy fallback title</title></head><body>${fixture.html}</body></html>` })
+      : route.abort());
+    await page.goto(fixture.url, { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('.seerr-flyout')).toHaveCount(1, { timeout: 15000 });
+    await page.getByRole('button', { name: 'Open Super Seerr', exact: true }).click();
+    await expect(page.locator('.seerr-title')).toHaveText(fixture.expect.title);
+    await expect(page.locator('.seerr-year')).toContainText(fixture.expect.mediaType === 'tv' ? 'TV Series' : 'Movie');
+    if (fixture.expect.year) await expect(page.locator('.seerr-year')).toContainText(String(fixture.expect.year));
+    await expect(page.locator('.seerr-action-button')).not.toContainText('Connecting');
+    if (fixture.expect.mediaType === 'tv') await expect(page.getByRole('button', { name: 'Choose TV seasons', exact: true })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.seerr-tab')).toHaveAttribute('aria-expanded', 'false');
+    await page.close();
+  });
+}
