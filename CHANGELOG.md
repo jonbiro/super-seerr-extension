@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.29]
+
+- Serialize preset saves and deletions in the worker so simultaneous tabs preserve each other’s changes.
+- Synchronize open preset controls after storage changes and remove listeners when the overlay closes.
+- Validate worker preset operations against the configured Seerr page and recover the write queue after storage failures.
+- Add concurrent-tab browser coverage and worker regressions for ordered writes, deletion and failed storage.
+
 ## [3.5.28]
 
 - Run popup diagnostics against a single settings snapshot and discard results when settings change during the check.

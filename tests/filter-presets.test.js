@@ -5,7 +5,7 @@ const { JSDOM } = require('jsdom');
 const tick = () => new Promise(resolve => setImmediate(resolve));
 function fixture(get, set) {
   const dom = new JSDOM('<div id="bar"><select class="seerr-sort-select"><option value="default">Default</option></select></div>', { runScripts: 'outside-only' });
-  dom.window.chrome = { storage: { sync: { get, set } } };
+  dom.window.chrome = { storage: { sync: { get, set } }, runtime: { sendMessage: require('./helpers/preset-bridge').presetBridge({ get, set }) } };
   dom.window.eval(fs.readFileSync('src/content/FilterPresets.js', 'utf8'));
   const applied = [];
   dom.window.installFilterPresets({ bar: dom.window.document.getElementById('bar'), readCurrent: () => ({ sort: 'default', filters: { minCritics: 90 } }), apply: value => applied.push(value) });
@@ -35,6 +35,7 @@ test('initial reads and pending writes disable every preset control', async t =>
   let resolveRead, resolveWrite, reads = 0;
   const f = fixture(() => ++reads === 1 ? new Promise(resolve => { resolveRead = resolve; }) : Promise.resolve({ seerrFilterPresetsV1: [preset] }), () => new Promise(resolve => { resolveWrite = resolve; }));
   t.after(() => f.dom.window.close());
+  await tick();
   assert.equal(f.save.disabled, true); f.save.click(); assert.equal(reads, 1);
   resolveRead({ seerrFilterPresetsV1: [preset] }); await tick(); choose(f);
   f.save.click(); await tick();

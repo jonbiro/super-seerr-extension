@@ -426,3 +426,32 @@ test('bulk review fits a short narrow viewport and Escape restores focus', async
     await expect(review).toBeFocused();
   } finally { await page.close(); }
 });
+
+test('presets saved concurrently in two tabs synchronize without losing either change', async () => {
+  const manager = await context.newPage();
+  await manager.goto('chrome://extensions');
+  await manager.evaluate(id => chrome.developerPrivate.addHostPermission(id, 'http://127.0.0.1/*'), extensionId);
+  await manager.close();
+  await options.evaluate(async serverUrl => {
+    await chrome.storage.sync.set({ seerrUrl: serverUrl, seerrFilterPresetsV1: [] });
+    await chrome.runtime.sendMessage({ action: 'reloadSettings' });
+  }, origin);
+  const tabs = await Promise.all([context.newPage(), context.newPage()]);
+  try {
+    await Promise.all(tabs.map(page => page.goto(`${origin}/discover`)));
+    for (let i = 0; i < tabs.length; i++) {
+      await expect(tabs[i].getByRole('button', { name: 'Save preset', exact: true })).toBeEnabled();
+      await tabs[i].getByRole('textbox', { name: 'Preset name', exact: true }).fill(`Tab ${i + 1}`);
+    }
+    await Promise.all(tabs.map(page => page.getByRole('button', { name: 'Save preset', exact: true }).click()));
+    for (const page of tabs) {
+      await expect(page.getByLabel('Saved filter presets').locator('option')).toHaveCount(3);
+      await expect(page.getByLabel('Saved filter presets')).toContainText('Tab 1');
+      await expect(page.getByLabel('Saved filter presets')).toContainText('Tab 2');
+    }
+    await tabs[0].getByLabel('Saved filter presets').selectOption('Tab 1');
+    await tabs[0].getByRole('button', { name: 'Delete preset', exact: true }).click();
+    await expect(tabs[1].getByLabel('Saved filter presets').locator('option')).toHaveCount(2);
+    await expect(tabs[1].getByLabel('Saved filter presets')).not.toContainText('Tab 1');
+  } finally { await Promise.all(tabs.map(page => page.close())); }
+});

@@ -7,10 +7,9 @@ test('long saved preset names and failure messages stay inside a narrow toolbar'
   await page.addStyleTag({ path: path.resolve('src/content/seerr-overlay.css') });
   await page.addScriptTag({ path: path.resolve('src/content/FilterPresets.js') });
   await page.evaluate(() => {
-    window.chrome = { storage: { sync: {
-      get: async () => ({ seerrFilterPresetsV1: [{ name: 'W'.repeat(40), sort: 'default', filters: {} }] }),
-      set: async () => { throw new Error('StorageUnavailable'.repeat(20)); }
-    } } };
+    window.chrome = { storage: {}, runtime: { sendMessage: async ({ action }) => action === 'getFilterPresets'
+      ? { success: true, data: [{ name: 'W'.repeat(40), sort: 'default', filters: {} }] }
+      : { success: false, error: 'StorageUnavailable'.repeat(20) } } };
     window.installFilterPresets({ bar: document.querySelector('.seerr-sort-filter-bar'), readCurrent: () => ({ sort: 'default', filters: {} }), apply: () => {} });
   });
   const select = page.getByLabel('Saved filter presets');

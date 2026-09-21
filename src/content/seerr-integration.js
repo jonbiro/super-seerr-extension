@@ -201,6 +201,7 @@
   window.addEventListener('scroll', () => cardRatingQueue.reprioritize(), { passive: true, capture: true });
 
   function cleanupOverlay() {
+    document.querySelectorAll('.seerr-sort-filter-bar').forEach(bar => bar.__seerrPresetCleanup?.());
     abandonBulkRun();
     activeBulkSeasonController?.abort();
     activeBulkSeasonController = null;

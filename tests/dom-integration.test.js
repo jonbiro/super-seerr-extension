@@ -20,7 +20,7 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
   });
   if (linkless) window.document.querySelectorAll('a').forEach(link => link.replaceWith(...link.childNodes));
   const storage = { seerrUrl: 'https://seerr.example', seerrApiKey: 'fixture', ...settings };
-  let storageListener;
+  const storageListeners = new Set();
   const messages = [];
   const urls = [];
   // The overlay reads the URL and flags from sync but asks the worker whether
@@ -31,7 +31,7 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
       sync: { get: async () => syncedStorage(), set: async values => Object.assign(storage, values) },
       // MV3 always provides these; a mock without them fails code that is fine.
       local: { get: async () => ({}), set: async () => {}, remove: async () => {} },
-      onChanged: { addListener(fn) { storageListener = fn; } }
+      onChanged: { addListener(fn) { storageListeners.add(fn); }, removeListener(fn) { storageListeners.delete(fn); } }
     },
     runtime: { sendMessage: async message => {
       messages.push(message);
@@ -54,12 +54,15 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
     window.document.head.append(script);
   }
   const cacheMessage = require('./helpers/cache-bridge').cacheBridge({ settings: syncedStorage(), local: window.chrome.storage.local, url: window.location.href });
+  const presetMessage = require('./helpers/preset-bridge').presetBridge(window.chrome.storage.sync);
+  const originalSend = window.chrome.runtime.sendMessage;
+  window.chrome.runtime.sendMessage = message => ['getFilterPresets', 'saveFilterPreset', 'deleteFilterPreset'].includes(message.action) ? presetMessage(message) : originalSend(message);
   const send = window.chrome.runtime.sendMessage;
   window.chrome.runtime.sendMessage = message => ['getOverlayCache', 'putOverlayCache'].includes(message.action) ? cacheMessage(message) : send(message);
   for (const file of ['RatingsModel', 'RatingsConfig']) window.eval(source(`src/shared/${file}.js`));
   require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(source('src/content/seerr-integration.js').replace(/\}\)\(\);\s*$/, `window.testOverlay = { injectCardBadges, injectSortFilterControls, handleRouteChange, extractSeerrNativeRatings, loadMoreCards, scoreAllCards }; })();`));
-  return { dom, window, messages, urls, storage, change: changes => storageListener(changes, 'sync') };
+  return { dom, window, messages, urls, storage, change: changes => storageListeners.forEach(listener => listener(changes, 'sync')) };
 }
 
 test('real DOM sorting follows ratings, stays idempotent and restores original order', async t => {

@@ -13,6 +13,7 @@ import './PopupDiagnostics.js';
 import './SeasonRequests.js';
 import './OverlayStorage.js';
 import './TitleCorrections.js';
+import './FilterPresetStorage.js';
 const RatingsConfig = globalThis.RatingsConfig;
 const MediaValidation = globalThis.MediaValidation;
 
@@ -254,6 +255,13 @@ class SeerrAPI {
           }
           const connectionResult = await connectionClient.testConnection();
           sendResponse({ success: true, data: connectionResult });
+          break;
+        }
+
+        case 'getFilterPresets':
+        case 'saveFilterPreset':
+        case 'deleteFilterPreset': {
+          sendResponse({ success: true, data: await this.filterPresetOperation(request.action, request.data, sender) });
           break;
         }
 
@@ -753,7 +761,7 @@ class SeerrAPI {
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
 
-Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests, globalThis.OverlayStorage, globalThis.TitleCorrections);
+Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests, globalThis.OverlayStorage, globalThis.TitleCorrections, globalThis.FilterPresetStorage);
 
 const seerrAPI = new SeerrAPI();
 let initializing = true;
