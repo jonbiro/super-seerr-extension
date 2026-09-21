@@ -876,3 +876,43 @@ test('duplicate cards produce one request and completion restores selection cont
   assert.equal(doc.querySelector('.seerr-toggle-select').textContent, 'Select titles');
   assert.equal(doc.activeElement, doc.querySelector('.seerr-toggle-select'));
 });
+
+test('a reused card drops its old selection and renders the new title ratings', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle(); const doc = f.window.document, card = doc.querySelector('[data-id="1"]');
+  doc.querySelector('.seerr-toggle-select').click(); card.querySelector('.seerr-select-checkbox').click();
+  card.querySelector('a').href = '/movie/2'; card.querySelector('h2').textContent = 'High';
+  f.window.testOverlay.injectCardBadges(); await settle();
+  assert.match(card.querySelector('.seerr-card-badge').textContent, /95%/);
+  const checkbox = card.querySelector('.seerr-select-checkbox');
+  assert.equal(checkbox.getAttribute('aria-checked'), 'false');
+  assert.equal(checkbox.getAttribute('aria-label'), 'Select High');
+  assert.equal(doc.querySelector('.seerr-bulk-review').disabled, true);
+});
+
+test('redrawing selection controls retains the visible and announced selected state', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle(); const doc = f.window.document, card = doc.querySelector('[data-id="1"]');
+  doc.querySelector('.seerr-toggle-select').click();
+  card.querySelector('.seerr-select-checkbox').click(); card.querySelector('.seerr-select-checkbox').remove();
+  f.window.testOverlay.injectCardBadges(); await settle();
+  const checkbox = card.querySelector('.seerr-select-checkbox');
+  assert.equal(checkbox.getAttribute('aria-checked'), 'true'); assert.equal(checkbox.classList.contains('checked'), true);
+  checkbox.click(); assert.equal(doc.querySelector('.seerr-bulk-review').disabled, true);
+});
+
+test('late ratings for a replaced card cannot overwrite its new identity', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle(); const doc = f.window.document, card = doc.createElement('article');
+  card.setAttribute('data-testid', 'title-card'); card.innerHTML = '<a href="/movie/99"><h2>Delayed</h2></a>';
+  const original = f.window.chrome.runtime.sendMessage; let release;
+  f.window.chrome.runtime.sendMessage = message => message.action === 'getRottenTomatoesRatings' && message.data.title === 'Delayed'
+    ? new Promise(resolve => { release = resolve; }) : original(message);
+  doc.getElementById('grid').appendChild(card); f.window.testOverlay.injectCardBadges(); await settle();
+  assert.ok(release);
+  card.querySelector('a').href = '/movie/2'; card.querySelector('h2').textContent = 'High';
+  f.window.testOverlay.injectCardBadges(); await settle();
+  release({ success: true, data: { rtCriticsScore: 1, confidence: 1 } }); await settle();
+  assert.match(card.querySelector('.seerr-card-badge').textContent, /95%/);
+  assert.equal(card.querySelectorAll('.seerr-card-badge').length, 1);
+});

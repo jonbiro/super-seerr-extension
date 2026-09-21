@@ -418,6 +418,10 @@
 /* ─── Bulk Action Bar ─── */
 
 .seerr-bulk-action-bar {
+  box-sizing: border-box;
+  max-width: calc(100% - 24px);
+  flex-wrap: wrap;
+  justify-content: center;
   position: fixed;
   bottom: 24px;
   left: 50%;
@@ -650,3 +654,5 @@
 .seerr-scored-card:has(> .seerr-select-checkbox) > .seerr-rating-details { left: 34px; max-width: calc(100% - 40px); }
 
 .seerr-bulk-action-bar button:disabled { opacity: .5; cursor: default; }
+
+.seerr-bulk-action-bar button:focus-visible, .seerr-select-checkbox:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }

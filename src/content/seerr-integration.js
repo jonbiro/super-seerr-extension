@@ -1160,15 +1160,24 @@
   let lastListItems = [];
 
   function getCardMediaInfo(card) {
-    if (card.__seerrMediaInfo) return card.__seerrMediaInfo;
-
+    const cached = card.__seerrMediaInfo || card.__seerrListMediaInfo;
     const links = card.matches?.('a[href]') ? [card] : Array.from(card.querySelectorAll('a[href]'));
     const link = links.find(a => mediaLinkTarget(a.getAttribute('href')));
-    if (!link) return card.__seerrListMediaInfo || null;
+    if (!link) return cached || null;
 
     const href = link.getAttribute('href') || '';
     const target = mediaLinkTarget(href);
     if (!target) return null;
+    if (cached && String(cached.tmdbId) === String(target.tmdbId) && cached.mediaType === target.mediaType) return cached;
+    if (cached) {
+      card.__seerrIdentityEpoch = (card.__seerrIdentityEpoch || 0) + 1;
+      card.querySelectorAll('.seerr-card-badge, .seerr-rating-details, .seerr-select-checkbox, .seerr-plex-card-button').forEach(node => node.remove());
+      delete card.__seerrRatings;
+      delete card.__seerrListMediaInfo;
+      card.__seerrBadgesResolving = false;
+      card.__seerrBadgesCleared = false;
+      selectedCards.delete(card);
+    }
 
     const titleEl = card.querySelector('h2, h3, [class*="title"], [class*="Title"]');
     const imageAlt = card.querySelector('img[alt]')?.getAttribute('alt') || '';
@@ -1245,6 +1254,7 @@
     if (cards.length > 0 && cards.some(card => !getCardMediaInfo(card)) && listEndpoint && !pageRatingsFetches.has(listEndpoint)) {
       indexCurrentListRatings().then(() => injectCardBadges());
     }
+    cards.forEach(card => getCardMediaInfo(card));
     ensureCardIndexes(cards);
     ensureBulkCheckboxes(cards);
 
@@ -1273,11 +1283,13 @@
       card.__seerrBadgesResolving = true;
       card.__seerrBadgesCleared = false;
       const generation = routeGeneration;
+      const identityEpoch = card.__seerrIdentityEpoch || 0;
 
       // Resolve ratings asynchronously
       if (mediaInfo.tmdbId) {
         cardRatingQueue.add(card, signal => getRatings(mediaInfo.tmdbId, mediaInfo.title, null, mediaInfo.mediaType, { signal, queueNode: card })).then(bundle => {
-          if (generation !== routeGeneration || !card.isConnected) return;
+          getCardMediaInfo(card);
+          if (generation !== routeGeneration || !card.isConnected || identityEpoch !== (card.__seerrIdentityEpoch || 0)) return;
           // Re-check: a cleanup could have removed any previously-rendered
           // badges since this promise was queued.
           if (card.__seerrBadgesCleared) {
@@ -1329,7 +1341,7 @@
           injectSortFilterControls();
         }).catch(err => log('Card badge ratings failed:', err))
           .finally(() => {
-            if (generation !== routeGeneration || !card.isConnected) return;
+            if (generation !== routeGeneration || !card.isConnected || identityEpoch !== (card.__seerrIdentityEpoch || 0)) return;
             card.__seerrBadgesResolving = false;
             updateSortFilterCoverage();
             applyScoreFilters(getCardsGrid());
@@ -1527,10 +1539,10 @@
     if (!isSeerrPage() || !isListRoute(detectRoute())) return;
     if (bulkMode) return;
     for (const card of getMediaCards()) {
+      const info = getCardMediaInfo(card);
       const hasButton = Array.from(card.children)
         .some(child => child.classList && child.classList.contains('seerr-plex-card-button'));
       if (hasButton) continue;
-      const info = getCardMediaInfo(card);
       const tmdbId = Number(info && info.tmdbId);
       if (!Number.isInteger(tmdbId) || tmdbId <= 0) continue;
       if (!info.mediaType || (info.mediaType !== 'movie' && info.mediaType !== 'tv')) continue;
@@ -1558,7 +1570,8 @@
         // The card itself navigates to the detail page; the button must not.
         event.stopPropagation();
         event.preventDefault();
-        if (button.disabled) return;
+        getCardMediaInfo(card);
+        if (!button.isConnected || button.disabled) return;
         button.disabled = true;
         button.textContent = '…';
         try {
@@ -1668,7 +1681,7 @@
         injectSortFilterControls();
       }, 250);
     });
-    cardObserver.observe(document.body, { childList: true, subtree: true });
+    cardObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
   }
 
   // ──────────────── Sort & Filter ────────────────
@@ -2038,11 +2051,14 @@
       checkbox.type = 'button';
       checkbox.className = 'seerr-select-checkbox';
       checkbox.setAttribute('role', 'checkbox');
-      checkbox.setAttribute('aria-checked', 'false');
+      checkbox.setAttribute('aria-checked', String(selectedCards.has(card)));
+      checkbox.classList.toggle('checked', selectedCards.has(card));
       checkbox.setAttribute('aria-label', `Select ${getCardMediaInfo(card)?.title || 'title'}`);
       checkbox.setAttribute('data-seerr-overlay', 'true');
       checkbox.addEventListener('click', (e) => {
         e.stopPropagation();
+        getCardMediaInfo(card);
+        if (!checkbox.isConnected) return;
         if (selectedCards.has(card)) {
           selectedCards.delete(card);
           checkbox.classList.remove('checked');

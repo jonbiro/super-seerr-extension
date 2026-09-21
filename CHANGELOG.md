@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.23]
+
+- Invalidate cached card identity, ratings, selection and Plex controls when a reused card links to a different title. Reject late rating results for the previous identity.
+- Restore selected checkbox appearance and accessibility state after the host redraws its contents.
+- Keep the bulk action toolbar within narrow screens and add visible keyboard focus to its controls.
+
 ## [3.5.22]
 
 - Add bulk-selection controls to newly loaded cards, discard detached selections, and disable review when no cards are selected.

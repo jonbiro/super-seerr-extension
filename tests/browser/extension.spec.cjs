@@ -409,6 +409,9 @@ test('bulk review fits a short narrow viewport and Escape restores focus', async
     await page.getByRole('button', { name: 'Select titles', exact: true }).click();
     await page.locator('.seerr-select-checkbox').click();
     const review = page.locator('.seerr-bulk-review');
+    const toolbarBounds = await page.locator('.seerr-bulk-action-bar').boundingBox();
+    expect(toolbarBounds.x).toBeGreaterThanOrEqual(0);
+    expect(toolbarBounds.x + toolbarBounds.width).toBeLessThanOrEqual(320);
     await review.click();
     const dialog = page.getByRole('dialog', { name: 'Review your bulk request' });
     await expect(dialog).toBeVisible();
