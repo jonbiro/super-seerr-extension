@@ -106,3 +106,21 @@ test('watch opens immediately and its delayed UI reset cannot cross navigation',
   for (const fn of callbacks.values()) fn();
   assert.equal(updates, 0);
 });
+
+test('a status read started before a request cannot replace its pending UI', async t => {
+  const f = fixture(t), status = deferred(), request = deferred();
+  f.integration.uiTheme = 'flyout';
+  const renders = [];
+  f.integration.ui.updateFlyoutStatus = (...args) => renders.push(args);
+  f.integration.ui.updateTabIcon = () => {};
+  f.integration.client.sendMessage = async () => ({success:true,data:{plexConfigured:false}});
+  f.integration.client.getMediaStatus = () => status.promise;
+  f.integration.client.requestMedia = () => request.promise;
+  const checking = f.integration.updateStatus();
+  await new Promise(resolve => setImmediate(resolve));
+  const sending = f.integration.handleRequest();
+  status.resolve({status:'available',buttonClass:'request',buttonText:'Request'});
+  await checking;
+  assert.equal(renders.length, 0, 'obsolete status must not reset the pending request');
+  request.resolve({}); await sending;
+});

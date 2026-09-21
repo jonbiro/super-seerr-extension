@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.52]
+
+- Invalidate earlier status lookups when a media request or season review begins so late results cannot reset the pending request UI.
+- Add a deferred-response lifecycle regression.
+
 ## [3.5.51]
 
 - Skip overlapping status refreshes while a Plex add is active so its pending label and disabled state cannot be reset by a stale watchlist read.

@@ -556,6 +556,8 @@ class BaseIntegration {
    * Handle regular request button click
    */
   async handleRequestButtonClick() {
+    // Reads begun before this action cannot replace its pending UI.
+    this._statusGeneration = (this._statusGeneration || 0) + 1;
     const view = this.captureActionView();
     try {
       let requestMedia = view.media;
