@@ -28,7 +28,7 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
   const syncedStorage = () => Object.fromEntries(Object.entries(storage).filter(([key]) => key !== 'seerrApiKey'));
   window.chrome = {
     storage: {
-      sync: { get: async () => syncedStorage() },
+      sync: { get: async () => syncedStorage(), set: async values => Object.assign(storage, values) },
       // MV3 always provides these; a mock without them fails code that is fine.
       local: { get: async () => ({}), set: async () => {}, remove: async () => {} },
       onChanged: { addListener(fn) { storageListener = fn; } }
@@ -663,4 +663,41 @@ test('a scored card is marked so the scores can step aside while it is hovered',
   // The terminator matters: /opacity:\s*0/ alone is satisfied by "opacity: 0.5".
   assert.match(css, /\.seerr-scored-card:hover\s+\.seerr-card-badge\s*\{[^}]*opacity:\s*0\s*;/,
     'the rule hides the scores rather than merely dimming them');
+});
+
+test('each card explains its score and supports a scoped retry', async t => {
+  const fixture = createOverlay(); t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
+  await settle();
+  const cards = [...fixture.window.document.querySelectorAll('[data-testid="title-card"]')];
+  assert.equal(fixture.window.document.querySelectorAll('.seerr-rating-details').length, 3);
+  const details = cards[0].querySelector('.seerr-rating-details');
+  assert.match(details.textContent, /Source:.*Last checked:/);
+  const before = fixture.messages.filter(message => message.action === 'getRottenTomatoesRatings').length;
+  details.querySelector('button').click(); await settle();
+  const after = fixture.messages.filter(message => message.action === 'getRottenTomatoesRatings');
+  assert.equal(after.length, before + 1);
+  assert.equal(after.at(-1).data.title, 'Low');
+  assert.equal(after.at(-1).data.refresh, true);
+  assert.equal(fixture.window.document.querySelectorAll('.seerr-rating-details').length, 3);
+});
+
+test('filter presets persist, apply sorting and thresholds, and delete', async t => {
+  const fixture = createOverlay(); t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
+  await settle();
+  const { document: doc, Event } = fixture.window;
+  const sort = doc.querySelector('.seerr-sort-select');
+  sort.value = 'rt-critics-desc'; sort.dispatchEvent(new Event('change'));
+  const min = doc.querySelector('.seerr-min-critics'); min.value = '70'; min.dispatchEvent(new Event('input'));
+  const controls = doc.querySelector('.seerr-filter-presets');
+  controls.querySelector('input').value = 'Movie night';
+  controls.querySelector('button').click(); await settle();
+  assert.equal(fixture.storage.seerrFilterPresetsV1[0].name, 'Movie night');
+  assert.equal(fixture.storage.seerrFilterPresetsV1[0].filters.minCritics, 70);
+  doc.querySelector('.seerr-reset-sort').click();
+  const select = controls.querySelector('select'); select.value = 'Movie night'; select.dispatchEvent(new Event('change'));
+  assert.equal(sort.value, 'rt-critics-desc'); assert.equal(min.value, '70');
+  assert.equal(doc.querySelector('[data-id="1"]').style.display, 'none');
+  assert.equal(doc.querySelector('[data-id="2"]').style.display, '');
+  controls.querySelectorAll('button')[1].click(); await settle();
+  assert.equal(fixture.storage.seerrFilterPresetsV1.length, 0);
 });

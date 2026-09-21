@@ -40,9 +40,9 @@ GECKODRIVER_PATH=/path/to/geckodriver FIREFOX_BINARY=/path/to/firefox npm run te
 
 This separate Node/WebDriver harness uses a temporary addon, profile, and the same local HTTP fixtures as Chromium. It is intended to cover optional permission grant/revocation, main- and isolated-world injection, SPA navigation, background restart via addon reload, and persisted cache clearing. Firefox permissions are granted through its own permission manager in the disposable test session, not by replacing extension API methods. Privileged WebDriver access is enabled solely for that test session.
 
-**Current limitation:** this harness has not completed successfully locally. Installed Firefox 147.0.3 did not initialize its WebDriver session; clean Firefox 155/156 builds exited with `Could not find profile folder`. These failures happen before addon installation. The test does not repair, remove, or modify an existing browser profile to work around the problem. Runtime compatibility remains unverified, and this command is intentionally not part of required CI until it has passed on a working Firefox environment.
+**Verified locally:** Firefox 147.0.3 and geckodriver 0.37.1 pass this test. Use a real-path temporary profile root and `--allow-system-access` as the harness does. The test does not modify existing browser profiles. This verifies the Seerr fixture; authenticated live sites, all seven external-site adapters, and extension-version upgrades still need separate coverage.
 
-Startup failures save `test-results/firefox/geckodriver.log`; failures after session creation also save a screenshot when possible. The harness terminates its test process group and removes its temporary extension/profile on exit. No additional automation-library dependency is required.
+Failures save `test-results/firefox/geckodriver.log`; failures after session creation also capture browser console messages, isolated-world helper availability, and a screenshot when possible. The harness terminates its test process group and removes its temporary extension/profile on exit. No additional automation-library dependency is required.
 
 ## Automated checks
 

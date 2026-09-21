@@ -133,7 +133,15 @@ test('an expanded site flyout follows SPA navigation and is removed on destroy',
     } });
   }, tabId);
   await expect(page.locator('.seerr-title')).toHaveText('First title');
-  await page.locator('.seerr-tab').click();
+  const tabButton = page.getByRole('button', { name: 'Open Super Seerr', exact: true });
+  await tabButton.focus();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.seerr-panel')).toBeFocused();
+  await expect(page.locator('.seerr-tab')).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('Escape');
+  await expect(tabButton).toBeFocused();
+  await expect(page.locator('.seerr-panel')).toHaveAttribute('inert', '');
+  await page.keyboard.press('Space');
   await expect(page.locator('.seerr-flyout')).toHaveClass(/expanded/);
   await page.evaluate(() => {
     document.querySelector('h1').textContent = 'Second title';
@@ -158,4 +166,31 @@ test('an expanded site flyout follows SPA navigation and is removed on destroy',
   await options.evaluate(tabId => chrome.scripting.executeScript({ target: { tabId }, func: () => window.navigationProbe.destroy() }), tabId);
   await expect(page.locator('.seerr-flyout')).toHaveCount(0);
   await page.close();
+});
+
+test('old ratings render immediately and update after the background refresh', async () => {
+  const Config = require('../../src/shared/RatingsConfig');
+  await options.evaluate(async ({ origin, matcher }) => {
+    const { ratingsCacheEpoch } = await chrome.storage.local.get('ratingsCacheEpoch');
+    await chrome.storage.local.set({ overlayRatingsV1: {
+      server: `${origin}/`, epoch: ratingsCacheEpoch ?? 0, matcher, entries: { 'movie:550': {
+        bundle: { rtCriticsScore: 10, rtAudienceScore: 20, imdbRating: 3, tmdbRating: 4, confidence: 1, source: 'cached' },
+        cachedAt: Date.now() - 2 * 86400000
+      } }
+    } });
+  }, { origin, matcher: Config.matcherVersion });
+  const page = await context.newPage();
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route('**/api/v1/movie/550/ratingscombined', async route => { await gate; await route.continue(); });
+  try {
+    await page.goto(`${origin}/discover`);
+    await expect(page.locator('.seerr-card-badge').first()).toContainText('10%');
+    release();
+    await expect(page.locator('.seerr-card-badge').first()).toContainText('85%');
+    await page.locator('.seerr-rating-details summary').click();
+    await expect(page.locator('.seerr-rating-details')).toContainText('Last checked:');
+    await expect(page.locator('.seerr-rating-details button')).toHaveText('Retry scores');
+    await page.screenshot({ path: 'test-results/ratings-details.png' });
+  } finally { release(); await page.close(); }
 });

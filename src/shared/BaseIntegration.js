@@ -545,8 +545,7 @@ class BaseIntegration {
       // Auto-close flyout after success
       if (this.uiTheme === 'flyout' && this.isFlyoutExpanded()) {
         this.deferViewAction(view, () => {
-          view.elements.flyout.classList.remove('expanded');
-          view.elements.flyout.classList.add('collapsed');
+          view.elements.flyout.setExpanded(false, view.elements.flyout.contains(document.activeElement));
           this.log('Auto-closing flyout after successful request');
         }, 4000);
       }
@@ -696,14 +695,12 @@ class BaseIntegration {
       getStatus: () => this.client.getMediaStatus(this.mediaData),
       expandFlyout: () => {
         if (this.uiElements.flyout) {
-          this.uiElements.flyout.classList.remove('collapsed');
-          this.uiElements.flyout.classList.add('expanded');
+          this.uiElements.flyout.setExpanded(true);
         }
       },
       collapseFlyout: () => {
         if (this.uiElements.flyout) {
-          this.uiElements.flyout.classList.remove('expanded');
-          this.uiElements.flyout.classList.add('collapsed');
+          this.uiElements.flyout.setExpanded(false);
         }
       },
       testTabIcons: () => {

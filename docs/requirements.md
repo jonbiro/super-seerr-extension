@@ -61,11 +61,11 @@ These criteria describe the current product contract. They replace the historica
 
 ## Known limits
 
-- The Firefox manifest uses the `background.scripts` module form, but has not been loaded in a running Firefox. Do not treat it as functional until that check happens.
+- Firefox 147.0.3 passes the real-extension local-fixture smoke test for permissions, overlay injection, SPA navigation, background reload, and cache clearing. Authenticated live-site and all-seven-site Firefox coverage remain open.
 - Ratings depend on RT markup, match heuristics, Seerr API responses, and the user’s session.
 - Cards are identified from the title lists Seerr fetches for itself, because Seerr's markup withholds a card's link and title until it is hovered. A card whose poster matches no observed item stays unresolved rather than being guessed at.
 - Cached ratings are bounded by entry count rather than age, and the two caches are capped independently. Both persist as a single rewritten blob, so a cap is also a write-size decision.
-- Cached ratings do not expire. A score that changes upstream, or a title cached before some source was reachable, keeps its stored shape until the cache is cleared from Settings.
+- Cached scored bundles remain visible while aging results refresh: complete bundles after 24 hours, partial bundles after one hour. Unrated titles retry after six hours, and failed lookups after two minutes. Refresh scores and per-title retry bypass the normal freshness window.
 - Sorting covers loaded cards associated with the controls, not the complete catalogue or all carousels.
 - Cards without explicit links require a unique matching list title. Ambiguous or missing metadata is left unresolved.
 - Live validation across the seven external sites and a configured Seerr/Jellyfin instance is still needed before a store release.

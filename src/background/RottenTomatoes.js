@@ -202,7 +202,7 @@
     // Candidates are scored against every title we know the film by, not against
     // the query: searching a localised title returns the film under its English
     // one, and judging that result by the query would reject the right answer.
-    async rtBestMatchFor(query, titles, year, mediaType) {
+    async rtBestMatchFor(query, titles, year, mediaType, outcome = {}) {
       const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(query)}`;
       const candidates = this.parseRtSearchResults(await this.fetchRtHtml(searchUrl), mediaType)
         .map(result => ({
@@ -218,9 +218,11 @@
       // wrong score presented as fact is worse than none. Another query may
       // still be unambiguous.
       if (!year && this.rtMatchIsAmbiguous(candidates, best)) {
+        outcome.uncertain = true;
         this.log(`Rotten Tomatoes has more than one "${best.title}" and no year was known; not guessing`);
         return null;
       }
+      if (best.confidence < RatingsConfig.confidenceThreshold) outcome.uncertain = true;
       return best.confidence >= RatingsConfig.confidenceThreshold ? best : null;
     },
 
@@ -248,9 +250,10 @@
         throw new Error('Rotten Tomatoes refused recent requests; not asking again yet');
       }
       let best = null;
+      const outcome = {};
       try {
         for (const query of queries) {
-          best = await this.rtBestMatchFor(query, queries, year, mediaType);
+          best = await this.rtBestMatchFor(query, queries, year, mediaType, outcome);
           if (best) break;
         }
         this.rtTransportFailures = 0;
@@ -266,7 +269,7 @@
 
       if (!best) {
         const empty = null;
-        this.cacheRottenTomatoesResult(cacheKey, empty, RatingsConfig.rtNegativeCacheTtlMs, generation);
+        this.cacheRottenTomatoesResult(cacheKey, empty, RatingsConfig.rtNegativeCacheTtlMs, generation, outcome.uncertain ? 'uncertain' : 'unrated');
         return empty;
       }
 
@@ -274,6 +277,7 @@
       try {
         detailScores = this.parseRtScorecard(await this.fetchRtHtml(best.href));
       } catch (error) {
+        outcome.failed = true;
         this.warn('Could not fetch Rotten Tomatoes detail page:', error);
       }
 
@@ -289,7 +293,7 @@
 
       const ttl = result.rtCriticsScore === null && result.rtAudienceScore === null
         ? RatingsConfig.rtNegativeCacheTtlMs : RatingsConfig.rtCacheTtlMs;
-      this.cacheRottenTomatoesResult(cacheKey, result, ttl, generation);
+      this.cacheRottenTomatoesResult(cacheKey, result, outcome.failed ? RatingsConfig.rtNegativeCacheTtlMs : ttl, generation, outcome.failed ? 'failed' : 'rated');
       return result;
     },
   };

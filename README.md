@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.5.2-blue)
+![Version](https://img.shields.io/badge/version-3.5.3-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -24,7 +24,7 @@ After rebuilding, reload the extension in Chrome and refresh the pages using it.
 
 `make build` also produces `dist/firefox`. Its manifest now uses the `background.scripts` module configuration [Mozilla documents for Firefox](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background) instead of the `service_worker` entry Firefox ignores, so the previously known-broken background configuration is fixed.
 
-This has **not been validated against a running Firefox**. An opt-in `npm run test:firefox` harness is available, but local validation is currently blocked by Firefox startup/profile initialization failures before the extension loads. Packaging success is not proof of Firefox compatibility. See [Firefox verification](docs/development.md#firefox-verification-opt-in) for prerequisites, artifacts, and the remaining coverage gap.
+The real-extension smoke test passes in Firefox 147.0.3 with geckodriver 0.37.1: optional permissions, ratings injection, SPA navigation, addon reload, persisted cache clearing, and permission revocation. These are local HTTP fixtures, not authenticated live-site or all-seven-site validation. See [Firefox verification](docs/development.md#firefox-verification-opt-in) for prerequisites and remaining coverage.
 
 ## What it does
 
@@ -57,6 +57,14 @@ Choose **Select titles**, select cards, then **Review & Request**. Titles with m
 ### Preferences
 
 Settings includes separate switches for card badges, detail ratings, summaries, sort/filter controls, bulk selection, and Plex Watchlist buttons. Save to apply them. Hiding card badges does not disable sorting by their underlying scores.
+
+### Saved presets and score details
+
+Save a named preset in the filter bar to reuse its sorting and score thresholds. Presets sync with your browser profile; select one to apply it or delete it from the same controls.
+
+Each card and detail page offers **Score details** with its source, last check, missing-score explanation, and a retry button. Cached ratings appear immediately while older results refresh in the background. Partial ratings retry sooner, and a failed refresh keeps known scores visible.
+
+The external-site flyout supports keyboard opening with Enter or Space, Escape to close, and focus return to its toggle. Hidden flyout controls stay out of the tab order.
 
 ## Development
 

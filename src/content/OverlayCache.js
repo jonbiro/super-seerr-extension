@@ -6,8 +6,8 @@
     const ratingsCache = new Map();
 
     // Resolved bundles persist so a page reload does not re-resolve every card.
-    // There is no expiry by design: entries live until the entry cap evicts them
-    // or the user clears the cache from Settings.
+    // Aging entries remain renderable while sources refresh in the background;
+    // the entry cap and explicit cache clearing still bound persistence.
     const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';
     // Seerr withholds a card's link and title until it is hovered, so a cold
     // load cannot identify cards from the DOM alone. The title lists Seerr
@@ -59,11 +59,13 @@
             if (!bundle) {
               // A remembered "nothing", worth keeping only while it is current.
               if (cachedAt === null || Date.now() - cachedAt >= Config.unratedRetryMs) continue;
-              ratingsCache.set(key, { bundle: null, cachedAt });
+              ratingsCache.set(key, { bundle: null, cachedAt, diagnostics: entry.diagnostics ?? null });
               continue;
             }
             if (typeof bundle !== 'object') continue;
-            ratingsCache.set(key, { bundle: Model.createRatingsBundle(bundle), cachedAt });
+            ratingsCache.set(key, { bundle: Model.createRatingsBundle(bundle), cachedAt,
+              ...(typeof entry.retryAt === 'number' ? { retryAt: entry.retryAt } : {}),
+              ...(entry.diagnostics && typeof entry.diagnostics === 'object' ? { diagnostics: entry.diagnostics } : {}) });
           }
         } catch (error) {
           log('Could not read the stored ratings cache:', error);
@@ -105,7 +107,8 @@
             // only two ways into this cache set one, and the loader refuses an
             // absence that has none.
             if (value.bundle && !Model.hasAnyScore(value.bundle)) continue;
-            entries[key] = { bundle: value.bundle ?? null, cachedAt: value.cachedAt ?? null };
+            entries[key] = { bundle: value.bundle ?? null, cachedAt: value.cachedAt ?? null,
+              retryAt: value.retryAt ?? null, diagnostics: value.diagnostics ?? null };
           }
           let index = [];
           if (typeof getListIndex === 'function') {
@@ -136,4 +139,4 @@
 
     return { ratingsCache, loadPersistedRatings, schedulePersistedRatingsFlush, flushPersistedRatings, forgetPersistedRatings };
   };
-})(globalThis);
+})(typeof window !== 'undefined' ? window : globalThis);

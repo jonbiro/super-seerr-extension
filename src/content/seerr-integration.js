@@ -728,6 +728,8 @@
         outcome.conclusive = false;
         return null;
       }
+      if (response.diagnostic === 'uncertain') outcome.uncertain = true;
+      if (response.diagnostic === 'failed') outcome.conclusive = false;
       if (!response.data) return null;
 
       return Model.createRatingsBundle({
@@ -750,25 +752,31 @@
     title = heading.title || title;
     year = year ?? heading.year;
     log(`Resolving ratings for TMDB ${tmdbId}`);
-    const native = extractSeerrNativeRatings(tmdbId, mediaType);
+    // Refreshes must read the sources again, not recycle the page's old scores.
+    const native = options.refresh ? null : extractSeerrNativeRatings(tmdbId, mediaType);
     await indexCurrentListRatings();
     const pageMeta = tmdbId !== null && tmdbId !== undefined ? pageMetadataByTmdbId.get(ratingKey(tmdbId, mediaType)) : null;
     const lookupTitle = title || pageMeta?.title || '';
     const lookupYear = year || pageMeta?.year || null;
     const pageBundle = tmdbId !== null && tmdbId !== undefined ? pageRatingsByTmdbId.get(ratingKey(tmdbId, mediaType)) : null;
-    let bundle = mergeBundles(native, pageBundle);
+    let bundle = options.refresh ? null : mergeBundles(native, pageBundle);
+    // A refresh asks the configured server first, avoiding external scraping
+    // entirely when Seerr can already supply the current ratings.
+    if (options.refresh) bundle = await fetchSeerrSessionRatings(tmdbId, mediaType, null, options.outcome ?? {});
 
     if (!bundle || bundle.rtCriticsScore === null || bundle.rtAudienceScore === null) {
       const rtBundle = await fetchRottenTomatoesRatings(
         lookupTitle, lookupYear, mediaType, options.refresh === true, pageMeta?.originalTitle || null, options.outcome ?? {});
       if (rtBundle && rtBundle.confidence >= Config.confidenceThreshold) {
         bundle = mergeBundles(bundle, rtBundle);
+      } else if (rtBundle && options.outcome) {
+        options.outcome.uncertain = true;
       }
     }
     // Continue filling partial bundles without overwriting higher-trust data.
     // Passing what is already known lets it skip endpoints that could only
     // return those same fields.
-    if (!isBundleComplete(bundle)) {
+    if (!options.refresh && !isBundleComplete(bundle)) {
       bundle = mergeBundles(bundle, await fetchSeerrSessionRatings(tmdbId, mediaType, bundle, options.outcome ?? {}));
     }
     return bundle || Model.createRatingsBundle({ lastUpdated: Date.now() });
@@ -905,7 +913,7 @@
 
     const cards = getMediaCards(grid);
     cards.forEach(card => {
-      card.querySelectorAll('[data-seerr-overlay="true"][class*="card-badge"]').forEach(badge => badge.remove());
+      card.querySelectorAll('[data-seerr-overlay="true"][class*="card-badge"], .seerr-rating-details').forEach(badge => badge.remove());
       delete card.__seerrRatings;
       card.__seerrBadgesResolving = false;
       card.__seerrBadgesCleared = false;
@@ -926,8 +934,9 @@
     await loadRatingsAvailability();
 
     const key = ratingsCacheKey(tmdbId, title, year, mediaType);
-    let cached = options.refresh === true ? null : ratingsCache.get(key);
-    // A remembered "nothing" expires; a remembered score does not.
+    const previous = ratingsCache.get(key);
+    let cached = options.refresh === true ? null : previous;
+    // Missing scores expire sooner than complete results.
     const absenceTtl = cached?.provisional ? Config.inconclusiveRetryMs : Config.unratedRetryMs;
     if (cached && !cached.bundle && Date.now() - (cached.cachedAt ?? 0) >= absenceTtl) {
       ratingsCache.delete(key);
@@ -939,6 +948,23 @@
       // rather than by insertion order.
       ratingsCache.delete(key);
       ratingsCache.set(key, cached);
+      const freshMs = isBundleComplete(cached.bundle) ? Config.ratingsFreshMs : Config.partialRatingsRetryMs;
+      const retryAt = cached.retryAt ?? ((cached.cachedAt ?? 0) + freshMs);
+      if (cached.bundle && Date.now() >= retryAt && !cached.refreshing && !ratingsCache.has(`pending:${key}`)) {
+        cached.refreshing = true;
+        const generation = routeGeneration;
+        // Return the current score immediately. Coalescing and the resolver
+        // deadline still apply to this background update.
+        void getRatings(tmdbId, title, year, mediaType, { refresh: true, background: true })
+          .then(() => {
+            if (generation === routeGeneration && ratingsCache.has(key)) repaintRatingTitle(tmdbId, mediaType);
+          })
+          .catch(error => {
+            log('Background ratings refresh failed:', error);
+            if (generation === routeGeneration && ratingsCache.has(key)) repaintRatingTitle(tmdbId, mediaType);
+          })
+          .finally(() => { cached.refreshing = false; });
+      }
       return cached.bundle;
     }
 
@@ -965,7 +991,12 @@
     try {
       const bundle = await Promise.race([promise, deadline]);
       // Storing the absence is the point: without it every visit asks again.
-      const storable = bundle && Model.hasAnyScore(bundle) ? bundle : null;
+      let storable = bundle && Model.hasAnyScore(bundle) ? bundle : null;
+      // An unavailable source is not evidence that a previously known score
+      // disappeared. Keep those values visible and retry the missing source.
+      if (options.refresh && outcome.conclusive === false && previous?.bundle) {
+        storable = mergeBundles(storable, previous.bundle);
+      }
       // A lookup that could not complete tells us nothing about the title, so
       // it is held briefly and in memory only: long enough that the page stops
       // re-asking on every pass, short enough to cost nothing once the server
@@ -977,14 +1008,90 @@
           if (lru === undefined) break;
           ratingsCache.delete(lru);
         }
-        ratingsCache.set(key, { bundle: storable, cachedAt: Date.now(), ...(provisional ? { provisional: true } : {}) });
+        const checkedAt = Date.now();
+        const status = outcome.conclusive === false ? 'failed' : outcome.uncertain ? 'uncertain'
+          : !storable ? 'unrated' : isBundleComplete(storable) ? 'rated' : 'partial';
+        const retryMs = outcome.conclusive === false ? Config.inconclusiveRetryMs
+          : status === 'unrated' ? Config.unratedRetryMs
+          : status === 'rated' ? Config.ratingsFreshMs : Config.partialRatingsRetryMs;
+        ratingsCache.set(key, { bundle: storable, cachedAt: checkedAt, retryAt: checkedAt + retryMs,
+          diagnostics: { status, checkedAt, source: storable?.source || 'No source returned a score' },
+          ...(provisional ? { provisional: true } : {}) });
         if (!provisional) schedulePersistedRatingsFlush();
       }
-      return bundle;
+      return storable || bundle;
+    } catch (error) {
+      if (options.refresh && previous?.bundle && ratingsCache.get(pendingKey) === promise) {
+        ratingsCache.set(key, { ...previous, refreshing: false, retryAt: Date.now() + Config.inconclusiveRetryMs,
+          diagnostics: { status: 'failed', checkedAt: Date.now(), source: previous.bundle.source } });
+      }
+      throw error;
     } finally {
       if (resolveTimer !== null) clearTimeout(resolveTimer);
       if (ratingsCache.get(pendingKey) === promise) ratingsCache.delete(pendingKey);
     }
+  }
+
+  function appendRatingDetails(container, info) {
+    if (container.querySelector('.seerr-rating-details')) return;
+    const entry = ratingsCache.get(ratingsCacheKey(info.tmdbId, info.title, info.year, info.mediaType));
+    const diagnostics = entry?.diagnostics;
+    const status = diagnostics?.status || (entry?.bundle ? 'partial' : 'unrated');
+    const messages = {
+      rated: 'All score sources returned ratings.',
+      partial: 'Some sources have no score for this title yet.',
+      unrated: 'No source returned a rating for this title.',
+      failed: 'A lookup failed. Any known scores are kept while we retry.',
+      uncertain: 'A Rotten Tomatoes match was uncertain, so its score is hidden.'
+    };
+    const details = document.createElement('details');
+    details.className = 'seerr-rating-details';
+    details.setAttribute('data-seerr-overlay', 'true');
+    const summary = document.createElement('summary');
+    summary.textContent = 'Score details';
+    summary.setAttribute('aria-label', `Score details for ${info.title || 'this title'}`);
+    const text = document.createElement('p');
+    const checkedAt = diagnostics?.checkedAt ?? entry?.cachedAt;
+    text.textContent = `${messages[status] || messages.partial} Source: ${diagnostics?.source || entry?.bundle?.source || 'Not recorded'}. Last checked: ${checkedAt ? new Date(checkedAt).toLocaleString() : 'Unknown'}.`;
+    const retry = document.createElement('button');
+    retry.type = 'button';
+    retry.textContent = 'Retry scores';
+    details.addEventListener('click', event => event.stopPropagation());
+    retry.addEventListener('click', async event => {
+      event.preventDefault();
+      if (retry.disabled) return;
+      retry.disabled = true;
+      retry.textContent = 'Checking…';
+      const generation = routeGeneration;
+      try {
+        await getRatings(info.tmdbId, info.title, info.year, info.mediaType, { refresh: true });
+        if (generation === routeGeneration && container.isConnected) repaintRatingTitle(info.tmdbId, info.mediaType);
+      } catch (_) {
+        text.textContent = 'The lookup failed. Please try again when the service is available.';
+      } finally {
+        retry.disabled = false;
+        retry.textContent = 'Retry scores';
+      }
+    });
+    details.append(summary, text, retry);
+    container.appendChild(details);
+  }
+
+  function repaintRatingTitle(tmdbId, mediaType) {
+    for (const card of getMediaCards()) {
+      const info = getCardMediaInfo(card);
+      if (!info || String(info.tmdbId) !== String(tmdbId) || info.mediaType !== mediaType) continue;
+      card.querySelectorAll('.seerr-card-badge, .seerr-rating-details').forEach(element => element.remove());
+      delete card.__seerrRatings;
+      card.__seerrBadgesResolving = false;
+      card.__seerrBadgesCleared = false;
+    }
+    const route = detectRoute();
+    if (String(route?.id) === String(tmdbId) && route?.type === `${mediaType}-detail`) {
+      document.querySelectorAll('.seerr-ratings-row, .seerr-quality-summary, .seerr-rating-details').forEach(element => element.remove());
+      injectDetailRatings();
+    }
+    injectCardBadges();
   }
 
   function resolvedCacheSize() {
@@ -1109,7 +1216,7 @@
 
     cards.forEach(card => {
       if (card.querySelector('[data-seerr-overlay="true"][class*="card-badge"], [data-seerr-overlay="true"][class*="audience-badge"]')) return;
-      if (card.__seerrRatings) return;
+      if (card.__seerrRatings || card.querySelector('.seerr-rating-details')) return;
       if (card.__seerrBadgesResolving) return; // already resolving, skip this pass
 
       // Try to extract title/TMDB ID from card
@@ -1144,6 +1251,7 @@
             return;
           }
           card.__seerrRatings = bundle;
+          if (FEATURE_FLAGS.cardBadges) appendRatingDetails(card, mediaInfo);
           if (!bundle || !Model.hasAnyScore(bundle)) {
             card.__seerrBadgesResolving = false;
             return;
@@ -1213,7 +1321,7 @@
       || titleBlock.parentElement;
     if (!container) return;
 
-    if (container.querySelector('[data-seerr-overlay="true"][class*="ratings-row"]')) return;
+    if (container.querySelector('.seerr-ratings-row, .seerr-rating-details')) return;
 
     // Extract TMDB ID from route
     const tmdbId = route.id;
@@ -1227,7 +1335,8 @@
       if (generation !== routeGeneration || !container.isConnected) return;
       const currentRoute = detectRoute();
       if (currentRoute?.type !== route.type || currentRoute.id !== tmdbId) return;
-      if (container.querySelector('.seerr-ratings-row, .seerr-quality-summary')) return;
+      if (container.querySelector('.seerr-ratings-row, .seerr-quality-summary, .seerr-rating-details')) return;
+      appendRatingDetails(container, { tmdbId, title, year: null, mediaType });
       if (!bundle || !Model.hasAnyScore(bundle)) return;
 
       const row = document.createElement('div');
@@ -1658,7 +1767,7 @@
 
     bar.innerHTML = `
       <span class="seerr-score-coverage">${rated}/${total} scored</span>
-      <span class="seerr-cache-age" title="Cached scores never expire; refresh to refetch the titles on this page"></span>
+      <span class="seerr-cache-age" title="Older scores refresh automatically; refresh now to check the titles on this page"></span>
       <span class="seerr-filter-field"><label for="seerr-sort-order">Sort titles</label>
       <select id="seerr-sort-order" class="seerr-sort-select">
         <option value="default">Original order</option>
@@ -1716,6 +1825,23 @@
       currentSort = sortSelect.value;
       applyScoreSort(grid);
       updateCoverage();
+    });
+
+    window.installFilterPresets({
+      bar,
+      readCurrent: () => ({ sort: currentSort, filters: { ...currentFilters } }),
+      apply: preset => {
+        currentSort = preset.sort;
+        sortSelect.value = currentSort;
+        Object.assign(currentFilters, preset.filters);
+        for (const [key, field] of Object.entries({ minCritics: 'critics', minAudience: 'audience', minTmdb: 'tmdb', minImdb: 'imdb' })) {
+          bar.querySelector(`.seerr-min-${field}`).value = String(currentFilters[key]);
+        }
+        applyScoreFilters(grid);
+        applyScoreSort(grid);
+        markActiveFilters(bar);
+        updateCoverage();
+      }
     });
 
     // ── Reset ──

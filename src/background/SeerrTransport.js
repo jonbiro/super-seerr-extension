@@ -3,6 +3,25 @@
   const RatingsConfig = root.RatingsConfig;
   root.SeerrTransport = {
     async makeAPIRequest(method, endpoint, data = null) {
+      if (method === 'GET') {
+        // Request pages are identical across title lookups. Details can also be
+        // reused by identity validation and the final status lookup.
+        if (/^\/api\/v1\/(request(?:\?|$)|(?:movie|tv)\/\d+$)/.test(endpoint)) {
+          return this.cachedSeerrRead(`api:${endpoint}`, () => this.sendAPIRequest(method, endpoint, data), 10000);
+        }
+        return this.sendAPIRequest(method, endpoint, data);
+      }
+      this.invalidateSeerrReads();
+      try {
+        return await this.sendAPIRequest(method, endpoint, data);
+      } finally {
+        // A lost write reply may still have changed the server. Reads started
+        // during the write cannot remain cached after it settles either.
+        this.invalidateSeerrReads();
+      }
+    },
+
+    async sendAPIRequest(method, endpoint, data = null) {
       if (!this.baseUrl || !this.apiKey) {
         throw new Error('Server URL and API key must be configured');
       }

@@ -22,11 +22,11 @@
       return this.cacheClearPending;
     },
 
-    cacheRottenTomatoesResult(key, value, ttl, generation = this.rtCacheGeneration) {
+    cacheRottenTomatoesResult(key, value, ttl, generation = this.rtCacheGeneration, diagnostic = null) {
       if (generation !== this.rtCacheGeneration) return;
       this.rtCache.delete(key);
       while (this.rtCache.size >= RatingsConfig.rtCacheMaxEntries) this.rtCache.delete(this.rtCache.keys().next().value);
-      this.rtCache.set(key, { value, expiresAt: Date.now() + ttl });
+      this.rtCache.set(key, { value, expiresAt: Date.now() + ttl, diagnostic });
       this.scheduleRtCacheFlush();
     },
 
@@ -59,7 +59,7 @@
             if (this.rtCache.has(key)) continue;
             if (!entry || typeof entry !== 'object' || typeof entry.expiresAt !== 'number') continue;
             if (now >= entry.expiresAt) continue;
-            this.rtCache.set(key, { value: entry.value ?? null, expiresAt: entry.expiresAt });
+            this.rtCache.set(key, { value: entry.value ?? null, expiresAt: entry.expiresAt, diagnostic: ['uncertain', 'failed', 'unrated', 'rated'].includes(entry.diagnostic) ? entry.diagnostic : null });
           }
         } catch (error) {
           console.error('Could not read the persisted Rotten Tomatoes cache:', error);

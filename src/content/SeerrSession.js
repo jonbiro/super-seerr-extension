@@ -107,4 +107,4 @@
 
     return { fetchJsonFromSeerr, loadRatingsAvailability, resetSeerrRatings, fetchSeerrSessionRatings, seerrRatingsRequests };
   };
-})(globalThis);
+})(typeof window !== 'undefined' ? window : globalThis);

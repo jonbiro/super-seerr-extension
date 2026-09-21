@@ -232,6 +232,7 @@
 }
 
 .seerr-sort-filter-bar select,
+.seerr-sort-filter-bar input[type="text"],
 .seerr-sort-filter-bar input[type="number"] {
   padding: 4px 8px;
   border-radius: 6px;
@@ -612,3 +613,20 @@
   }
 }
 
+
+/* Source and retry information stays compact until explicitly expanded. */
+.seerr-rating-details { font-size: 12px; line-height: 1.4; margin: .5rem 0; }
+.seerr-rating-details summary { cursor: pointer; }
+.seerr-rating-details p { margin: .5rem 0; }
+.seerr-rating-details button { cursor: pointer; padding: .35rem .6rem; border: 1px solid currentColor; border-radius: 4px; }
+.seerr-scored-card > .seerr-rating-details {
+  position: absolute; top: .35rem; left: .35rem; z-index: 25; margin: 0;
+  max-width: calc(100% - .7rem); color: white; background: #171923;
+  border-radius: 5px; padding: .3rem .45rem;
+}
+.seerr-rating-details[open] { box-shadow: 0 3px 12px #0006; }
+.seerr-rating-details summary:focus-visible, .seerr-rating-details button:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
+
+.seerr-filter-presets { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
+.seerr-filter-presets input { width: 120px; }
+.seerr-filter-presets input:focus-visible { outline: 3px solid #f59e0b; }

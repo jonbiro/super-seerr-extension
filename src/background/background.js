@@ -6,6 +6,7 @@ import './MediaStatus.js';
 import './RtCache.js';
 import './RottenTomatoes.js';
 import './SeerrTransport.js';
+import './SeerrReadCache.js';
 import './PlexWatchlist.js';
 const RatingsConfig = globalThis.RatingsConfig;
 const MediaValidation = globalThis.MediaValidation;
@@ -15,7 +16,7 @@ const MediaValidation = globalThis.MediaValidation;
 // the saved origin instead, once the user grants that optional host permission.
 const OVERLAY_SCRIPT_ID = 'seerr-overlay';
 const OVERLAY_SCRIPT_FILES = {
-  js: ['src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/OverlayCache.js', 'src/content/RatingsPresentation.js', 'src/content/SeerrSession.js', 'src/content/seerr-integration.js'],
+  js: ['src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/OverlayCache.js', 'src/content/RatingsPresentation.js', 'src/content/SeerrSession.js', 'src/content/FilterPresets.js', 'src/content/seerr-integration.js'],
   css: ['src/content/seerr-overlay.css']
 };
 
@@ -116,6 +117,7 @@ class SeerrAPI {
         chrome.storage.local.get(['seerrApiKey', 'plexToken', 'debugLogging', 'mediaServerName'])
       ]);
       if (generation !== this.settingsLoadGeneration) return;
+      if (this.baseUrl !== synced.seerrUrl || this.apiKey !== local.seerrApiKey) this.invalidateSeerrReads();
       this.baseUrl = synced.seerrUrl;
       this.apiKey = local.seerrApiKey;
       this.plexToken = local.plexToken || null;
@@ -325,8 +327,10 @@ class SeerrAPI {
         }
 
         case 'getRottenTomatoesRatings': {
-          const rtResult = await this.getRottenTomatoesRatings(request.data || {});
-          sendResponse({ success: true, data: rtResult });
+          const input = request.data || {};
+          const rtResult = await this.getRottenTomatoesRatings(input);
+          const key = `${input.mediaType || 'movie'}:${String(input.title || '').trim()}:${input.year || ''}`;
+          sendResponse({ success: true, data: rtResult, diagnostic: this.rtCache.get(key)?.diagnostic ?? null });
           break;
         }
 
@@ -427,6 +431,12 @@ class SeerrAPI {
   }
 
   async getMediaStatus(mediaData) {
+    const media = MediaValidation.media(mediaData);
+    const key = `status:${JSON.stringify([media.mediaType, media.tmdbId, media.title, media.year])}`;
+    return this.cachedSeerrRead(key, () => this.getMediaStatusUncached(media));
+  }
+
+  async getMediaStatusUncached(mediaData) {
     mediaData = MediaValidation.media(mediaData);
     this.log('📊 [Background] Getting media status for:', mediaData);
     this.log('📊 [Background] API Config - baseUrl:', this.baseUrl, 'apiKey:', this.apiKey ? '[SET]' : '[NOT SET]');
@@ -665,7 +675,7 @@ class SeerrAPI {
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
 
-Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.PlexWatchlist);
+Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist);
 
 const seerrAPI = new SeerrAPI();
 let initializing = true;

@@ -42,13 +42,14 @@ const RatingsConfig = {
   // different expiry rules, and each persists as one rewritten blob, so the
   // cap is also what decides how large that write gets.
   //
-  // The overlay ratings cache has no expiry by design, so this cap is its only
-  // bound; eviction is least-recently-used.
+  // Scores remain visible while aging entries are refreshed in the background.
+  ratingsFreshMs: 24 * 60 * 60 * 1000,
+  partialRatingsRetryMs: 60 * 60 * 1000,
   // How long "nothing knows this title" stands before it is worth asking again.
   // Not remembering it at all meant a fresh round of requests, and a fresh 404
   // from Seerr's ratings endpoints, on every visit to the same page. A film
   // that nobody has rated yet is unrated only for now, so this expires.
-  unratedRetryMs: 7 * 24 * 60 * 60 * 1000,
+  unratedRetryMs: 6 * 60 * 60 * 1000,
 
   // A lookup that could not complete is not a verdict, so it is not stored the
   // same way: it is held in memory only, briefly, so the badges on a page do
@@ -96,4 +97,6 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = RatingsConfig;
 } else {
   globalThis.RatingsConfig = RatingsConfig;
+  // Firefox content scripts have a separate global object and window wrapper.
+  if (typeof window !== 'undefined') window.RatingsConfig = RatingsConfig;
 }

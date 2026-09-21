@@ -118,4 +118,4 @@
     }
     return { parsePercentScore, parseTenPointScore, bundleFromRatingObject, isBundleComplete, mergeBundles, buildSummary };
   };
-})(globalThis);
+})(typeof window !== 'undefined' ? window : globalThis);

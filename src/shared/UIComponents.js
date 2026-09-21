@@ -58,8 +58,8 @@ class UIComponents {
   }
 
   createNotification(title, message, type = 'info', duration = 5000) {
-    const closeBtn = this.el('button', { className: 'seerr-notification-close', textContent: '×' });
-    const notification = this.el('div', { className: `seerr-notification ${type}` }, [
+    const closeBtn = this.el('button', { type: 'button', className: 'seerr-notification-close', 'aria-label': 'Dismiss notification', textContent: '×' });
+    const notification = this.el('div', { className: `seerr-notification ${type}`, role: type === 'error' ? 'alert' : 'status' }, [
       this.el('div', { className: 'seerr-notification-title', textContent: title }),
       this.el('div', { className: 'seerr-notification-message', textContent: message }),
       closeBtn
@@ -176,7 +176,7 @@ class UIComponents {
     const flyoutId = `seerr-flyout-${this.siteName.toLowerCase()}`;
     document.getElementById(flyoutId)?.remove();
 
-    const tab = this.el('div', { className: 'seerr-tab' }, [
+    const tab = this.el('button', { className: 'seerr-tab', type: 'button', 'aria-expanded': 'false', 'aria-controls': `${flyoutId}-panel`, 'aria-label': 'Open Super Seerr' }, [
       this.svg('M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z', {
         size: 24,
         className: 'seerr-tab-icon seerr-connection-status checking',
@@ -185,16 +185,32 @@ class UIComponents {
       this.el('span', { className: 'seerr-tab-text', textContent: 'Super Seerr' })
     ]);
 
-    const panel = this.el('div', { className: 'seerr-panel' });
+    const panel = this.el('div', { className: 'seerr-panel', id: `${flyoutId}-panel`, role: 'region', 'aria-label': 'Super Seerr title actions', tabindex: '-1', 'aria-hidden': 'true', inert: '' });
     const flyout = this.el('div', {
       id: flyoutId,
       className: `seerr-flyout collapsed seerr-theme-${this.detectHostTheme()}`
     }, [tab, panel]);
 
-    tab.addEventListener('click', () => {
-      flyout.classList.toggle('collapsed');
-      flyout.classList.toggle('expanded');
+    flyout.setExpanded = (expanded, moveFocus = true) => {
+      flyout.classList.toggle('collapsed', !expanded);
+      flyout.classList.toggle('expanded', expanded);
+      tab.setAttribute('aria-expanded', String(expanded));
+      tab.setAttribute('aria-label', expanded ? 'Close Super Seerr' : 'Open Super Seerr');
+      panel.setAttribute('aria-hidden', String(!expanded));
+      panel.toggleAttribute('inert', !expanded);
+      if (moveFocus) (expanded ? panel : tab).focus();
+    };
+    tab.addEventListener('click', () => flyout.setExpanded(!flyout.classList.contains('expanded')));
+    flyout.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && flyout.classList.contains('expanded')) {
+        event.preventDefault();
+        event.stopPropagation();
+        flyout.setExpanded(false);
+      }
     });
+    const close = this.el('button', { type: 'button', className: 'seerr-panel-close', 'aria-label': 'Close Super Seerr', textContent: 'Close' });
+    close.addEventListener('click', () => flyout.setExpanded(false));
+    panel.appendChild(close);
 
     this.log('Flyout created');
     return { flyout, tab, panel };
@@ -202,7 +218,7 @@ class UIComponents {
 
   createFlyoutContent(mediaData, panel) {
     const statusIcon = this.el('div', { className: 'seerr-status-icon loading' });
-    const statusText = this.el('span', { className: 'seerr-status-text', textContent: 'Connecting to Seerr...' });
+    const statusText = this.el('span', { className: 'seerr-status-text', role: 'status', 'aria-live': 'polite', textContent: 'Connecting to Seerr...' });
     
     const statusSection = this.el('div', { className: 'seerr-status-section' }, [
       this.el('div', { className: 'seerr-media-info' }, [
@@ -531,6 +547,16 @@ class UIComponents {
         user-select: none;
       }
 
+      .seerr-tab { padding: 0; font: inherit; }
+      .seerr-flyout button:focus-visible, .seerr-panel:focus-visible {
+        outline: 3px solid #f59e0b;
+        outline-offset: 3px;
+      }
+      .seerr-panel-close {
+        display: block; margin: 0 0 10px auto; padding: 5px 9px;
+        border: 1px solid currentColor; border-radius: 4px;
+        background: transparent; color: inherit; cursor: pointer;
+      }
       .seerr-tab:hover {
         background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
         border-color: #7c3aed;

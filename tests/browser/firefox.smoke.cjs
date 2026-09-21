@@ -49,7 +49,7 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
       ...(body === undefined ? {} : { body: JSON.stringify(body) }), signal: AbortSignal.timeout(30000)
     });
     const { value } = await response.json();
-    if (!response.ok || value?.error) throw new Error(`WebDriver ${route}: ${value?.message || response.status}`);
+    if (!response.ok) throw new Error(`WebDriver ${route}: ${value?.message || value?.error || response.status}`);
     return value;
   }
   const action = (route, body, method) => command(`/session/${session}${route}`, body, method);
@@ -64,7 +64,7 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     return response.result;
   }
   const context = name => action('/moz/context', { context: name });
-  const extensionScript = (source, args) => asyncScript(`const api = window.wrappedJSObject.browser; ${source}`, args);
+  const extensionScript = (source, args) => asyncScript(`const api = (window.wrappedJSObject || window).browser; ${source}`, args);
   const message = request => extensionScript('return await api.runtime.sendMessage(arguments[0]);', [request]);
 
   t.after(async () => {
@@ -123,7 +123,7 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     await navigate(`${origin}/discover`);
     const badges = () => script('return document.querySelectorAll(".seerr-card-badge").length;');
     await eventually(badges, 2, 'Firefox renders real content-script ratings');
-    assert.equal(await script('return typeof window.wrappedJSObject.superSeerrDiagnose;'), 'function', 'MAIN-world observer is installed');
+    assert.equal(await script('return typeof (window.wrappedJSObject || window).superSeerrDiagnose;'), 'function', 'MAIN-world observer is installed');
     await script('history.pushState({}, "", "/settings");');
     await eventually(badges, 0, 'unsupported SPA route removes badges');
     await script('history.back();');
@@ -137,6 +137,8 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     await extensionScript(`const { rtCacheV1 } = await api.storage.local.get('rtCacheV1');
       rtCacheV1.entries['movie:Example:2020'].value.rtCriticsScore = 88;
       await api.storage.local.set({ rtCacheV1 });`);
+    // Reload closes extension documents; keep the WebDriver caller on a normal page.
+    await navigate(`${origin}/settings`);
     await context('chrome');
     await asyncScript(`const { AddonManager } = ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs');
       await (await AddonManager.getAddonByID(arguments[0])).reload();`, [addonId]);
@@ -158,7 +160,33 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     await fs.mkdir(artifacts, { recursive: true });
     await fs.writeFile(path.join(artifacts, 'geckodriver.log'), driverLog);
     if (session) {
+      await context('chrome').catch(() => {});
+      const browserErrors = await script('return Services.console.getMessageArray().map(item => item.message).slice(-80);').catch(() => []);
+      await fs.writeFile(path.join(artifacts, 'browser-errors.json'), JSON.stringify(browserErrors, null, 2));
+      await context('content').catch(() => {});
       const screenshot = await action('/screenshot').catch(() => null);
+      const isolatedState = await (async () => {
+        const previousUrl = await script('return location.href;');
+        const diagnosticTab = await action('/window/new', { type: 'tab' });
+        await action('/window', { handle: diagnosticTab.handle });
+        await navigate(`moz-extension://${await (async () => {
+          await context('chrome');
+          const id = await script('return JSON.parse(Services.prefs.getStringPref("extensions.webextensions.uuids"))[arguments[0]];', [build.manifest.browser_specific_settings.gecko.id]);
+          await context('content');
+          return id;
+        })()}/src/options/options.html`);
+        return await extensionScript(`
+          const tabs = await api.tabs.query({});
+          const tab = tabs.find(tab => tab.url === arguments[0]);
+          return await api.scripting.executeScript({ target: { tabId: tab.id }, func: () => ({
+            windowConfig: !!window.RatingsConfig, globalConfig: !!globalThis.RatingsConfig,
+            windowModel: !!window.RatingsModel, globalModel: !!globalThis.RatingsModel,
+            windowCache: !!window.createOverlayCache, globalCache: !!globalThis.createOverlayCache,
+            installed: !!window.__seerr_overlay_installed
+          }) });
+        `, [previousUrl]);
+      })().catch(error => String(error));
+      await fs.writeFile(path.join(artifacts, 'isolated-state.json'), JSON.stringify(isolatedState, null, 2));
       if (screenshot) await fs.writeFile(path.join(artifacts, 'failure.png'), Buffer.from(screenshot, 'base64'));
     }
     throw error;

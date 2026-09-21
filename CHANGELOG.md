@@ -6,6 +6,15 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.3]
+
+- Cached ratings display immediately while aging full or partial bundles refresh in the background; failed refreshes preserve known scores and retry sooner.
+- Score details explain missing, failed, or uncertain lookups, show source and last-check time, and support retrying one title.
+- Named filter presets save, apply, update, and delete score thresholds and sorting.
+- Concurrent Seerr status reads share work, with short-lived request-history/detail caches invalidated around writes and configuration changes.
+- Flyouts use keyboard-accessible buttons, announce expanded state, support Escape, and restore focus when closed.
+- Fixed Firefox content-script helper exports so the ratings overlay initializes in Firefox's separate global and window contexts. The real Firefox smoke test now passes alongside Chromium coverage.
+
 ## [3.5.2]
 
 - Requests retain their own in-flight guard across navigation; an old success or failure cannot unlock or relabel a newer request.
