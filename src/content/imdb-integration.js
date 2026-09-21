@@ -70,6 +70,7 @@ class IMDBIntegration extends BaseIntegration {
     ];
 
     const year = this.extractor.extractYear(yearSelectors, {
+      multiElementSelector: '[data-testid="hero-title-block__metadata"] a',
       fallback: true
     });
 

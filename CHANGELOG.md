@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.47]
+
+- Scan all links in IMDb hero metadata for the release year when the first link is a media type or content rating.
+- Keep the scan scoped to the title metadata, with regressions for reordered links and missing years.
+
 ## [3.5.46]
 
 - Restrict Filmweb extraction to film and series detail routes so discussion and episode-list headings cannot become request metadata.
