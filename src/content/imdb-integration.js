@@ -23,7 +23,7 @@ class IMDBIntegration extends BaseIntegration {
     this.log('Extracting media data from IMDB page...');
 
     // Extract IMDB ID from URL
-    const urlMatch = window.location.pathname.match(/\/title\/(tt\d+)/);
+    const urlMatch = window.location.pathname.match(/^\/title\/(tt\d+)\/?$/);
     if (!urlMatch) {
       this.log('No IMDB ID found in URL:', window.location.pathname);
       return null;

@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.44]
+
+- Restrict IMDb extraction to exact title detail routes so review, credits and episode-list headings cannot become request metadata.
+- Reject partial IMDb IDs and nested title paths, with seven route and fallback regressions.
+
 ## [3.5.43]
 
 - Restrict Trakt extraction to movie, series and season detail routes; reject episode, comment and nested non-title routes before extracting request metadata.
