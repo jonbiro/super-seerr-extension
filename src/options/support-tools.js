@@ -66,6 +66,7 @@
   let report = '';
   prepare.addEventListener('click', async () => {
     prepare.disabled = true; download.hidden = true;
+    report = ''; preview.value = ''; preview.hidden = true;
     try {
       const response = await chrome.runtime.sendMessage({ action: 'exportDiagnostics' }); if (!response?.success) throw new Error();
       report = JSON.stringify(response.data, null, 2); preview.value = report; preview.hidden = false; download.hidden = false;

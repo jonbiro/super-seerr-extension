@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.58]
+
+- Clear the previous diagnostic report when preparing a new one so failed refreshes cannot leave stale results visible.
+- Add a preview-state regression covering successful preparation followed by a failed refresh.
+
 ## [3.5.57]
 
 - Discard saved-match inspection results and errors that predate a successful deletion, preventing forgotten rows from reappearing.
