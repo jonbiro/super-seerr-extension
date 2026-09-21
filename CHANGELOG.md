@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.22]
+
+- Add bulk-selection controls to newly loaded cards, discard detached selections, and disable review when no cards are selected.
+- Deduplicate repeated media identities before bulk review and requests.
+- Restore the selection toggle, Plex controls and keyboard focus after bulk completion.
+
 ## [3.5.21]
 
 - Move score details aside during bulk selection so the selection checkbox remains clickable.

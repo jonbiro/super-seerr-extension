@@ -648,3 +648,5 @@
 .seerr-confirmation-modal button:focus-visible, .seerr-confirmation-modal summary:focus-visible { outline: 3px solid #fbbf24; outline-offset: 2px; }
 
 .seerr-scored-card:has(> .seerr-select-checkbox) > .seerr-rating-details { left: 34px; max-width: calc(100% - 40px); }
+
+.seerr-bulk-action-bar button:disabled { opacity: .5; cursor: default; }

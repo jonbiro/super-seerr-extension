@@ -1246,6 +1246,7 @@
       indexCurrentListRatings().then(() => injectCardBadges());
     }
     ensureCardIndexes(cards);
+    ensureBulkCheckboxes(cards);
 
     cards.forEach(card => {
       if (card.querySelector('[data-seerr-overlay="true"][class*="card-badge"], [data-seerr-overlay="true"][class*="audience-badge"]')) return;
@@ -2025,6 +2026,39 @@
   let bulkMode = false;
   let selectedCards = new Set();
 
+  function ensureBulkCheckboxes(cards) {
+    if (!bulkMode) return;
+    cards.forEach(card => {
+      if (card.querySelector('.seerr-select-checkbox')) return;
+
+      const computed = window.getComputedStyle(card);
+      if (computed.position === 'static') card.style.position = 'relative';
+
+      const checkbox = document.createElement('button');
+      checkbox.type = 'button';
+      checkbox.className = 'seerr-select-checkbox';
+      checkbox.setAttribute('role', 'checkbox');
+      checkbox.setAttribute('aria-checked', 'false');
+      checkbox.setAttribute('aria-label', `Select ${getCardMediaInfo(card)?.title || 'title'}`);
+      checkbox.setAttribute('data-seerr-overlay', 'true');
+      checkbox.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (selectedCards.has(card)) {
+          selectedCards.delete(card);
+          checkbox.classList.remove('checked');
+          checkbox.setAttribute('aria-checked', 'false');
+        } else {
+          selectedCards.add(card);
+          checkbox.classList.add('checked');
+          checkbox.setAttribute('aria-checked', 'true');
+        }
+        updateBulkActionBar();
+      });
+      card.appendChild(checkbox);
+    });
+    updateBulkActionBar();
+  }
+
   function toggleBulkMode() {
     if (!FEATURE_FLAGS.bulkActions || !apiConfigured) return;
 
@@ -2037,34 +2071,7 @@
     if (bulkMode) {
       // The selection checkboxes own the top-left corner while active.
       removePlexCardButtons();
-      cards.forEach(card => {
-        if (card.querySelector('.seerr-select-checkbox')) return;
-
-        const computed = window.getComputedStyle(card);
-        if (computed.position === 'static') card.style.position = 'relative';
-
-        const checkbox = document.createElement('button');
-        checkbox.type = 'button';
-        checkbox.className = 'seerr-select-checkbox';
-        checkbox.setAttribute('role', 'checkbox');
-        checkbox.setAttribute('aria-checked', 'false');
-        checkbox.setAttribute('aria-label', `Select ${getCardMediaInfo(card)?.title || 'title'}`);
-        checkbox.setAttribute('data-seerr-overlay', 'true');
-        checkbox.addEventListener('click', (e) => {
-          e.stopPropagation();
-          if (selectedCards.has(card)) {
-            selectedCards.delete(card);
-            checkbox.classList.remove('checked');
-            checkbox.setAttribute('aria-checked', 'false');
-          } else {
-            selectedCards.add(card);
-            checkbox.classList.add('checked');
-            checkbox.setAttribute('aria-checked', 'true');
-          }
-          updateBulkActionBar();
-        });
-        card.appendChild(checkbox);
-      });
+      ensureBulkCheckboxes(cards);
 
       showBulkActionBar();
       updateBulkActionBar();
@@ -2104,16 +2111,22 @@
   }
 
   function updateBulkActionBar() {
+    for (const card of selectedCards) if (!card.isConnected) selectedCards.delete(card);
     if (!bulkActionBar) return;
+    bulkActionBar.querySelector('.seerr-bulk-review').disabled = selectedCards.size === 0;
     const countEl = bulkActionBar.querySelector('.seerr-bulk-count');
-    if (countEl) countEl.textContent = `${selectedCards.size} selected`;
+    const label = `${selectedCards.size} selected`;
+    if (countEl && countEl.textContent !== label) countEl.textContent = label;
   }
 
   function getSelectedTitles() {
-    const titles = [];
+    const titles = [], identities = new Set();
     selectedCards.forEach(card => {
-      if (!card) return;
+      if (!card?.isConnected) return;
       const mediaInfo = getCardMediaInfo(card);
+      const identity = mediaInfo?.tmdbId ? `${mediaInfo.mediaType}:${mediaInfo.tmdbId}` : null;
+      if (identity && identities.has(identity)) return;
+      if (identity) identities.add(identity);
       const score = getCardScore(card);
       titles.push({
         title: mediaInfo?.title || 'Unknown Title',
@@ -2137,6 +2150,7 @@
   }
 
   function openBulkConfirmation() {
+    updateBulkActionBar();
     if (selectedCards.size === 0 || document.querySelector('.seerr-confirmation-modal')) return;
 
     const titles = getSelectedTitles();
@@ -2170,7 +2184,7 @@
       ` : ''}
       <div class="modal-actions">
         <button class="cancel-btn">Cancel</button>
-        <button class="confirm-btn"${readyTitles.length === 0 ? ' disabled' : ''}>Request ${readyTitles.length} titles</button>
+        <button class="confirm-btn"${readyTitles.length === 0 ? ' disabled' : ''}>Request ${readyTitles.length} title${readyTitles.length === 1 ? '' : 's'}</button>
       </div>
     `;
 
@@ -2271,9 +2285,8 @@
       const resultTitle = failed === 0 ? 'Bulk Request Complete' : succeeded === 0 ? 'Bulk Request Failed' : 'Some Requests Failed';
       notifyResult(resultTitle, `${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}`, resultKind);
 
-      bulkMode = false;
-      selectedCards.clear();
-      document.querySelectorAll('.seerr-select-checkbox').forEach(el => el.remove());
+      if (bulkMode) toggleBulkMode();
+      document.querySelector('.seerr-toggle-select')?.focus();
     });
   }
 

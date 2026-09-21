@@ -845,3 +845,34 @@ for (const [outcomes, kind, heading] of [
     assert.equal(sent, outcomes.length);
   });
 }
+
+test('selection follows added and removed cards and disables empty review', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle(); const doc = f.window.document;
+  doc.querySelector('.seerr-toggle-select').click();
+  const review = doc.querySelector('.seerr-bulk-review'); assert.equal(review.disabled, true);
+  const card = doc.createElement('article'); card.setAttribute('data-testid', 'title-card');
+  card.innerHTML = '<a href="/movie/99"><h2>New arrival</h2></a>'; doc.getElementById('grid').appendChild(card);
+  f.window.testOverlay.injectCardBadges(); await settle();
+  const checkbox = card.querySelector('.seerr-select-checkbox'); assert.ok(checkbox);
+  checkbox.click(); assert.equal(review.disabled, false);
+  card.remove(); f.window.testOverlay.injectCardBadges(); await settle();
+  assert.equal(review.disabled, true); assert.match(doc.querySelector('.seerr-bulk-count').textContent, /0 selected/);
+});
+
+test('duplicate cards produce one request and completion restores selection controls', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle(); const doc = f.window.document;
+  const card = doc.createElement('article'); card.setAttribute('data-testid', 'title-card');
+  card.innerHTML = '<a href="/movie/1"><h2>Low</h2></a>'; doc.getElementById('grid').appendChild(card);
+  doc.querySelector('.seerr-toggle-select').click();
+  doc.querySelector('[data-id="1"] .seerr-select-checkbox').click(); card.querySelector('.seerr-select-checkbox').click();
+  doc.querySelector('.seerr-bulk-review').click();
+  assert.equal(doc.querySelector('.confirm-btn').textContent, 'Request 1 title');
+  const original = f.window.chrome.runtime.sendMessage; let writes = 0;
+  f.window.chrome.runtime.sendMessage = async message => { if (message.action === 'requestMedia') { writes++; return { success: true }; } return original(message); };
+  doc.querySelector('.confirm-btn').click(); await settle();
+  assert.equal(writes, 1); assert.equal(doc.querySelectorAll('.seerr-select-checkbox').length, 0);
+  assert.equal(doc.querySelector('.seerr-toggle-select').textContent, 'Select titles');
+  assert.equal(doc.activeElement, doc.querySelector('.seerr-toggle-select'));
+});
