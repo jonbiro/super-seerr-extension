@@ -67,10 +67,9 @@ class RottenTomatoesIntegration extends BaseIntegration {
     const title = this.extractor.extractTitle(titleSelectors, {
       cleanupPatterns: [
         /\s*\(\d{4}\)\s*$/, // Remove year in parentheses
-        /\s*\d{4}\s*$/, // Remove trailing year
         /\s*-\s*Rotten Tomatoes\s*$/, // Remove Rotten Tomatoes suffix
         /\s*Reviews.*$/, // Remove Reviews and everything after
-        /\s*Season.*$/, // Remove Season info
+        /\s+(?:[-:–]\s*)?Season\s+\d+\s*$/i, // Only a numbered season suffix
       ]
     });
 

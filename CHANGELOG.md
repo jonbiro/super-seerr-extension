@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.36]
+
+- Preserve Rotten Tomatoes movie titles containing four-digit numbers or the word Season; only remove explicit numbered season suffixes.
+- Add regressions for 1917, Blade Runner 2049, Season of the Witch and The Seasoning House, including rendered extension panels.
+
 ## [3.5.35]
 
 - Read Rotten Tomatoes release years from current hero metadata, including TV premiere ranges, without borrowing dates from related titles.

@@ -465,3 +465,17 @@ test('presets saved concurrently in two tabs synchronize without losing either c
     await expect(tabs[1].getByRole('button', { name: 'Delete preset', exact: true })).toBeDisabled();
   } finally { await Promise.all(tabs.map(page => page.close())); }
 });
+
+test('RT preserves numeric and Season movie titles in the rendered panel', async () => {
+  const page = await context.newPage();
+  for (const title of ['1917', 'Blade Runner 2049', 'Season of the Witch', 'The Seasoning House']) {
+    await page.route('**/*', route => route.request().isNavigationRequest()
+      ? route.fulfill({ contentType: 'text/html', body: `<h1 data-qa="score-panel-movie-title">${title}</h1>` })
+      : route.abort());
+    await page.goto('https://www.rottentomatoes.com/m/example', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'Open Super Seerr', exact: true }).click();
+    await expect(page.locator('.seerr-title')).toHaveText(title);
+    await page.unroute('**/*');
+  }
+  await page.close();
+});
