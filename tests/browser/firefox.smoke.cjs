@@ -151,6 +151,36 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     assert.equal((await message({ action: 'clearRatingsCache' })).success, true);
     assert.equal(await extensionScript('return (await api.storage.local.get("rtCacheV1")).rtCacheV1 ?? null;'), null);
     assert.equal((await message({ action: 'addToWatchlist', data: { title: 'Fight Club', tmdbId: 550, mediaType: 'movie', year: 1999 } })).success, true);
+    const optionsHandle = await action('/window');
+    const previousHandles = await action('/window/handles');
+    await extensionScript(`
+      const tab = await api.tabs.create({ url: arguments[0] });
+      for (let attempt = 0; attempt < 100; attempt++) {
+        const current = await api.tabs.get(tab.id);
+        if (current.status === 'complete' && current.url === arguments[0]) break;
+        if (attempt === 99) throw new Error('Picker fixture did not finish loading');
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      // Firefox executes this classic script but cannot serialize its final
+      // class assignment. The next call uses the actual exported class.
+      await api.scripting.executeScript({ target: { tabId: tab.id }, files: ['/src/shared/UIComponents.js'] }).catch(error => {
+        if (!String(error).includes('non-structured-clonable')) throw error;
+      });
+      await api.scripting.executeScript({ target: { tabId: tab.id }, func: async () => {
+        const result = await chrome.runtime.sendMessage({ action: 'getMediaCandidates', data: { title: 'The Thing', mediaType: 'movie' } });
+        const ui = new window.UIComponents();
+        ui.chooseTitle(result.data, { title: 'The Thing' }).then(choice => {
+          document.body.dataset.chosenTitle = choice ? String(choice.tmdbId) : 'cancelled';
+        });
+      } });
+    `, [`${origin}/title/picker`]);
+    const pickerHandle = (await action('/window/handles')).find(handle => !previousHandles.includes(handle));
+    await action('/window', { handle: pickerHandle });
+    await eventually(() => script('return document.querySelectorAll(".seerr-title-choice").length;'), 2, 'Firefox renders ambiguous title candidates');
+    await script('document.querySelectorAll(".seerr-title-choice")[1].click();');
+    await eventually(() => script('return document.body.dataset.chosenTitle;'), '911', 'Firefox picker returns the explicit choice');
+    await action('/window', undefined, 'DELETE');
+    await action('/window', { handle: optionsHandle });
     await navigate(`moz-extension://${uuid}/src/popup/popup.html`);
     await eventually(() => script('return document.getElementById("diagnosticChecks").textContent.includes("API key: OK");'), true, 'Firefox popup verifies the configured key');
     await eventually(() => script('return document.getElementById("recentActionsList").textContent.includes("Fight Club");'), true, 'Firefox popup displays confirmed actions');

@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.5.5-blue)
+![Version](https://img.shields.io/badge/version-3.5.6-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -36,7 +36,7 @@ The real-extension smoke test passes in Firefox 147.0.3 with geckodriver 0.37.1:
 
 The flyout reports request status, supports Seerr watchlisting, offers a separate Plex Watchlist button when a Plex token is configured (visible even for available titles, where the Seerr button hides), and links to your media server when Seerr supplies a playable URL. Where a single lookup answers it — detail pages and the flyout — the Plex button shows the current state up front (`✓ On Plex Watchlist`, disabled) instead of an action; grids keep the lightweight add button, which reports an already-listed title distinctly when clicked. Seerr can be backed by Plex, Jellyfin or Emby; Super Seerr asks your server which one it uses and names it accordingly, or says simply “Watch” if it cannot tell. Those are separate products; their names and links are intentional. Seerr's watchlist and Plex's Universal Watchlist are different lists: the extension writes the first via your Seerr server and the second via plex.tv with your Plex token.
 
-Requests only use a known TMDB ID or an unambiguous title/type/year match. If matching is uncertain, **Choose in Seerr** opens search so you can select the right title. Failed status lookups offer **Retry status**, not a media request. A lost response to a request is an unknown outcome: check Seerr before requesting again; the extension never automatically resends that POST.
+Requests only use a known TMDB ID or an unambiguous title/type/year match. If matching is uncertain, **Choose title** opens a keyboard-accessible picker with matching titles, years, types, and descriptions. Selecting a match checks its availability; a separate request click is still required. Cancelling or navigating away sends no request. Failed status lookups offer **Retry status**, not a media request. A lost response to a request is an unknown outcome: check Seerr before requesting again; the extension never automatically resends that POST.
 
 ### Ratings and sorting
 

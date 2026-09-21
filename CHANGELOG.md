@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.6]
+
+- Ambiguous titles open an in-extension picker with release year, type, and description. Candidate lookup retains strict identity matching and returns only display fields.
+- A selection checks the chosen title's status; it never sends a request automatically. Escape, cancellation, and navigation dismiss the picker without writing.
+- Added worker, DOM, and Chromium coverage proving a separate request click sends the selected TMDB ID exactly once.
+
 ## [3.5.5]
 
 - Popup diagnostics separate Seerr reachability, host permission, API-key rejection, and optional Plex configuration, with repair links focused on the relevant Settings control.

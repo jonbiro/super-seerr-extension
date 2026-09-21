@@ -224,3 +224,48 @@ test('popup diagnoses connections and shows confirmed local actions with working
   await permissionPage.close();
   await popup.close();
 });
+
+test('ambiguous title picker checks the chosen identity and sends only a separately confirmed request', async () => {
+  const manager = await context.newPage();
+  await manager.goto('chrome://extensions');
+  await manager.evaluate(id => chrome.developerPrivate.addHostPermission(id, 'http://127.0.0.1/*'), extensionId);
+  await manager.close();
+  await options.locator('#serverUrl').fill(origin);
+  await options.locator('button[type="submit"]').click();
+  await expect.poll(() => options.evaluate(() => chrome.permissions.contains({ origins: ['http://127.0.0.1/*'] }))).toBe(true);
+  const page = await context.newPage();
+  await page.goto(`${origin}/title/ambiguous`); await page.bringToFront();
+  const tabId = await options.evaluate(async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0].id);
+  await options.evaluate(async tabId => {
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['src/shared/SeerrClient.js', 'src/shared/MediaExtractor.js', 'src/shared/UIComponents.js', 'src/shared/BaseIntegration.js'] });
+    await chrome.scripting.executeScript({ target: { tabId }, func: async () => {
+      class PickerProbe extends window.BaseIntegration {
+        constructor() { super('PickerProbe', { uiTheme: 'flyout', retryDelay: 100000 }); }
+        async extractMediaData() { return { title: 'The Thing', mediaType: 'movie' }; }
+      }
+      window.pickerProbe = new PickerProbe(); await window.pickerProbe.init();
+    } });
+  }, tabId);
+  const posts = [];
+  const capture = request => {
+    if (request.method !== 'POST' || request.url !== '/api/v1/request') return;
+    let body = ''; request.on('data', chunk => { body += chunk; }); request.on('end', () => posts.push(JSON.parse(body)));
+  };
+  server.on('request', capture);
+  try {
+    await page.getByRole('button', { name: 'Open Super Seerr', exact: true }).click();
+    await page.getByRole('button', { name: 'Choose title', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Choose matching title' })).toBeVisible();
+    await page.getByRole('button', { name: /The Thing \(2011\)/ }).click();
+    await expect(page.locator('.seerr-title')).toHaveText('The Thing (2011)');
+    await expect(page.getByRole('button', { name: 'Request on Seerr', exact: true })).toBeVisible();
+    expect(posts).toHaveLength(0);
+    await page.getByRole('button', { name: 'Request on Seerr', exact: true }).click();
+    await expect.poll(() => posts.length).toBe(1);
+    expect(posts[0].mediaId).toBe(911);
+    expect(posts[0].mediaType).toBe('movie');
+  } finally {
+    server.off('request', capture);
+    await page.close();
+  }
+});

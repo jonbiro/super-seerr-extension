@@ -44,16 +44,33 @@
       return terms;
     },
 
-    async resolveMediaMatch(mediaData) {
+    async matchingMediaChoices(mediaData) {
       for (const query of this.generateSearchTerms(mediaData.title)) {
         const results = await this.searchMedia(query, mediaData.mediaType);
         // A query variant is only a discovery aid, not a different identity.
         const candidates = this.matchingCandidates(results, mediaData);
         this.log('Seerr title match:', { query, candidates: candidates.length });
         // Once ambiguity is known, a later query must not hide one contender.
-        if (candidates.length) return candidates.length === 1 ? candidates[0] : null;
+        if (candidates.length) return candidates;
       }
-      return null;
+      return [];
+    },
+
+    async resolveMediaMatch(mediaData) {
+      const candidates = await this.matchingMediaChoices(mediaData);
+      return candidates.length === 1 ? candidates[0] : null;
+    },
+
+    async getMediaCandidates(data) {
+      const media = root.MediaValidation.media(data);
+      const candidates = await this.matchingMediaChoices(media);
+      return candidates.filter(candidate => Number.isSafeInteger(Number(candidate.id)) && Number(candidate.id) > 0)
+        .slice(0, 20).map(candidate => ({
+          tmdbId: Number(candidate.id), mediaType: media.mediaType,
+          title: String(candidate.title || candidate.name || media.title).slice(0, 300),
+          year: this.extractYear(candidate.releaseDate || candidate.firstAirDate),
+          overview: typeof candidate.overview === 'string' ? candidate.overview.slice(0, 500) : ''
+        }));
     },
 
     findBestMatch(searchResults, mediaData) {

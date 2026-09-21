@@ -18,6 +18,18 @@ async function startServer() {
   // Real HTTP responses also reach extension background fetches, unlike page
   // route mocks. All fixtures are local; no real API key or Seerr is needed.
   const server = http.createServer((request, response) => {
+    if (request.url.startsWith('/api/v1/search?') && new URL(request.url, 'http://fixture').searchParams.get('query') === 'The Thing') {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify({ results: [
+        { id: 910, title: 'The Thing', mediaType: 'movie', releaseDate: '1982-06-25', overview: 'Antarctica, 1982' },
+        { id: 911, title: 'The Thing', mediaType: 'movie', releaseDate: '2011-10-14', overview: 'The prequel' }
+      ] })); return;
+    }
+    if (/^\/api\/v1\/movie\/91[01]$/.test(request.url)) {
+      const id = Number(request.url.split('/').pop());
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify({ id, title: 'The Thing', releaseDate: id === 910 ? '1982-06-25' : '2011-10-14', mediaInfo: null })); return;
+    }
     if (request.url.startsWith('/api/')) {
       response.setHeader('Content-Type', 'application/json');
       response.end(JSON.stringify(request.url.includes('/settings/public') ? { mediaServerType: 2 }

@@ -440,13 +440,7 @@ class BaseIntegration {
       if (this.currentStatusData?.action === 'retryStatus') {
         await this.updateStatus();
       } else if (this.currentStatusData?.action === 'choose') {
-        const response = await this.client.sendMessage({ action: 'getConfigState' });
-        if (!view.isCurrent()) return;
-        const server = new URL(response?.data?.serverUrl);
-        if (!['http:', 'https:'].includes(server.protocol)) throw new Error('Invalid Seerr URL');
-        server.pathname = `${server.pathname.replace(/\/$/, '')}/search`;
-        server.search = new URLSearchParams({ query: view.media.title }).toString();
-        window.open(server.href, '_blank', 'noopener,noreferrer');
+        await this.handleTitleChoice();
       } else if (isWatchButton) {
         await this.handleWatchButtonClick();
       } else {
@@ -459,6 +453,26 @@ class BaseIntegration {
         this._requestInFlight = false;
         this._requestAttempt = null;
       }
+    }
+  }
+
+  async handleTitleChoice() {
+    const view = this.captureActionView();
+    const response = await this.client.sendMessage({ action: 'getMediaCandidates', data: view.media });
+    if (!view.isCurrent()) return;
+    if (!response?.success || !Array.isArray(response.data)) throw new Error(response?.error || 'Could not load matching titles');
+    const controller = new AbortController();
+    this._titlePickerController?.abort();
+    this._titlePickerController = controller;
+    try {
+      const selected = await this.ui.chooseTitle(response.data, { title: view.media.title, signal: controller.signal });
+      if (!selected || !view.isCurrent()) return;
+      this.mediaData = { ...view.media, title: selected.title, tmdbId: selected.tmdbId, mediaType: selected.mediaType, year: selected.year };
+      const heading = view.elements.flyout?.querySelector('.seerr-title');
+      if (heading) heading.textContent = `${selected.title}${selected.year ? ` (${selected.year})` : ''}`;
+      await this.updateStatus();
+    } finally {
+      if (this._titlePickerController === controller) this._titlePickerController = null;
     }
   }
 
@@ -837,6 +851,8 @@ class BaseIntegration {
    */
   cleanupUI() {
     this.log('Cleaning up existing UI');
+    this._titlePickerController?.abort();
+    this._titlePickerController = null;
     this._extractionGeneration = (this._extractionGeneration || 0) + 1;
     this._statusGeneration = (this._statusGeneration || 0) + 1;
 

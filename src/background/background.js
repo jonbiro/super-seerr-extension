@@ -254,6 +254,11 @@ class SeerrAPI {
           break;
         }
 
+        case 'getMediaCandidates': {
+          sendResponse({ success: true, data: await this.getMediaCandidates(request.data) });
+          break;
+        }
+
         case 'searchMedia': {
           const searchResult = await this.searchMedia(request.query, request.mediaType);
           sendResponse({ success: true, data: searchResult });
@@ -492,8 +497,8 @@ class SeerrAPI {
         this.log('📊 [Background] No unambiguous match; asking the user to choose in Seerr');
         return {
           status: 'unmatched',
-          message: 'No unambiguous match. Choose this title in Seerr.',
-          buttonText: 'Choose in Seerr',
+          message: 'No unambiguous match. Choose the correct title before requesting.',
+          buttonText: 'Choose title',
           buttonClass: 'request',
           action: 'choose'
         };
