@@ -22,9 +22,9 @@ class UIComponents {
     return new Promise(resolve => {
       const previousFocus = document.activeElement;
       const backdrop = this.el('div', { className: 'seerr-title-picker' });
-      backdrop.style.cssText = 'position:fixed;inset:0;background:#0009;z-index:2147483647;display:grid;place-items:center;padding:20px;color:#f9fafb;font:14px system-ui;';
+      backdrop.style.cssText = 'box-sizing:border-box;position:fixed;inset:0;background:#0009;z-index:2147483647;display:grid;place-items:center;padding:20px;color:#f9fafb;font:14px system-ui;';
       const dialog = this.el('div', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Choose matching title', tabindex: '-1' });
-      dialog.style.cssText = 'background:#171b25;border:1px solid #64748b;border-radius:12px;padding:20px;max-width:540px;width:100%;max-height:85vh;overflow:auto;';
+      dialog.style.cssText = 'box-sizing:border-box;min-width:0;overflow-wrap:anywhere;background:#171b25;color:#f9fafb;border:1px solid #64748b;border-radius:12px;padding:20px;max-width:540px;width:100%;max-height:min(85vh, calc(100dvh - 40px));overflow:auto;';
       const heading = this.el('h2', { textContent: 'Choose matching title' });
       const explanation = this.el('p', { textContent: `Select the correct match for “${title || ''}”. This checks availability; it does not send a request.` });
       dialog.append(heading, explanation);
@@ -41,7 +41,7 @@ class UIComponents {
       const list = this.el('div');
       for (const candidate of candidates) {
         const button = this.el('button', { type: 'button', className: 'seerr-title-choice' });
-        button.style.cssText = 'display:block;width:100%;padding:12px;margin:10px 0;text-align:left;background:#263244;color:#fff;border:1px solid #94a3b8;border-radius:6px;cursor:pointer;';
+        button.style.cssText = 'box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;font:inherit;display:block;width:100%;padding:12px;margin:10px 0;text-align:left;background:#263244;color:#fff;border:1px solid #94a3b8;border-radius:6px;cursor:pointer;';
         button.append(this.el('strong', { textContent: `${candidate.title} (${candidate.year || 'Year unknown'}) — ${candidate.mediaType === 'tv' ? 'TV' : 'Movie'}` }));
         button.append(this.el('p', { textContent: candidate.overview || `TMDB ${candidate.tmdbId}` }));
         button.addEventListener('click', () => finish({ ...candidate, rememberChoice: remember.checked }), { once: true });
@@ -49,7 +49,7 @@ class UIComponents {
       }
       if (!candidates.length) list.appendChild(this.el('p', { textContent: 'No verified matches found. Search directly in Seerr to choose a different title.' }));
       const cancel = this.el('button', { type: 'button', textContent: 'Cancel' });
-      cancel.style.cssText = 'padding:8px 16px;margin-top:12px;';
+      cancel.style.cssText = 'font:inherit;min-height:44px;padding:8px 16px;margin-top:12px;background:#263244;color:#fff;border:1px solid #94a3b8;border-radius:6px;cursor:pointer;';
       cancel.addEventListener('click', abort);
       dialog.append(list, rememberLabel, cancel); backdrop.appendChild(dialog); document.body.appendChild(backdrop);
       dialog.addEventListener('keydown', event => {

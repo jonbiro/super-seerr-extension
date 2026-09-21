@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.15]
+
+- Keep title and season dialogs inside narrow viewports regardless of host-page box sizing, wrap long titles, and improve action button contrast and sizing.
+- Prevent older popup connection checks from overwriting newer results, and remove stale diagnostic details after a failed check.
+- Add real-browser narrow-screen picker checks covering overflow, season selection and Escape focus restoration.
+
 ## [3.5.14]
 
 - Match refreshed history statuses and links to stable action identities, and prevent delayed reads from restoring cleared history. Ignore invalid timestamps safely.

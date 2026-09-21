@@ -13,6 +13,7 @@ class PopupManager {
     this.openOptionsButton = document.getElementById('openOptions');
     this.testConnectionButton = document.getElementById('testConnection');
     
+    this.checkGeneration = 0;
     this.init();
   }
 
@@ -26,9 +27,11 @@ class PopupManager {
   }
 
   async checkStatus() {
+    const generation = ++this.checkGeneration;
     this.setStatus('loading', 'Checking connections…');
     try {
       const response = await this.sendMessage({ action: 'getPopupDiagnostics' });
+      if (generation !== this.checkGeneration) return;
       if (!response?.success || !response.data?.checks) throw new Error('Unable to load diagnostics. Reopen the popup to retry.');
       const { serverUrl, checks } = response.data;
       this.renderDiagnostics(checks);
@@ -46,6 +49,8 @@ class PopupManager {
       }
       this.testConnectionButton.classList.remove('hidden');
     } catch (error) {
+      if (generation !== this.checkGeneration) return;
+      document.getElementById('diagnosticChecks').replaceChildren();
       this.showErrorState(error.message);
       this.setStatus('error', 'Could not check connections');
     }

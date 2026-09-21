@@ -14,9 +14,9 @@
     return new Promise(resolve => {
       const previousFocus = document.activeElement;
       const backdrop = el('div', { className: 'seerr-season-picker' });
-      backdrop.style.cssText = 'position:fixed;inset:0;background:#0009;z-index:2147483647;display:grid;place-items:center;padding:20px;color:#f9fafb;font:14px system-ui;';
+      backdrop.style.cssText = 'box-sizing:border-box;position:fixed;inset:0;background:#0009;z-index:2147483647;display:grid;place-items:center;padding:20px;color:#f9fafb;font:14px system-ui;';
       const dialog = el('div', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Choose TV seasons' });
-      dialog.style.cssText = 'background:#171b25;border:1px solid #64748b;border-radius:12px;padding:20px;max-width:540px;width:100%;max-height:85vh;overflow:auto;';
+      dialog.style.cssText = 'box-sizing:border-box;min-width:0;overflow-wrap:anywhere;background:#171b25;color:#f9fafb;border:1px solid #64748b;border-radius:12px;padding:20px;max-width:540px;width:100%;max-height:min(85vh, calc(100dvh - 40px));overflow:auto;';
       dialog.append(el('h2', { textContent: options.title }), el('p', { textContent: 'Choose seasons to request. Availability is for standard quality. Specials depend on your Seerr server settings.' }));
       const inputs = [];
       const confirm = el('button', { type: 'button', textContent: confirmText }); confirm.disabled = true;
@@ -24,7 +24,7 @@
         const label = el('label'); label.style.cssText = 'display:block;padding:10px 0;';
         const input = el('input', { type: 'checkbox', value: String(season.number) });
         input.disabled = !season.requestable;
-        input.addEventListener('change', () => { confirm.disabled = !inputs.some(item => item.checked && !item.disabled); });
+        input.addEventListener('change', () => { confirm.disabled = !inputs.some(item => item.checked && !item.disabled); confirm.style.opacity = confirm.disabled ? '0.5' : '1'; });
         inputs.push(input);
         label.append(input, document.createTextNode(` ${season.name} (${season.episodeCount} episodes) — ${season.availability}`));
         dialog.appendChild(label);
@@ -42,7 +42,8 @@
         const selected = inputs.filter(input => input.checked && !input.disabled).map(input => Number(input.value));
         if (selected.length) finish(selected);
       });
-      for (const button of [cancelButton, confirm]) button.style.cssText = 'padding:8px 12px;margin:12px 8px 0 0;';
+      for (const button of [cancelButton, confirm]) button.style.cssText = 'font:inherit;white-space:normal;min-height:44px;max-width:100%;padding:8px 12px;margin:12px 8px 0 0;background:#263244;color:#fff;border:1px solid #94a3b8;border-radius:6px;cursor:pointer;';
+      confirm.style.opacity = '0.5';
       dialog.append(cancelButton, confirm); backdrop.appendChild(dialog); document.body.appendChild(backdrop);
       dialog.addEventListener('keydown', event => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancel(); }

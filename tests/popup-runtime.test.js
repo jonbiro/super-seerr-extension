@@ -45,3 +45,27 @@ test('popup ratings-only and request-ready states reflect verified checks', asyn
     dom.window.close();
   }
 });
+
+test('popup ignores stale checks and clears obsolete diagnostic details on failure', async () => {
+  const { dom, document } = await popup({ serverUrl: null, checks: {
+    seerr: row('warning', 'Old'), permission: row('warning', 'Old'), apiKey: row('warning', 'Old'), plex: row('warning', 'Old')
+  } });
+  const pending = [];
+  dom.window.chrome.runtime.sendMessage = () => new Promise((resolve, reject) => pending.push({ resolve, reject }));
+  const manager = new dom.window.PopupManager();
+  const latest = manager.checkStatus();
+  pending[1].resolve({ success: true, data: { serverUrl: 'https://new.example', checks: {
+    seerr: row('ok', 'New'), permission: row('ok', 'New'), apiKey: row('ok', 'New'), plex: row('ok', 'New')
+  } } });
+  await latest;
+  pending[0].reject(new Error('Old failure'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(document.getElementById('serverUrl').textContent, 'new.example');
+  assert.equal(document.querySelector('.status-text').textContent, 'Ready to request');
+  const failed = manager.checkStatus();
+  pending[2].reject(new Error('Offline'));
+  await failed;
+  assert.equal(document.querySelectorAll('.diagnostic-row').length, 0);
+  assert.equal(document.getElementById('errorMessage').textContent, 'Offline');
+  dom.window.close();
+});
