@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.53]
+
+- Prevent new status refreshes from resetting an active media request or season review.
+- Preserve Retry status and refresh after request completion, with lifecycle regressions for both paths.
+
 ## [3.5.52]
 
 - Invalidate earlier status lookups when a media request or season review begins so late results cannot reset the pending request UI.

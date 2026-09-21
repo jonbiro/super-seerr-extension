@@ -124,3 +124,31 @@ test('a status read started before a request cannot replace its pending UI', asy
   assert.equal(renders.length, 0, 'obsolete status must not reset the pending request');
   request.resolve({}); await sending;
 });
+
+test('refresh started during a media request cannot reset its UI', async t => {
+  const f = fixture(t), request = deferred();
+  f.integration.uiTheme = 'flyout';
+  const renders = [];
+  f.integration.ui.updateFlyoutStatus = (...args) => renders.push(args);
+  f.integration.ui.updateTabIcon = () => {};
+  f.integration.client.sendMessage = async () => ({success:true,data:{plexConfigured:false}});
+  f.integration.client.getMediaStatus = async () => ({status:'available',buttonClass:'request'});
+  f.integration.client.requestMedia = () => request.promise;
+  const sending = f.integration.handleRequest();
+  await f.integration.updateStatus();
+  assert.equal(renders.length, 0);
+  request.resolve({}); await sending;
+  await f.integration.updateStatus();
+  assert.equal(renders.length, 1, 'refresh resumes after the write settles');
+});
+
+test('Retry status remains available while the click handler is active', async t => {
+  const f = fixture(t);
+  f.integration.currentStatusData = {action:'retryStatus'};
+  let reads = 0;
+  f.integration.client.sendMessage = async () => ({success:true,data:{plexConfigured:false}});
+  f.integration.client.getMediaStatus = async () => { reads++; return {status:'available'}; };
+  f.integration.ui.updateButtonStatus = () => {};
+  await f.integration.handleRequest();
+  assert.equal(reads, 1);
+});

@@ -312,8 +312,8 @@ class BaseIntegration {
   }
 
   async updateStatus() {
-    // The active Plex action owns its pending/result UI until it settles.
-    if (this._plexWatchlistAttempt) return;
+    // Active writes own their pending UI until they settle.
+    if (this._plexWatchlistAttempt || this._requestAttempt?.mediaRequest) return;
     const generation = this._statusGeneration = (this._statusGeneration || 0) + 1;
     const media = this.mediaData;
     const elements = this.uiElements;
@@ -455,6 +455,7 @@ class BaseIntegration {
       } else if (isWatchButton && !seasonsOnly) {
         await this.handleWatchButtonClick();
       } else {
+        attempt.mediaRequest = true;
         await this.handleRequestButtonClick();
       }
     } catch (error) {
