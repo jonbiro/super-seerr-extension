@@ -26,10 +26,10 @@
     },
     async getSavedTitleCorrection(data) {
       if (!this.baseUrl) return null;
+      const server = this.baseUrl;
       const key = this.correctionKey(data);
       const saved = (await this.getTitleCorrections()).find(row => row.key === key);
-      if (!saved) return null;
-      const server = this.baseUrl;
+      if (!saved || server !== this.baseUrl) return null;
       const selected = (await this.getMediaCandidates(data)).find(row => row.tmdbId === saved.tmdbId);
       return server === this.baseUrl ? selected || null : null;
     },

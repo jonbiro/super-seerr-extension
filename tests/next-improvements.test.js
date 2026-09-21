@@ -116,3 +116,17 @@ test('aging cached card refreshes also obey the four-read queue limit', async ()
   release.forEach(resolve => resolve(full)); await tick();
   assert.equal(started, 4, 'navigation discards pending refreshes');
 });
+
+test('saved correction read cannot cross a server change while storage is pending', async () => {
+  const w = await worker();
+  const key = w.api.correctionKey(original);
+  let release;
+  w.api.getTitleCorrections = () => new Promise(resolve => { release = resolve; });
+  let searches = 0;
+  w.api.getMediaCandidates = async () => { searches++; return choices; };
+  const pending = w.api.getSavedTitleCorrection(original);
+  w.api.baseUrl = 'https://other.example';
+  release([{key, title:original.title, tmdbId:2}]);
+  assert.equal(await pending, null);
+  assert.equal(searches, 0, 'old-server choices must not be revalidated against the new server');
+});
