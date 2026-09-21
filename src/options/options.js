@@ -282,6 +282,7 @@ class OptionsManager {
   }
 
   async testConnection() {
+    if (this.testButton.disabled) return;
     const serverUrl = this.serverUrlInput.value.trim();
     const apiKey = this.apiKeyInput.value.trim();
 
@@ -314,6 +315,7 @@ class OptionsManager {
     this.testButton.disabled = true;
     this.testButton.textContent = 'Testing...';
     this.showStatus('loading', 'Testing connection to Seerr server...');
+    const current = this.connectionTestGuard(() => this.serverUrlInput.value.trim() === serverUrl && this.apiKeyInput.value.trim() === apiKey);
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -321,12 +323,14 @@ class OptionsManager {
         data: { seerrUrl: serverUrl, seerrApiKey: apiKey }
       });
 
-      if (response.success) {
+      if (!current()) return;
+      if (response?.success) {
         this.showStatus('success', `Connected as ${response.data.user}. Click Save Settings to apply these values.`);
       } else {
-        this.showStatus('error', response.error || 'Connection test failed');
+        this.showStatus('error', response?.error || 'Connection test failed');
       }
     } catch (error) {
+      if (!current()) return;
       console.error('Connection test error:', error);
       this.showStatus('error', `Connection failed: ${error.message}`);
     } finally {
@@ -362,6 +366,7 @@ class OptionsManager {
   }
 
   async testPlexConnection() {
+    if (this.testPlexButton?.disabled) return;
     const plexToken = this.plexTokenInput ? this.plexTokenInput.value.trim() : '';
     if (!plexToken) {
       this.showStatus('error', 'Enter a Plex token before testing');
@@ -371,9 +376,11 @@ class OptionsManager {
     this.testPlexButton.disabled = true;
     this.testPlexButton.textContent = 'Testing...';
     this.showStatus('loading', 'Testing Plex connection...');
+    const current = this.connectionTestGuard(() => this.plexTokenInput.value.trim() === plexToken);
     try {
       // This button is also used before the first save, when Plex has no grant.
       const granted = await this.requestPlexPermission();
+      if (!current()) return;
       if (!granted) {
         this.showStatus('error', 'Plex host permission is required to test the connection. Click Test Plex to grant access.');
         return;
@@ -382,12 +389,14 @@ class OptionsManager {
         action: 'plexTestConnection',
         data: { plexToken }
       });
+      if (!current()) return;
       if (response && response.success) {
         this.showStatus('success', `Plex connected as ${response.data.user}. Click Save Settings to apply.`);
       } else {
         this.showStatus('error', (response && response.error) || 'Plex connection test failed');
       }
     } catch (error) {
+      if (!current()) return;
       console.error('Plex connection test error:', error);
       this.showStatus('error', `Plex connection failed: ${error.message}`);
     } finally {
@@ -396,7 +405,18 @@ class OptionsManager {
     }
   }
 
+  connectionTestGuard(valuesMatch) {
+    const revision = this.statusRevision;
+    return () => {
+      if (revision !== this.statusRevision) return false;
+      if (valuesMatch()) return true;
+      this.showStatus('error', 'Settings changed during the test. Test again to check the current values.');
+      return false;
+    };
+  }
+
   showStatus(type, message) {
+    this.statusRevision = (this.statusRevision || 0) + 1;
     clearTimeout(this.statusTimeout);
     this.statusDiv.className = `status ${type}`;
     const statusTextEl = this.statusDiv.querySelector('.status-text');

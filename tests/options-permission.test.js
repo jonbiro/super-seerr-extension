@@ -299,3 +299,34 @@ test('cache read failures remain unknown and clearing stays available without du
   finish({ success: true }); await flush();
   assert.equal(button.disabled, false);
 });
+
+for (const target of ['Seerr', 'Plex']) {
+  test(`${target} test cannot claim success for edited settings`, async t => {
+    const ctx = openOptions({ synced: { seerrUrl: 'https://saved.example' }, local: { seerrApiKey: 'old-key', plexToken: 'old-token' } });
+    t.after(() => ctx.window.close()); await flush();
+    let complete;
+    ctx.window.chrome.runtime.sendMessage = () => new Promise(resolve => { complete = resolve; });
+    const doc = ctx.window.document;
+    const button = doc.getElementById(target === 'Seerr' ? 'testConnection' : 'testPlexConnection');
+    button.click(); await flush();
+    doc.getElementById(target === 'Seerr' ? 'apiKey' : 'plexToken').value = 'edited-value';
+    complete({ success: true, data: { user: 'Old account' } }); await flush();
+    assert.match(doc.getElementById('status').textContent, /Settings changed.*Test again/);
+    assert.doesNotMatch(doc.getElementById('status').textContent, /Old account/);
+    assert.equal(button.disabled, false);
+  });
+}
+
+test('an older connection failure cannot overwrite a newer test result', async t => {
+  const ctx = openOptions({ synced: { seerrUrl: 'https://saved.example' }, local: { seerrApiKey: 'key', plexToken: 'token' } });
+  t.after(() => ctx.window.close()); await flush();
+  const pending = {};
+  ctx.window.chrome.runtime.sendMessage = ({ action }) => new Promise((resolve, reject) => { pending[action] = { resolve, reject }; });
+  const doc = ctx.window.document;
+  doc.getElementById('testConnection').click();
+  doc.getElementById('testPlexConnection').click(); await flush();
+  pending.plexTestConnection.resolve({ success: true, data: { user: 'New account' } }); await flush();
+  pending.testConnection.reject(new Error('Old failure')); await flush();
+  assert.match(doc.getElementById('status').textContent, /Plex connected as New account/);
+  assert.equal(doc.getElementById('testConnection').disabled, false);
+});

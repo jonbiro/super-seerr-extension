@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.25]
+
+- Discard Seerr and Plex connection results when their tested settings have changed, and prompt a fresh test of the current values.
+- Prevent older connection responses from overwriting newer status messages, while always restoring test controls.
+- Guard repeated test calls and handle empty worker replies without exposing an internal error.
+
 ## [3.5.24]
 
 - Re-evaluate missing rating fields after each Seerr response to skip redundant endpoints while still filling gaps.
