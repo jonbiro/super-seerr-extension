@@ -633,6 +633,8 @@ class SeerrAPI {
         }
 
         const matchingRequest = requests.find(request => {
+          // Extension requests use standard quality, independently of 4K.
+          if (request.is4k) return false;
           const requestMediaType = request.type === 'movie' ? 'movie' : 'tv';
           const matchesType = requestMediaType === mediaType;
           // Only tmdbId identifies the title. request.media.id is Seerr's own

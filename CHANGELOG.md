@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.59]
+
+- Exclude 4K entries from standard-quality request history matching so a pending 4K request cannot block a standard request.
+- Add regressions for 4K-only history and mixed-quality entries.
+
 ## [3.5.58]
 
 - Clear the previous diagnostic report when preparing a new one so failed refreshes cannot leave stale results visible.

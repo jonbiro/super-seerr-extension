@@ -133,3 +133,21 @@ test('request paging is capped, never unbounded', async () => {
   assert.equal(await worker.api.searchRequests(550, 'movie'), null);
   assert.equal(calls.filter(e => e.startsWith('/api/v1/request')).length, 10, 'ten full pages then stop');
 });
+
+test('4K request history does not block a standard-quality request', async () => {
+  const worker = loadWorker(CONFIGURED); await worker.ready;
+  withApi(worker, {
+    '/api/v1/request': {results:[{id:1,type:'movie',status:1,is4k:true,media:{tmdbId:550}}]},
+    '/api/v1/movie/550': {mediaInfo:undefined}
+  });
+  assert.equal((await worker.api.getMediaStatus({tmdbId:550,mediaType:'movie'})).status, 'available');
+});
+
+test('standard request history wins over an earlier 4K entry', async () => {
+  const worker = loadWorker(CONFIGURED); await worker.ready;
+  withApi(worker, {'/api/v1/request': {results:[
+    {id:1,type:'movie',status:1,is4k:true,media:{tmdbId:550}},
+    {id:2,type:'movie',status:4,is4k:false,media:{tmdbId:550}}
+  ]}});
+  assert.equal((await worker.api.searchRequests(550,'movie')).id, 2);
+});
