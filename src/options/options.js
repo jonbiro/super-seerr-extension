@@ -346,6 +346,12 @@ class OptionsManager {
     this.testPlexButton.textContent = 'Testing...';
     this.showStatus('loading', 'Testing Plex connection...');
     try {
+      // This button is also used before the first save, when Plex has no grant.
+      const granted = await this.requestPlexPermission();
+      if (!granted) {
+        this.showStatus('error', 'Plex host permission is required to test the connection. Click Test Plex to grant access.');
+        return;
+      }
       const response = await chrome.runtime.sendMessage({
         action: 'plexTestConnection',
         data: { plexToken }

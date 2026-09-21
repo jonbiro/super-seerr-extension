@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.1]
+
+- Seerr watchlist actions resolve title-only entries using title, type, and year, and reject ambiguous matches.
+- Slow Plex state lookups no longer block Seerr controls; stale replies cannot overwrite newer actions.
+- Missing ratings no longer suppress unrelated movies or shows, and legacy server-wide suppression is removed.
+- Navigation replaces an expanded flyout with the current title; stale extractions cannot overwrite the new page, and destruction removes open panels.
+- Test Plex requests host access before testing an unsaved token and explains declined access without issuing a network request.
+
 ## [3.5.0]
 
 - Options: the Plex Token hint and its Show/Test Plex buttons no longer collide. The hint flows full-width with the actions on their own row.

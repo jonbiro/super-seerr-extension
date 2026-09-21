@@ -160,13 +160,20 @@ class BaseIntegration {
    * Override extractMediaData() in child classes
    */
   async extractAndSetup() {
+    const generation = this._extractionGeneration = (this._extractionGeneration || 0) + 1;
+    const pageUrl = window.location.href;
     try {
       this.log('Starting media data extraction...');
       const mediaData = await this.extractMediaData();
-      if (this.destroyed) return;
+      if (this.destroyed || generation !== this._extractionGeneration || window.location.href !== pageUrl) return;
       this.log('Extracted media data:', mediaData);
 
       if (mediaData && mediaData.title) {
+        // A same-page retry must not replace the identity behind an open panel
+        // while its status lookup is still using that identity.
+        if (this.isFlyoutExpanded() && this.mediaData
+          && ['title', 'mediaType', 'tmdbId', 'year'].every(key => this.mediaData[key] === mediaData[key])) return;
+        if (this.isFlyoutExpanded()) this.cleanupUI();
         this.mediaData = mediaData;
         this.log('Valid media data found, setting up UI...');
         await this.setupUI();
@@ -787,20 +794,16 @@ class BaseIntegration {
   async handleNavigationChange() {
     this.log('Handling navigation change to:', this.currentUrl);
 
-    // Protect expanded flyout from cleanup
-    if (this.isFlyoutExpanded()) {
-      this.log('Flyout is open, deferring navigation handling');
-      return;
-    }
-
     if (this.destroyed) return;
 
-    // Clean up existing UI
+    // Navigation always retires the old title, even if its panel is open.
     this.cleanupUI();
+    const generation = this._extractionGeneration;
+    const pageUrl = window.location.href;
 
     // Wait a bit for the new page content to load
     await new Promise(resolve => setTimeout(resolve, 500));
-    if (this.destroyed) return;
+    if (this.destroyed || generation !== this._extractionGeneration || window.location.href !== pageUrl) return;
 
     // Re-extract and setup for the new page
     await this.extractAndSetup();
@@ -818,18 +821,13 @@ class BaseIntegration {
    */
   cleanupUI() {
     this.log('Cleaning up existing UI');
+    this._extractionGeneration = (this._extractionGeneration || 0) + 1;
     this._statusGeneration = (this._statusGeneration || 0) + 1;
 
     // A new page supersedes every retry scheduled for the old one.
     this.clearPendingRetries();
 
-    // Protect expanded flyout from removal
-    if (this.isFlyoutExpanded()) {
-      this.log('Flyout is expanded, skipping cleanup');
-      return;
-    }
-
-    // Remove flyout if it exists and is not expanded
+    // Remove the old title's flyout regardless of its expansion state
     if (this.hasFlyout()) {
       this.uiElements.flyout.parentNode.removeChild(this.uiElements.flyout);
     }

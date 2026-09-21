@@ -141,3 +141,55 @@ test('navigation that dies mid-flight builds nothing', async t => {
   await new Promise(resolve => setTimeout(resolve, 50));
   assert.equal(window.document.querySelector('.seerr-flyout'), null, 'a dead navigation must not build UI');
 });
+
+test('navigation replaces an expanded flyout with the new title', async t => {
+  const fixture = loadIntegration({ html: '<h1>Old title</h1>' });
+  t.after(() => fixture.window.close());
+  class Navigating extends fixture.window.BaseIntegration {
+    constructor() { super('Navigation', { uiTheme: 'flyout', retryDelay: 100000 }); }
+    async extractMediaData() { return { title: fixture.window.document.querySelector('h1').textContent, mediaType: 'movie' }; }
+    async updateStatus() {}
+  }
+  const integration = new Navigating();
+  await integration.extractAndSetup();
+  const oldFlyout = integration.uiElements.flyout;
+  oldFlyout.classList.add('expanded');
+  fixture.window.history.replaceState({}, '', '/title/tt9999999/');
+  fixture.window.document.querySelector('h1').textContent = 'New title';
+  const navigating = integration.handleNavigationChange();
+  assert.equal(oldFlyout.isConnected, false, 'the old title must stop being actionable immediately');
+  await navigating;
+  assert.equal(integration.mediaData.title, 'New title');
+  assert.equal(fixture.window.document.querySelectorAll('.seerr-flyout').length, 1);
+  assert.ok(integration.uiElements.panel.textContent.includes('New title'));
+  integration.destroy();
+});
+
+test('destroy removes an expanded flyout', async t => {
+  const fixture = loadIntegration(); t.after(() => fixture.window.close());
+  const integration = new fixture.window.BaseIntegration('Probe', { uiTheme: 'flyout' });
+  integration.mediaData = { title: 'Example', mediaType: 'movie' };
+  integration.updateStatus = async () => {};
+  await integration.setupUI();
+  const flyout = integration.uiElements.flyout;
+  flyout.classList.add('expanded');
+  integration.destroy();
+  assert.equal(flyout.isConnected, false);
+});
+
+test('an old extraction cannot replace a newer page identity', async t => {
+  const fixture = loadIntegration(); t.after(() => fixture.window.close());
+  const integration = new fixture.window.BaseIntegration('Probe');
+  let finishOld;
+  integration.extractMediaData = () => new Promise(resolve => { finishOld = resolve; });
+  const titles = [];
+  integration.setupUI = async () => { titles.push(integration.mediaData.title); };
+  const old = integration.extractAndSetup();
+  fixture.window.history.replaceState({}, '', '/title/tt9999999/');
+  integration.extractMediaData = async () => ({ title: 'New title', mediaType: 'movie' });
+  await integration.extractAndSetup();
+  finishOld({ title: 'Old title', mediaType: 'movie' });
+  await old;
+  assert.equal(integration.mediaData.title, 'New title');
+  assert.deepEqual(titles, ['New title']);
+});

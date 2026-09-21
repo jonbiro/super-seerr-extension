@@ -227,3 +227,36 @@ test('double submissions save once and prompt once', async t => {
   assert.equal(ctx.syncWrites.length, 1, 'one save, not two');
   assert.equal(ctx.order.filter(entry => entry === 'permissions.request').length, 1, 'one prompt, not two');
 });
+
+test('Test Plex requests host access before contacting the worker without saving', async t => {
+  const ctx = openOptions(); t.after(() => ctx.window.close());
+  await flush();
+  const events = [];
+  ctx.window.chrome.permissions.request = async ({ origins }) => {
+    events.push('permission');
+    assert.ok(origins.includes('https://plex.tv/*'));
+    return true;
+  };
+  ctx.window.chrome.runtime.sendMessage = async message => {
+    events.push(message.action);
+    return { success: true, data: { user: 'Test account' } };
+  };
+  ctx.window.document.getElementById('plexToken').value = 'test-token';
+  ctx.window.document.getElementById('testPlexConnection').click();
+  await flush();
+  assert.deepEqual(events, ['permission', 'plexTestConnection']);
+  assert.equal(ctx.localWrites.length, 0);
+});
+
+test('Test Plex stops when host access is declined', async t => {
+  const ctx = openOptions({ granted: false }); t.after(() => ctx.window.close());
+  await flush();
+  let messages = 0;
+  ctx.window.chrome.runtime.sendMessage = async () => { messages++; return { success: true }; };
+  ctx.window.document.getElementById('plexToken').value = 'test-token';
+  ctx.window.document.getElementById('testPlexConnection').click();
+  await flush();
+  assert.equal(messages, 0);
+  assert.match(ctx.window.document.getElementById('status').textContent, /permission/i);
+  assert.equal(ctx.window.document.getElementById('testPlexConnection').disabled, false);
+});

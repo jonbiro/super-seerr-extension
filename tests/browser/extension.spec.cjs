@@ -102,3 +102,47 @@ test('worker restart preserves configuration and cache; clear removes persisted 
   expect(await options.evaluate(async () => (await chrome.storage.local.get('rtCacheV1')).rtCacheV1)).toBeUndefined();
   await cdp.detach();
 });
+
+test('an expanded site flyout follows SPA navigation and is removed on destroy', async () => {
+  const manager = await context.newPage();
+  await manager.goto('chrome://extensions');
+  await manager.evaluate(id => chrome.developerPrivate.addHostPermission(id, 'http://127.0.0.1/*'), extensionId);
+  await manager.close();
+  await options.locator('#serverUrl').fill(origin);
+  await options.locator('button[type="submit"]').click();
+  await expect.poll(() => options.evaluate(() => chrome.permissions.contains({ origins: ['http://127.0.0.1/*'] }))).toBe(true);
+  const page = await context.newPage();
+  await page.goto(`${origin}/title/first`);
+  await page.locator('h1').evaluate(element => { element.textContent = 'First title'; });
+  await page.bringToFront();
+  const tabId = await options.evaluate(async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0].id);
+  await options.evaluate(async tabId => {
+    await chrome.scripting.executeScript({ target: { tabId }, files: [
+      'src/shared/SeerrClient.js', 'src/shared/MediaExtractor.js',
+      'src/shared/UIComponents.js', 'src/shared/BaseIntegration.js'
+    ] });
+    await chrome.scripting.executeScript({ target: { tabId }, func: async () => {
+      class NavigationProbe extends window.BaseIntegration {
+        constructor() { super('NavigationProbe', { uiTheme: 'flyout', retryDelay: 100000 }); }
+        async extractMediaData() {
+          return { title: document.querySelector('h1').textContent, tmdbId: 550, mediaType: 'movie' };
+        }
+      }
+      window.navigationProbe = new NavigationProbe();
+      await window.navigationProbe.init();
+    } });
+  }, tabId);
+  await expect(page.locator('.seerr-title')).toHaveText('First title');
+  await page.locator('.seerr-tab').click();
+  await expect(page.locator('.seerr-flyout')).toHaveClass(/expanded/);
+  await page.evaluate(() => {
+    document.querySelector('h1').textContent = 'Second title';
+    history.pushState({}, '', '/title/second');
+  });
+  await expect(page.locator('.seerr-title')).toHaveText('Second title');
+  await expect(page.locator('.seerr-flyout')).toHaveCount(1);
+  await page.locator('.seerr-tab').click();
+  await options.evaluate(tabId => chrome.scripting.executeScript({ target: { tabId }, func: () => window.navigationProbe.destroy() }), tabId);
+  await expect(page.locator('.seerr-flyout')).toHaveCount(0);
+  await page.close();
+});
