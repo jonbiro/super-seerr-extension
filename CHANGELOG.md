@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.64]
+
+- Stop Seerr watchlist adds and season reviews when the server or API key changes during title verification or search.
+- Stop Plex adds before the write if the account token changes or is removed during lookup; ignore old-account watchlist status replies.
+- Preserve Unicode letters and meaningful non-Latin marks in Plex title matching and reject empty normalized titles, preventing unrelated titles from matching.
+- Add deferred-response and title-matching regressions, including Japanese, Cyrillic and accented Latin titles.
+
 ## [3.5.62]
 
 - Refuse media-request writes if the Seerr URL or API key changes during title matching or season validation.

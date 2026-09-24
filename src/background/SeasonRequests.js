@@ -11,17 +11,23 @@
     async getSeasonOptions(data) {
       const media = root.MediaValidation.media(data);
       if (media.mediaType !== 'tv') throw new Error('Season selection is only available for TV');
+      const server = this.baseUrl;
+      const key = this.apiKey;
+      const assertCurrent = () => {
+        if (this.baseUrl !== server || this.apiKey !== key) throw new Error('Settings changed. Review seasons again.');
+      };
       let tmdbId = media.tmdbId;
-      if (!tmdbId || !(await this.tmdbIdentityMatches(media))) {
+      const identityMatches = tmdbId && await this.tmdbIdentityMatches(media);
+      assertCurrent();
+      if (!identityMatches) {
         const match = await this.resolveMediaMatch(media);
+        assertCurrent();
         if (!match) throw new Error('No unambiguous match. Choose the correct title first.');
         tmdbId = root.MediaValidation.tmdbId(match.id);
       }
-      const server = this.baseUrl;
-      const key = this.apiKey;
       // Always refresh before presenting availability or approving a write.
       const details = await this.sendAPIRequest('GET', `/api/v1/tv/${tmdbId}`);
-      if (this.baseUrl !== server || this.apiKey !== key) throw new Error('Settings changed. Review seasons again.');
+      assertCurrent();
       if (!Array.isArray(details?.seasons)) throw new Error('Season information is unavailable. Try again before requesting.');
       const info = details.mediaInfo || {};
       const availability = new Map((info.seasons || []).map(season => [season.seasonNumber, season.status]));

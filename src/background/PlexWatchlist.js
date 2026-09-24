@@ -16,8 +16,11 @@
   const PLEX_CLIENT_ID = 'super-seerr-extension';
 
   function normalizeTitle(value = '') {
-    return String(value).toLowerCase().replace(/&amp;/g, '&').normalize('NFD')
-      .replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ' ').replace(/\b(the|a|an)\b/g, ' ')
+    // Fold Latin accents while preserving meaningful marks in other scripts
+    // (for example, Japanese ハ and バ are different characters).
+    return String(value).toLowerCase().replace(/&amp;/g, '&').normalize('NFKD')
+      .replace(/(\p{Script=Latin})\p{M}+/gu, '$1').normalize('NFC')
+      .replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ').replace(/(^| )(?:the|a|an)(?= |$)/g, ' ')
       .replace(/\s+/g, ' ').trim();
   }
 
@@ -217,7 +220,7 @@
 
       // Title-only: require a single normalized title/year match, never a guess.
       const wanted = normalizeTitle(media.title);
-      const matching = candidates.filter(candidate => normalizeTitle(candidate.title) === wanted
+      const matching = candidates.filter(candidate => /[\p{L}\p{N}]/u.test(wanted) && normalizeTitle(candidate.title) === wanted
         && (media.year == null || candidate.year == null || candidate.year === media.year));
       if (matching.length === 0) {
         throw new Error(`No Plex match for "${media.title}". Check the title in Plex Discover.`);
@@ -247,7 +250,9 @@
         const token = this.plexToken;
         if (!token) return { onWatchlist: false, unknown: true };
         const resolved = await this.plexResolveRatingKey(media, { token });
+        if (this.plexToken !== token) return { onWatchlist: false, unknown: true };
         const state = await this.plexUserState(resolved.ratingKey, token);
+        if (this.plexToken !== token) return { onWatchlist: false, unknown: true };
         const onWatchlist = !!(state && (state.watchlistedAt || state.watchlisted || state.onWatchlist));
         return { onWatchlist, ratingKey: resolved.ratingKey, title: resolved.title || media.title };
       } catch (_) {
@@ -261,8 +266,13 @@
       const media = MediaValidation.media(data);
       const token = this.plexToken;
       if (!token) throw new Error('Plex token is required. Add it in the extension options.');
+      const assertCurrent = () => {
+        if (this.plexToken !== token) throw new Error('Plex account changed. Review the title and add it again.');
+      };
       const resolved = await this.plexResolveRatingKey(media, { token });
+      assertCurrent();
       const state = await this.plexUserState(resolved.ratingKey, token);
+      assertCurrent();
       const already = state && (state.watchlistedAt || state.watchlisted || state.onWatchlist);
       if (already) return { ratingKey: resolved.ratingKey, title: resolved.title || media.title, already: true };
       try {
