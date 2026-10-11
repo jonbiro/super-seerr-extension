@@ -62,7 +62,7 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
   window.chrome.runtime.sendMessage = message => ['getOverlayCache', 'putOverlayCache'].includes(message.action) ? cacheMessage(message) : send(message);
   for (const file of ['RatingsModel', 'RatingsConfig']) window.eval(source(`src/shared/${file}.js`));
   require('./helpers/overlay-modules').loadOverlayModules(window);
-  window.eval(source('src/content/seerr-integration.js').replace(/\}\)\(\);\s*$/, `window.testOverlay = { injectCardBadges, injectSortFilterControls, handleRouteChange, extractSeerrNativeRatings, loadMoreCards, scoreAllCards, injectPlexWatchlistButton }; })();`));
+  window.eval(source('src/content/seerr-integration.js').replace(/\}\)\(\);\s*$/, `window.testOverlay = { injectCardBadges, injectSortFilterControls, handleRouteChange, extractSeerrNativeRatings, loadMoreCards, scoreAllCards, injectPlexWatchlistButton, flushPersistedRatings }; })();`));
   return { dom, window, messages, urls, storage, message: value => messageListeners.forEach(listener => listener(value)), change: changes => storageListeners.forEach(listener => listener(changes, 'sync')) };
 }
 
@@ -1256,4 +1256,32 @@ test('a missed cache clear discovered through public ratings repaints old scores
   await settle();
   assert.equal(card.__seerrRatings.rtCriticsScore, 88, 'old ratings must be refetched and repainted');
   assert.match(card.querySelector('.seerr-card-badge').textContent, /88/);
+});
+
+
+test('a cache write rejected after a missed clear resets and repaints the tab', async t => {
+  const fixture = createOverlay();
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  const { window } = fixture;
+  const card = window.document.querySelector('[data-id="1"]');
+  assert.equal(card.__seerrRatings.rtCriticsScore, 30);
+  const send = window.chrome.runtime.sendMessage;
+  const writes = [];
+  window.chrome.runtime.sendMessage = message => {
+    if (message.action === 'getOverlayCache') return Promise.resolve({ success: true, data: { ratingsCacheEpoch: 'new-write-epoch' } });
+    if (message.action === 'putOverlayCache') {
+      writes.push(message.data);
+      return Promise.resolve({ success: true, data: { stored: writes.length !== 1 } });
+    }
+    if (message.action === 'getRottenTomatoesRatings') return Promise.resolve({ success: true, data: { rtCriticsScore: 88, confidence: 1 } });
+    return send(message);
+  };
+  await window.testOverlay.flushPersistedRatings();
+  await settle();
+  assert.equal(card.__seerrRatings.rtCriticsScore, 88, 'rejected old-epoch write must trigger a visible refresh');
+  await window.testOverlay.flushPersistedRatings();
+  assert.equal(writes[0].epoch, 0);
+  assert.equal(writes.at(-1).epoch, 'new-write-epoch');
+  assert.equal(writes.at(-1).entries['movie:1'].bundle.rtCriticsScore, 88);
 });

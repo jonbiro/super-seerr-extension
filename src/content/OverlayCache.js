@@ -117,8 +117,7 @@
         if ((response.data?.ratingsCacheEpoch ?? 0) !== epoch) {
           // A tab can miss the original clear broadcast. The epoch is
           // authoritative even when this reply contains no public entries.
-          if (typeof onCacheCleared === 'function') onCacheCleared();
-          else forgetPersistedRatings();
+          resetClearedCache();
           return [];
         }
         const payload = response.data?.publicRatingsV1;
@@ -211,7 +210,7 @@
           if (reply.data?.stored === false) {
             // A missed clear notification must not pin this tab to an old
             // epoch or restore pre-clear ratings on its next attempt.
-            forgetPersistedRatings();
+            resetClearedCache();
             return;
           }
           persistedEntries = snapshot; persistedIndex = indexSnapshot;
@@ -220,6 +219,13 @@
         }
       });
       return persistedRatingsFlushing;
+    }
+
+    function resetClearedCache() {
+      // Reset the rendered overlay as well as memory when the bridge discovers
+      // a missed clear through either a read epoch or a rejected write.
+      if (typeof onCacheCleared === 'function') onCacheCleared();
+      else forgetPersistedRatings();
     }
 
     function forgetPersistedRatings() {

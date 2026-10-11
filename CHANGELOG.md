@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.139]
+
+- Reset and repaint the full overlay when a cache write reveals a missed clear, instead of clearing memory while leaving old scores visible.
+- Share the normal clear recovery path between rejected writes and changed read epochs.
+- Add a DOM regression proving displayed ratings refresh and the next write uses the new epoch and fresh scores.
+
 ## [3.5.138]
 
 - Require actual string title fields when validating Seerr search candidates, so arrays, numbers and booleans cannot authorize a media request through string coercion.
