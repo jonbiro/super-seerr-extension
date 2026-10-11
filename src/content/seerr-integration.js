@@ -1160,6 +1160,14 @@
     // Whether a null result means "nothing knows this title" or "we could not
     // find out". Only the first is worth remembering.
     const outcome = { signal: options.signal };
+    const lookupStartedAt = Date.now();
+    const reconcilePublic = (bundle, publicCheckedAt) => {
+      const latest = getPublicRating(key, year);
+      if (latest && latest.checkedAt > (publicCheckedAt ?? lookupStartedAt)) {
+        return { bundle: mergeBundles(latest.bundle, bundle), publicCheckedAt: latest.checkedAt };
+      }
+      return { bundle, publicCheckedAt };
+    };
     const resolution = resolveRatings(tmdbId, title, year, mediaType, { ...options, outcome });
     // A hung channel must not pin the coalesced promise forever: after the
     // deadline the title goes provisional (retried in minutes, never stored)
@@ -1199,8 +1207,11 @@
         // it is held briefly and in memory only: long enough that the page stops
         // re-asking on every pass, short enough to cost nothing once the server
         // or the worker is back.
+        let publicCheckedAt = outcome.publicCheckedAt ?? (outcome.conclusive === false ? previous?.publicCheckedAt : null);
+        // A public notification can arrive while this lookup is awaiting its
+        // provider. Reconcile at completion too, retaining any native fields.
+        ({ bundle: storable, publicCheckedAt } = reconcilePublic(storable, publicCheckedAt));
         const provisional = !storable && outcome.conclusive === false;
-        const publicCheckedAt = outcome.publicCheckedAt ?? (outcome.conclusive === false ? previous?.publicCheckedAt : null);
         if (ratingsCache.get(pendingKey) === pending) {
           while (resolvedCacheSize() >= Config.overlayCacheMaxEntries) {
             const lru = [...ratingsCache.keys()].find(existingKey => !existingKey.startsWith('pending:'));
@@ -1226,8 +1237,10 @@
         return storable || bundle;
       } catch (error) {
         if (options.refresh && previous?.bundle && ratingsCache.get(pendingKey) === pending) {
-          ratingsCache.set(key, { ...previous, refreshing: false, retryAt: Date.now() + Config.inconclusiveRetryMs,
-            diagnostics: { status: 'failed', checkedAt: Date.now(), source: previous.bundle.source } });
+          const fallback = reconcilePublic(previous.bundle, previous.publicCheckedAt ?? previous.cachedAt);
+          ratingsCache.set(key, { ...previous, ...fallback, refreshing: false, retryAt: Date.now() + Config.inconclusiveRetryMs,
+            diagnostics: { status: 'failed', checkedAt: Date.now(), source: fallback.bundle.source } });
+          schedulePersistedRatingsFlush();
         }
         throw error;
       } finally {

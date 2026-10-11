@@ -165,3 +165,62 @@ for (const timing of ['before lookup', 'during cache loading', 'during availabil
     assert.equal(overlay.ratingsCache.get('movie:550').bundle.rtCriticsScore, 80);
   });
 }
+
+for (const completion of ['success', 'unavailable', 'rejection']) {
+  test(`a pending ${completion} cannot replace a newer live public rating`, async () => {
+    const overlay = loadOverlay({ pathname: '/discover', settings: { seerrUrl: 'https://seerr.example/' } });
+    await settle();
+    const oldAt = Date.now() - 10000, newAt = Date.now() + 1000;
+    const previous = overlay.Model.createRatingsBundle({ rtCriticsScore: 80, rtAudienceScore: 85, imdbRating: 7, confidence: 1 });
+    overlay.ratingsCache.set('movie:550', { bundle: previous, cachedAt: oldAt, publicCheckedAt: oldAt, retryAt: Date.now() + 100000 });
+    let release, reject;
+    overlay.setResolver((id, title, year, type, options) => {
+      options.outcome.publicCheckedAt = oldAt;
+      options.outcome.conclusive = completion === 'success';
+      return new Promise((resolve, fail) => { release = resolve; reject = fail; });
+    });
+    const pending = overlay.getRatings(550, 'Fight Club', 1999, 'movie', { refresh: true });
+    const settled = pending.catch(() => null);
+    await settle();
+    const send = overlay.context.chrome.runtime.sendMessage;
+    overlay.context.chrome.runtime.sendMessage = message => message.action === 'getOverlayCache'
+      ? Promise.resolve({ success: true, data: { publicRatingsV1: { matcher: Config.matcherVersion, entries: {
+        'movie:550': { checkedAt: newAt, expiresAt: newAt + Config.rtCacheTtlMs,
+          value: { rtCriticsScore: 95, rtAudienceScore: 92, confidence: 1, matchedYear: 1999, source: 'rotten-tomatoes' } }
+      } } } }) : send(message);
+    await overlay.refreshPublicRatings();
+    assert.equal((await overlay.getRatings(550, 'Fight Club', 1999, 'movie')).rtCriticsScore, 95);
+    if (completion === 'rejection') reject(new Error('Provider unavailable'));
+    else release(completion === 'success' ? overlay.Model.createRatingsBundle({ rtCriticsScore: 30, imdbRating: 9, confidence: 1 }) : null);
+    const result = await settled;
+    const cached = overlay.ratingsCache.get('movie:550');
+    assert.equal(cached.bundle.rtCriticsScore, 95);
+    assert.equal(cached.bundle.imdbRating, completion === 'success' ? 9 : 7);
+    assert.equal(cached.publicCheckedAt, newAt);
+    if (completion !== 'rejection') assert.equal(result.rtCriticsScore, 95);
+  });
+}
+
+for (const matchedYear of [1999, 2000]) {
+  test(`a cold lookup reconciles late public data only for its known year (${matchedYear})`, async () => {
+    const overlay = loadOverlay({ pathname: '/discover', settings: { seerrUrl: 'https://seerr.example/' } });
+    await settle();
+    let release;
+    overlay.setResolver(() => new Promise(resolve => { release = resolve; }));
+    const pending = overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+    await settle();
+    const checkedAt = Date.now() + 1000;
+    const send = overlay.context.chrome.runtime.sendMessage;
+    overlay.context.chrome.runtime.sendMessage = message => message.action === 'getOverlayCache'
+      ? Promise.resolve({ success: true, data: { publicRatingsV1: { matcher: Config.matcherVersion, entries: {
+        'movie:550': { checkedAt, expiresAt: checkedAt + Config.rtCacheTtlMs,
+          value: { rtCriticsScore: 95, confidence: 1, matchedYear, source: 'rotten-tomatoes' } }
+      } } } }) : send(message);
+    await overlay.refreshPublicRatings();
+    release(overlay.Model.createRatingsBundle({ rtCriticsScore: 30, imdbRating: 9, confidence: 1 }));
+    const result = await pending;
+    assert.equal(result.rtCriticsScore, matchedYear === 1999 ? 95 : 30);
+    assert.equal(result.imdbRating, 9);
+    assert.equal(overlay.ratingsCache.get('movie:550').bundle.rtCriticsScore, result.rtCriticsScore);
+  });
+}

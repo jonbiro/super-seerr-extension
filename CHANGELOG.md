@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.98]
+
+- Reconcile newer verified public ratings when a pending lookup completes, preventing older provider responses from replacing scores delivered by live cache notifications.
+- Preserve current public scores in both unavailable-result and rejected-refresh fallbacks while retaining server-specific IMDb/TMDB fields and persisting the corrected fallback.
+- Apply the same year checks at completion and add successful, unavailable, rejected, cold-cache and contradictory-year regressions.
+
 ## [3.5.97]
 
 - Notify open Seerr pages when a changed verified public ratings snapshot has been persisted, without broadcasting scores, catalogue data or credentials.
