@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.132]
+
+- Restore focus to Choose seasons after nested bulk TV season review, without taking focus moved to another control or a different route.
+- Keep bulk-review keydown events from reaching host shortcuts and cancelling its keyboard navigation.
+- Add browser checks for cancelled and confirmed season selection, availability failures, moved focus and host shortcut isolation; verify these reviews send no requests.
+
 ## [3.5.131]
 
 - Serialize content-script registration updates so overlapping settings and permission changes cannot cause duplicate-ID failures; keep queued updates aligned with the latest site.

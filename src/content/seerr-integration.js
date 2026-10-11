@@ -2510,6 +2510,7 @@
         const t = readyTitles[Number(button.dataset.seasonIndex)];
         const label = button.parentElement.querySelector('.seerr-season-choice');
         const generation = routeGeneration;
+        const restoreFocus = document.activeElement === button;
         button.disabled = true; refreshSeasonReadiness(); label.textContent = ' Loading availability…';
         try {
           const response = await chrome.runtime.sendMessage({ action: 'getSeasonOptions', data: t, connectionToken });
@@ -2523,13 +2524,15 @@
         finally {
           if (activeBulkSeasonController === controller) activeBulkSeasonController = null;
           button.disabled = false; refreshSeasonReadiness();
+          if (restoreFocus && modal.isConnected && generation === routeGeneration && document.activeElement === document.body) button.focus();
         }
       });
     }
     modal.querySelector('.cancel-btn').addEventListener('click', closeModal);
     modal.querySelector('.cancel-btn').focus();
     modal.addEventListener('keydown', event => {
-      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeModal(); }
+      event.stopPropagation();
+      if (event.key === 'Escape') { event.preventDefault(); closeModal(); }
       if (event.key === 'Tab') {
         const controls = [...modal.querySelectorAll('button:not(:disabled), summary')];
         const index = controls.indexOf(document.activeElement);
