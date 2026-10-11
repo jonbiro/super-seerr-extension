@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.148]
+
+- Label missing or uncertain season episode counts as unavailable instead of displaying zero or undefined episodes, and use singular wording for one episode.
+- Add a browser regression checking visible checkbox labels and confirming bulk selection still excludes seasons that cannot be requested.
+
 ## [3.5.147]
 
 - Refuse season requests when duplicate metadata reports contradictory episode counts, instead of allowing the final duplicate to decide whether a season is requestable.

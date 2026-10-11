@@ -54,7 +54,10 @@
         input.disabled = !season.requestable;
         input.addEventListener('change', updateSelection);
         inputs.push(input);
-        label.append(input, document.createTextNode(` ${season.name} (${season.episodeCount} episodes) — ${season.availability}`));
+        const count = season.episodeCount;
+        const episodeLabel = Number.isSafeInteger(count) && count > 0
+          ? `${count} episode${count === 1 ? '' : 's'}` : 'Episode count unavailable';
+        label.append(input, document.createTextNode(` ${season.name} (${episodeLabel}) — ${season.availability}`));
         dialog.appendChild(label);
       }
       if (!options.seasons.some(season => season.requestable)) dialog.appendChild(el('p', { textContent: 'No seasons are currently available to request.' }));

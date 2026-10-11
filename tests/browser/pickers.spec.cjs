@@ -178,3 +178,24 @@ for (const kind of ['title', 'season']) test(`${kind} picker keeps host shortcut
   await page.keyboard.press('h');
   expect(await page.evaluate(() => window.hostKeys)).toEqual(['h']);
 });
+
+test('season picker distinguishes unavailable episode counts and uses singular wording', async ({ page }) => {
+  await page.setContent('<button id="opener">Choose</button>');
+  await page.addScriptTag({ path: path.resolve('src/shared/SeasonPicker.js') });
+  await page.evaluate(() => {
+    chooseSeerrSeasons({ title: 'Example series', seasons: [
+      { number: 1, name: 'Season 1', episodeCount: 0, availability: 'Season information uncertain', requestable: false },
+      { number: 2, name: 'Season 2', availability: 'Status unknown', requestable: false },
+      { number: 3, name: 'Season 3', episodeCount: 1, availability: 'Not available', requestable: true },
+      { number: 4, name: 'Season 4', episodeCount: 8, availability: 'Not available', requestable: true }
+    ] }).then(value => { window.pickerResult = value; });
+  });
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('checkbox', { name: 'Season 1 (Episode count unavailable) — Season information uncertain', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('checkbox', { name: 'Season 2 (Episode count unavailable) — Status unknown', exact: true })).toBeDisabled();
+  await expect(dialog.getByRole('checkbox', { name: 'Season 3 (1 episode) — Not available', exact: true })).toBeEnabled();
+  await expect(dialog.getByRole('checkbox', { name: 'Season 4 (8 episodes) — Not available', exact: true })).toBeEnabled();
+  await dialog.getByRole('button', { name: 'Select all requestable' }).click();
+  await dialog.getByRole('button', { name: 'Request selected seasons' }).click();
+  expect(await page.evaluate(() => window.pickerResult)).toEqual([3, 4]);
+});
