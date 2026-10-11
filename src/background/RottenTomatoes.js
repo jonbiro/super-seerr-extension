@@ -261,6 +261,7 @@
       if (this.cacheClearPending) await this.cacheClearPending;
       const generation = this.rtCacheGeneration;
       await this.loadRtCache();
+      if (generation !== this.rtCacheGeneration) return null;
 
       const identity = { title, originalTitle, year, mediaType, tmdbId };
       const shared = !refresh && this.cachedPublicRating(identity);
@@ -290,11 +291,13 @@
       try {
         for (const query of queries) {
           best = await this.rtBestMatchFor(query, queries, year, mediaType, outcome);
+          if (generation !== this.rtCacheGeneration) return null;
           if (best) break;
         }
         this.rtTransportFailures = 0;
         this.rtBackoffUntil = 0;
       } catch (error) {
+        if (generation !== this.rtCacheGeneration) return null;
         this.rtTransportFailures++;
         if (this.rtTransportFailures >= RatingsConfig.rtFailureLimit) {
           this.rtBackoffUntil = Date.now() + RatingsConfig.rtBackoffMs;
@@ -316,6 +319,8 @@
         outcome.failed = true;
         this.warn('Could not read Rotten Tomatoes detail page:', error);
       }
+
+      if (generation !== this.rtCacheGeneration) return null;
 
       const result = {
         rtCriticsScore: detailScores.rtCriticsScore ?? best.rtCriticsScore ?? null,

@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.229]
+
+- Stop retired Rotten Tomatoes lookups between provider stages after a cache clear, including late replies and failures.
+
 ## [3.5.228]
 
 - Preserve confirmed Plex watchlist state when its user-state lookup fails instead of treating the failure as a confirmed removal.

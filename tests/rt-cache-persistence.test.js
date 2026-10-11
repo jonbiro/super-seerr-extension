@@ -343,3 +343,41 @@ for (const [diagnostic, value, ttl] of [
     assert.ok(entry.expiresAt <= entry.checkedAt + (expired ? Config.rtCacheTtlMs : ttl));
   });
 }
+
+for (const stage of ['storage', 'search', 'detail']) {
+  test(`clearing ratings during ${stage} stops the retired worker lookup`, async () => {
+    const worker = loadWorker(); await worker.ready;
+    let release, announce;
+    const gate = new Promise(resolve => { release = resolve; });
+    const started = new Promise(resolve => { announce = resolve; });
+    const api = worker.api;
+    let searches = 0, details = 0;
+    if (stage === 'storage') {
+      const read = worker.context.chrome.storage.local.get;
+      worker.context.chrome.storage.local.get = async keys => {
+        if (keys.includes(RT_KEY)) { announce(); await gate; }
+        return read(keys);
+      };
+    }
+    api.rtBestMatchFor = async () => {
+      searches++;
+      if (stage === 'search') { announce(); await gate; }
+      return { href: '/m/example', title: 'Example', year: 2020, confidence: 1, rtCriticsScore: 80 };
+    };
+    api.fetchRtHtml = async () => {
+      details++;
+      if (stage === 'detail') { announce(); await gate; }
+      return '';
+    };
+    api.parseRtScorecard = () => ({ rtAudienceScore: 90 });
+    const lookup = api.getRottenTomatoesRatings({ title: 'Example', year: 2020, mediaType: 'movie', tmdbId: 1 });
+    await started;
+    await api.clearRatingsCache();
+    release();
+    assert.equal(await lookup, null, 'a cleared lookup must not return its retired result');
+    assert.equal(searches, stage === 'storage' ? 0 : 1);
+    assert.equal(details, stage === 'detail' ? 1 : 0, 'no next provider stage should start after the clear');
+    assert.equal(api.rtCache.size, 0);
+    assert.equal(api.publicRatings.size, 0);
+  });
+}
