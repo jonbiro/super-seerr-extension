@@ -234,6 +234,7 @@
       delete card.__seerrRatings;
       delete card.__seerrMediaInfo;
       delete card.__seerrListMediaInfo;
+      delete card.__seerrIdentityEvidence;
     });
     bulkMode = false;
     selectedCards.clear();
@@ -595,7 +596,7 @@
     const { byPosterFile, byTitle } = indexedListItems();
     const cards = getMediaCards(root);
     cards.forEach(card => {
-      if (getCardMediaInfo(card)) return;
+      if (getCardMediaInfo(card) || hasRejectedMediaLink(card)) return;
       const title = (card.querySelector('h2, h3, [class*="title"], [class*="Title"]')?.textContent
         || card.querySelector('img[alt]')?.getAttribute('alt') || '').trim().toLowerCase();
       const image = card.querySelector('img');
@@ -631,6 +632,7 @@
       if (matches.length !== 1) return;
       const info = matches[0];
       card.__seerrListMediaInfo = info;
+      rememberCardIdentityEvidence(card);
     });
   }
 
@@ -1222,25 +1224,76 @@
   let nextCardIndex = 0;
   let lastListItems = [];
 
+  function cardIdentityEvidence(card) {
+    return {
+      // Responsive image sizes and cache-busting queries keep the same poster.
+      poster: posterFileName(card.querySelector('img')?.getAttribute('src') || ''),
+      title: (card.querySelector('h2, h3, [class*="title"], [class*="Title"]')?.textContent
+        || card.querySelector('img[alt]')?.getAttribute('alt') || '').trim().toLowerCase()
+    };
+  }
+
+  function rememberCardIdentityEvidence(card) {
+    const previous = card.__seerrIdentityEvidence;
+    const current = cardIdentityEvidence(card);
+    // Hover-only headings/links can disappear without changing the title.
+    card.__seerrIdentityEvidence = {
+      poster: current.poster || previous?.poster || '', title: current.title || previous?.title || ''
+    };
+  }
+
+  function hasRejectedMediaLink(card) {
+    const links = card.matches?.('a[href]') ? [card] : Array.from(card.querySelectorAll('a[href]'));
+    return links.some(link => {
+      if (mediaLinkTarget(link.getAttribute('href'))) return false;
+      try {
+        const url = new URL(link.getAttribute('href'), window.location.href);
+        if (!['http:', 'https:'].includes(url.protocol)) return false;
+        const base = configuredServer?.pathname.replace(/\/+$/, '') || '';
+        return url.origin !== window.location.origin || url.username || url.password
+          || (base && url.pathname !== base && !url.pathname.startsWith(`${base}/`))
+          || /\/(movie|tv)\/[^/]+/.test(url.pathname);
+      } catch (_) { return false; }
+    });
+  }
+
+  function clearCardIdentity(card) {
+    card.__seerrIdentityEpoch = (card.__seerrIdentityEpoch || 0) + 1;
+    card.querySelectorAll('.seerr-card-badge, .seerr-rating-details, .seerr-select-checkbox, .seerr-plex-card-button').forEach(node => node.remove());
+    delete card.__seerrRatings;
+    delete card.__seerrMediaInfo;
+    delete card.__seerrListMediaInfo;
+    delete card.__seerrIdentityEvidence;
+    card.__seerrBadgesResolving = false;
+    card.__seerrBadgesCleared = false;
+    selectedCards.delete(card);
+  }
+
   function getCardMediaInfo(card) {
     const cached = card.__seerrMediaInfo || card.__seerrListMediaInfo;
     const links = card.matches?.('a[href]') ? [card] : Array.from(card.querySelectorAll('a[href]'));
     const link = links.find(a => mediaLinkTarget(a.getAttribute('href')));
-    if (!link) return cached || null;
+    if (!link) {
+      const previous = card.__seerrIdentityEvidence;
+      const current = cardIdentityEvidence(card);
+      const changed = previous && ((current.poster && previous.poster && current.poster !== previous.poster)
+        || (current.title && previous.title && current.title !== previous.title));
+      if (hasRejectedMediaLink(card) || changed) {
+        if (cached) clearCardIdentity(card);
+        return null;
+      }
+      if (cached) rememberCardIdentityEvidence(card);
+      return cached || null;
+    }
 
     const href = link.getAttribute('href') || '';
     const target = mediaLinkTarget(href);
     if (!target) return null;
-    if (cached && String(cached.tmdbId) === String(target.tmdbId) && cached.mediaType === target.mediaType) return cached;
-    if (cached) {
-      card.__seerrIdentityEpoch = (card.__seerrIdentityEpoch || 0) + 1;
-      card.querySelectorAll('.seerr-card-badge, .seerr-rating-details, .seerr-select-checkbox, .seerr-plex-card-button').forEach(node => node.remove());
-      delete card.__seerrRatings;
-      delete card.__seerrListMediaInfo;
-      card.__seerrBadgesResolving = false;
-      card.__seerrBadgesCleared = false;
-      selectedCards.delete(card);
+    if (cached && String(cached.tmdbId) === String(target.tmdbId) && cached.mediaType === target.mediaType) {
+      rememberCardIdentityEvidence(card);
+      return cached;
     }
+    if (cached) clearCardIdentity(card);
 
     const titleEl = card.querySelector('h2, h3, [class*="title"], [class*="Title"]');
     const imageAlt = card.querySelector('img[alt]')?.getAttribute('alt') || '';
@@ -1253,6 +1306,7 @@
       tmdbId: target.tmdbId,
       title: title.trim()
     };
+    rememberCardIdentityEvidence(card);
     return card.__seerrMediaInfo;
   }
 
@@ -1726,7 +1780,8 @@
         injectSortFilterControls();
       }, 250);
     });
-    cardObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['href'] });
+    cardObserver.observe(document.body, { childList: true, characterData: true, subtree: true, attributes: true,
+      attributeFilter: ['href', 'src', 'srcset', 'alt'] });
   }
 
   // ──────────────── Sort & Filter ────────────────
@@ -2185,6 +2240,9 @@
     selectedCards.forEach(card => {
       if (!card?.isConnected) return;
       const mediaInfo = getCardMediaInfo(card);
+      // Resolving current DOM evidence can deselect a recycled card. Do not
+      // copy its replacement title into a review of the previous selection.
+      if (!selectedCards.has(card)) return;
       const identity = mediaInfo?.tmdbId ? `${mediaInfo.mediaType}:${mediaInfo.tmdbId}` : null;
       if (identity && identities.has(identity)) return;
       if (identity) identities.add(identity);
@@ -2215,6 +2273,8 @@
     if (selectedCards.size === 0 || document.querySelector('.seerr-confirmation-modal')) return;
 
     const titles = getSelectedTitles();
+    updateBulkActionBar();
+    if (selectedCards.size === 0) return;
     // Ratings are optional context. Request eligibility depends on a media
     // identity; Seerr remains responsible for permissions and approval.
     const readyTitles = titles.filter(isRequestableTitle);

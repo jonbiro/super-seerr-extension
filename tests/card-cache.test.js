@@ -180,6 +180,81 @@ function seedBlob({ entries = {}, index = [INDEX_ENTRY], server = SERVER, matche
   return { [CACHE_KEY]: { server, epoch: 0, matcher, entries, index } };
 }
 
+function recycledCardFixture() {
+  return openGrid({ plexConfigured: true, apiConfigured: true, local: seedBlob({
+    index: [INDEX_ENTRY, { tmdbId: '456', mediaType: 'movie', title: 'Arrival', year: 2016, posterPath: '/p456.jpg' }],
+    entries: { 'movie:123': { bundle: BUNDLE, cachedAt: Date.now() },
+      'movie:456': { bundle: { ...BUNDLE, rtCriticsScore: 95 }, cachedAt: Date.now() } }
+  }) });
+}
+
+test('a reused poster-only card replaces its old badges and Plex action', async t => {
+  const fixture = recycledCardFixture();
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  const card = fixture.window.document.querySelector('[data-testid="title-card"]');
+  assert.match(card.textContent, /90%/);
+  card.querySelector('img').src = 'https://image.tmdb.org/t/p/w300/p456.jpg';
+  fixture.window.testOverlay.injectCardBadges(); fixture.window.testOverlay.injectPlexCardButtons();
+  await flush(fixture.window);
+  assert.match(card.textContent, /95%/);
+  assert.equal(card.querySelector('.seerr-plex-card-button').getAttribute('aria-label'), 'Add Arrival to Plex Watchlist');
+  card.querySelector('.seerr-plex-card-button').click(); await flush(fixture.window);
+  assert.equal(fixture.messages.find(message => message.action === 'plexAddToWatchlist').data.tmdbId, 456);
+});
+
+test('a stale Plex button cannot add the old title after an unknown poster replaces it', async t => {
+  const fixture = recycledCardFixture();
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  const card = fixture.window.document.querySelector('[data-testid="title-card"]');
+  const oldButton = card.querySelector('.seerr-plex-card-button');
+  card.querySelector('img').src = 'https://image.tmdb.org/t/p/w300/unobserved.jpg';
+  // Deliberately click before the observer's debounced refresh runs.
+  oldButton.click(); await flush(fixture.window);
+  assert.equal(fixture.messages.filter(message => message.action === 'plexAddToWatchlist').length, 0);
+  assert.equal(card.querySelectorAll('.seerr-card-badge, .seerr-rating-details, .seerr-plex-card-button').length, 0);
+});
+
+test('bulk review cannot substitute a recycled poster-only card for the selected title', async t => {
+  const fixture = recycledCardFixture();
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  const doc = fixture.window.document, card = doc.querySelector('[data-testid="title-card"]');
+  fixture.window.testOverlay.toggleBulkMode(); card.querySelector('.seerr-select-checkbox').click();
+  card.querySelector('img').src = 'https://image.tmdb.org/t/p/w300/p456.jpg';
+  doc.querySelector('.seerr-bulk-review').click();
+  assert.equal(doc.querySelector('.seerr-confirmation-modal'), null);
+  assert.equal(doc.querySelector('.seerr-bulk-review').disabled, true);
+  assert.match(doc.querySelector('.seerr-bulk-count').textContent, /0 selected/);
+});
+
+test('poster size and query changes preserve a card identity and its existing action', async t => {
+  const fixture = recycledCardFixture();
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  const card = fixture.window.document.querySelector('[data-testid="title-card"]');
+  const button = card.querySelector('.seerr-plex-card-button');
+  card.querySelector('img').src = 'https://image.tmdb.org/t/p/w600/p123.jpg?size=600';
+  fixture.window.testOverlay.injectCardBadges(); fixture.window.testOverlay.injectPlexCardButtons();
+  await flush(fixture.window);
+  assert.equal(card.querySelector('.seerr-plex-card-button'), button);
+  assert.match(card.textContent, /90%/);
+});
+
+for (const href of ['https://other.example/movie/123', 'https://www.imdb.com/title/tt1160419/'])
+test(`a foreign link (${href}) cannot regain a cached card identity through its unchanged poster`, async t => {
+  const fixture = recycledCardFixture();
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  const card = fixture.window.document.querySelector('[data-testid="title-card"]');
+  const link = fixture.window.document.createElement('a');
+  link.href = href; link.textContent = 'Dune'; card.append(link);
+  fixture.window.testOverlay.injectCardBadges(); fixture.window.testOverlay.injectPlexCardButtons();
+  await flush(fixture.window);
+  assert.equal(card.querySelectorAll('.seerr-card-badge, .seerr-plex-card-button').length, 0);
+});
+
 test('a stored title index identifies linkless cards with no network and no hover', async t => {
   const fixture = openGrid({ local: seedBlob(), plexConfigured: true });
   t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });

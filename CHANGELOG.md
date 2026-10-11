@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.79]
+
+- Invalidate recycled card identities when their poster or visible title changes without a replacement link; remove stale badges, selections and Plex actions, and ignore late results for the previous title.
+- Drop cached identities when a card points outside the active installation, preventing poster-based fallback from restoring ratings or actions on a rejected link.
+- Revalidate bulk selection before copying titles into confirmation, excluding cards deselected by identity changes rather than substituting their replacements.
+- Observe poster and title updates so badges refresh automatically, while retaining identities across hover-only link removal and responsive poster size/query changes.
+- Add action, selection, late-result and hover regressions plus Chromium checks for automatic poster recycling and nested-site link changes.
+
 ## [3.5.78]
 
 - Recognize movie and TV card links beneath the configured Seerr base path, keeping parent/sibling installation links out of nested-site overlays; reject malformed IDs and links containing credentials.

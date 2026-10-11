@@ -909,6 +909,55 @@ test('a reused card drops its old selection and renders the new title ratings', 
   assert.equal(doc.querySelector('.seerr-bulk-review').disabled, true);
 });
 
+test('an anchored card changed to another installation drops its old ratings and selection', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle(); const doc = f.window.document, card = doc.querySelector('[data-id="1"]');
+  doc.querySelector('.seerr-toggle-select').click(); card.querySelector('.seerr-select-checkbox').click();
+  card.querySelector('a').href = 'https://other.example/movie/1';
+  f.window.testOverlay.injectCardBadges(); await settle();
+  assert.equal(card.querySelector('.seerr-card-badge'), null);
+  assert.equal(doc.querySelector('.seerr-bulk-review').disabled, true);
+});
+
+test('bulk review revalidates an anchored card before copying its selected identity', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle(); const doc = f.window.document, card = doc.querySelector('[data-id="1"]');
+  doc.querySelector('.seerr-toggle-select').click(); card.querySelector('.seerr-select-checkbox').click();
+  card.querySelector('a').href = '/movie/2'; card.querySelector('h2').textContent = 'High';
+  doc.querySelector('.seerr-bulk-review').click();
+  assert.equal(doc.querySelector('.seerr-confirmation-modal'), null);
+  assert.equal(doc.querySelector('.seerr-bulk-review').disabled, true);
+});
+
+test('hover-only link removal keeps the same card ratings and selection', async t => {
+  const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle(); const doc = f.window.document, card = doc.querySelector('[data-id="1"]');
+  doc.querySelector('.seerr-toggle-select').click(); card.querySelector('.seerr-select-checkbox').click();
+  const link = card.querySelector('a'); link.replaceWith(...link.childNodes);
+  f.window.testOverlay.injectCardBadges(); await settle();
+  assert.match(card.querySelector('.seerr-card-badge').textContent, /30%/);
+  assert.equal(card.querySelector('.seerr-select-checkbox').getAttribute('aria-checked'), 'true');
+  assert.equal(doc.querySelector('.seerr-bulk-review').disabled, false);
+});
+
+test('late ratings cannot repaint a recycled poster-only card with its previous title', async t => {
+  const f = createOverlay({ posters: true, listItems: [
+    { id: 1, mediaType: 'movie', title: 'Low', posterPath: '/poster1.jpg' },
+    { id: 2, mediaType: 'movie', title: 'High', posterPath: '/poster2.jpg' }
+  ] });
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  const send = f.window.chrome.runtime.sendMessage; let release;
+  f.window.chrome.runtime.sendMessage = message => message.action === 'getRottenTomatoesRatings' && message.data.title === 'Low'
+    ? new Promise(resolve => { release = resolve; }) : send(message);
+  await settle(); assert.ok(release);
+  const card = f.window.document.querySelector('[data-id="1"]');
+  card.querySelector('img').src = 'https://image.tmdb.org/t/p/w300/poster2.jpg';
+  f.window.testOverlay.injectCardBadges(); await settle();
+  release({ success: true, data: { rtCriticsScore: 1, confidence: 1 } }); await settle();
+  assert.match(card.querySelector('.seerr-card-badge').textContent, /95%/);
+  assert.equal(card.querySelectorAll('.seerr-card-badge').length, 1);
+});
+
 test('redrawing selection controls retains the visible and announced selected state', async t => {
   const f = createOverlay(); t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
   await settle(); const doc = f.window.document, card = doc.querySelector('[data-id="1"]');

@@ -99,6 +99,17 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await seerr.reload();
     await seerr.evaluate(addPosterOnlyCard);
     await expect(seerr.locator('#updated-catalogue-card .seerr-card-badge').first()).toBeVisible();
+    await seerr.evaluate(() => window.postMessage({ channel: 'super-seerr:api', url: '/api/v1/discover/movies', items: [
+      { id: 555555, mediaType: 'movie', title: 'Recycled title', posterPath: '/catalogue-recycled.jpg', releaseDate: '2022-01-01',
+        rtCriticsScore: 96, rtAudienceScore: 82, imdbRating: 8, voteAverage: 8 }
+    ] }, location.origin));
+    // Let the real MutationObserver detect a poster change without mounting a
+    // link or manually calling an injection helper.
+    await seerr.locator('#updated-catalogue-card img').evaluate(image => { image.src = '/catalogue-recycled.jpg'; });
+    await expect(seerr.locator('#updated-catalogue-card .seerr-card-badge').first()).toContainText('96%');
+    await expect.poll(async () => (await cachedSites())[second.origin]?.index.some(item => item.tmdbId === '555555')).toBe(true);
+    await seerr.locator('#updated-catalogue-card img').evaluate(image => { image.src = '/catalogue-unobserved.jpg'; });
+    await expect(seerr.locator('#updated-catalogue-card .seerr-card-badge')).toHaveCount(0);
     await seerr.locator('#updated-catalogue-card').evaluate(node => node.remove());
     // Two independently loaded cache clients must preserve each other's
     // ratings and title indexes while using the real worker/storage bridge.
@@ -240,6 +251,10 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await expect(seerr.locator('#nested-title .seerr-card-badge')).toHaveCount(2);
     await expect(seerr.locator('#parent-title .seerr-card-badge')).toHaveCount(0);
     await expect.poll(async () => (await cachedSites())[child]?.entries['movie:550']?.bundle.rtCriticsScore).toBe(95);
+    await seerr.locator('#nested-title a').evaluate(link => { link.href = '/movie/550'; });
+    await expect(seerr.locator('#nested-title .seerr-card-badge')).toHaveCount(0);
+    await seerr.locator('#nested-title a').evaluate(link => { link.href = '/movie/movie/550'; });
+    await expect(seerr.locator('#nested-title .seerr-card-badge')).toHaveCount(2);
     await seerr.route(`${child}/api/v1/movie/777/ratingscombined`, route => route.fulfill({
       status: 302, headers: { location: `${second.origin}/api/v1/movie/777/ratingscombined` }, body: ''
     }));
