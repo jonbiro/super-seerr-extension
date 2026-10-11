@@ -103,8 +103,13 @@
     // Distinct provider entries remain ambiguous regardless of their spelling;
     // search ordering supplies no evidence for choosing between them.
     rtMatchIsAmbiguous(candidates, best) {
+      const pageKey = href => {
+        try { return new URL(href, 'https://www.rottentomatoes.com').href; }
+        catch (_) { return href; }
+      };
+      const bestPage = pageKey(best.href);
       return candidates.some(candidate =>
-        candidate !== best && candidate.href !== best.href &&
+        candidate !== best && pageKey(candidate.href) !== bestPage &&
         candidate.confidence >= best.confidence);
     },
 

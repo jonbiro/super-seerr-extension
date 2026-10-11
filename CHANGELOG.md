@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.195]
+
+- Recognize equivalent relative, absolute, protocol-relative, and default-port Rotten Tomatoes links as one provider page when checking search ambiguity.
+- Continue refusing equally strong matches on genuinely different pages.
+- Cover movie and TV search HTML, both result orders, single detail reads, and verified public-cache reuse on a second Seerr site after restart.
+
 ## [3.5.194]
 
 - Bound persisted Rotten Tomatoes title-cache expiry by its recorded check time and the scored, negative, or failure TTL.
