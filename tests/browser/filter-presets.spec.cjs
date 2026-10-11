@@ -181,3 +181,53 @@ for (const initialPending of [true, false]) for (const latestSuccess of [true, f
     }
   });
 }
+
+for (const trigger of ['initial', 'retry']) for (const newestFirst of [true, false]) for (const success of [true, false]) for (const moved of trigger === 'retry' ? [false, true] : [false]) {
+  test(`latest preset read owns loading controls (${trigger}, newest first: ${newestFirst}, success: ${success}, moved: ${moved})`, async ({ page }) => {
+    await page.setContent('<button id="outside">Other action</button><div class="seerr-sort-filter-bar"><select class="seerr-sort-select"><option value="default">Default</option></select></div>');
+    await page.addScriptTag({ path: path.resolve('src/content/FilterPresets.js') });
+    await page.evaluate(trigger => {
+      window.presetReplies = [];
+      let reads = 0;
+      window.chrome = { runtime: { sendMessage: () => {
+        if (++reads === 1 && trigger === 'retry') return Promise.resolve({ success: false });
+        return new Promise(resolve => presetReplies.push(resolve));
+      } }, storage: { onChanged: { addListener(listener) { window.changePresets = () => listener({ seerrFilterPresetsV1: {} }, 'sync'); } } } };
+      window.presetReport = name => ({ success: true, data: [{ name, sort: 'default', filters: {} }] });
+      window.installFilterPresets({ bar: document.querySelector('.seerr-sort-filter-bar'), readCurrent: () => ({ sort: 'default', filters: {} }), apply: () => {} });
+    }, trigger);
+    const retry = page.getByRole('button', { name: 'Retry loading presets', exact: true });
+    const select = page.getByLabel('Saved filter presets');
+    if (trigger === 'retry') {
+      await expect(retry).toBeEnabled();
+      await retry.focus(); await page.keyboard.press('Enter');
+    }
+    await expect(select).toBeDisabled();
+    await page.evaluate(() => changePresets());
+    if (moved) await page.locator('#outside').focus();
+    const finishOld = () => page.evaluate(() => presetReplies[0](presetReport('Obsolete')));
+    const finishNewest = () => page.evaluate(success => presetReplies[1](success ? presetReport('Current') : { success: false }), success);
+    if (newestFirst) {
+      await finishNewest();
+      await expect(select).toBeEnabled();
+      await expect(page.locator('.seerr-filter-presets')).toHaveAttribute('aria-busy', 'false');
+      if (trigger === 'retry') await expect(moved ? page.locator('#outside') : success ? select : retry).toBeFocused();
+      await finishOld();
+    } else {
+      await finishOld();
+      await expect(select).toBeDisabled();
+      await expect(page.getByLabel('Preset name')).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Save preset', exact: true })).toBeDisabled();
+      await expect(page.locator('.seerr-filter-presets')).toHaveAttribute('aria-busy', 'true');
+      await finishNewest();
+    }
+    await expect(select).toBeEnabled();
+    await expect(page.getByLabel('Preset name')).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Save preset', exact: true })).toBeEnabled();
+    await expect(page.locator('.seerr-filter-presets')).toHaveAttribute('aria-busy', 'false');
+    await expect(select.locator('option')).toHaveText(success ? ['Saved presets', 'Current'] : ['Saved presets']);
+    if (success) await expect(retry).toBeHidden();
+    else await expect(retry).toBeEnabled();
+    if (trigger === 'retry') await expect(moved ? page.locator('#outside') : success ? select : retry).toBeFocused();
+  });
+}

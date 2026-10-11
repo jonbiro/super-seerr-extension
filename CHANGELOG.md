@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.203]
+
+- Transfer preset loading-control ownership to the newest cross-tab read when it supersedes the initial load or a manual retry.
+- Keep controls disabled while that read is pending and release them as soon as it finishes, without waiting for an obsolete reply.
+- Preserve retry keyboard focus ownership and cover success, failure, and both reply orders in Chromium.
+
 ## [3.5.202]
 
 - Prevent obsolete preset reads from replacing current presets or hiding recovery after a newer cross-tab refresh fails.
