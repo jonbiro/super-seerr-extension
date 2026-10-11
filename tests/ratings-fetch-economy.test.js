@@ -235,3 +235,23 @@ for (const mediaType of ['movie', 'tv']) test(`${mediaType} wrong-title detail s
   const persisted = overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'];
   assert.equal(persisted?.entries?.[`${mediaType}:${TMDB_ID}`], undefined);
 });
+
+for (const mediaType of ['movie', 'tv']) test(`${mediaType} malformed score fields cannot persist alongside a valid native rating`, async () => {
+  const settings = { seerrUrl: 'https://seerr.example' };
+  const overlay = loadOverlay({ settings,
+    fetch: async url => ({ ok: true, status: 200, json: async () => new URL(url).pathname.endsWith(`/${TMDB_ID}`)
+      ? { id: TMDB_ID, voteAverage: '7.9' }
+      : { rtCriticsScore: '%', rtAudienceScore: '0b10', imdbRating: '0x8' } }),
+    sendMessage: async () => ({ success: true, data: null }) });
+  const result = await overlay.getRatings(TMDB_ID, 'Example', 2020, mediaType);
+  assert.equal(result.tmdbRating, 7.9);
+  for (const field of ['rtCriticsScore', 'rtAudienceScore', 'imdbRating']) assert.equal(result[field], null);
+  await overlay.flushPersistedRatings();
+  const persisted = overlay.localStore.overlayRatingsByServerV1['https://seerr.example'].entries[`${mediaType}:${TMDB_ID}`];
+  assert.equal(persisted.bundle.tmdbRating, 7.9);
+  for (const field of ['rtCriticsScore', 'rtAudienceScore', 'imdbRating']) assert.equal(persisted.bundle[field], null);
+  const reloaded = loadOverlay({ settings, local: overlay.localStore, fetch: async () => assert.fail('fresh cached result should not refetch') });
+  const cached = await reloaded.getRatings(TMDB_ID, 'Example', 2020, mediaType);
+  assert.equal(cached.tmdbRating, 7.9);
+  assert.equal(cached.rtCriticsScore, null);
+});

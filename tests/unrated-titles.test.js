@@ -59,3 +59,24 @@ test('an unrated title is not sorted as though it scored zero', () => {
   overlay.applyScoreSort(grid, 'tmdb-asc');
   assert.deepEqual(grid.cards.map(c => c.id), [1, 2, 0], 'the unrated title sorts last, not first');
 });
+
+for (const field of ['rtCriticsScore', 'rtAudienceScore', 'imdbRating', 'tmdbRating']) {
+  test(`malformed native ${field} strings do not become confident scores`, () => {
+    const overlay = loadOverlay({ settings });
+    for (const value of ['%', ' % ', '0x8', '0b10', '1e1', '+8', '8junk', 'Infinity', ...(field.includes('Rating') ? ['8%'] : [])]) {
+      assert.equal(bundleFor(overlay, { [field]: value }), null, `${field}: ${value} must not create a score`);
+    }
+  });
+}
+
+test('decimal native score strings preserve valid zeros, rounding and independent fields', () => {
+  const overlay = loadOverlay({ settings });
+  const bundle = bundleFor(overlay, { rtCriticsScore: ' 0% ', rtAudienceScore: ' 80.5 % ', imdbRating: '8.25', voteAverage: '.5' });
+  assert.equal(bundle.rtCriticsScore, 0);
+  assert.equal(bundle.rtAudienceScore, 81);
+  assert.equal(bundle.imdbRating, 8.3);
+  assert.equal(bundle.tmdbRating, 0.5);
+  const partial = bundleFor(overlay, { rtCriticsScore: '%', imdbRating: '8.2' });
+  assert.equal(partial.rtCriticsScore, null);
+  assert.equal(partial.imdbRating, 8.2);
+});

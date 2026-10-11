@@ -3,8 +3,14 @@
   root.createRatingsPresentation = function ({ Model, Config }) {
     function parseScore(value, max) {
       if (typeof value !== 'number' && typeof value !== 'string') return null;
-      if (typeof value === 'string' && !value.trim()) return null;
-      const number = typeof value === 'number' ? value : Number(value.trim().replace(/%$/, ''));
+      if (typeof value === 'string') {
+        const text = (max === 100 ? value.trim().replace(/%$/, '') : value).trim();
+        // A unit without digits is missing data, not a real zero. Accept
+        // decimal ratings only; percentage suffixes belong to the RT scale.
+        if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) return null;
+        value = Number(text);
+      }
+      const number = value;
       return Number.isFinite(number) && number >= 0 && number <= max ? number : null;
     }
 

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.162]
+
+- Require decimal native score strings, preventing missing percentages and hexadecimal/binary/exponent notation from becoming confident ratings.
+- Accept percentage suffixes only on Rotten Tomatoes scores while preserving real 0%, decimal rounding and valid scores from partially malformed responses.
+- Advance the matcher revision to recheck old verdicts; add movie/TV cache persistence and reload regressions.
+
 ## [3.5.161]
 
 - Cancel unread failed Seerr session-response bodies before completing rating jobs, preventing error-page downloads from continuing after a grid lookup finishes.

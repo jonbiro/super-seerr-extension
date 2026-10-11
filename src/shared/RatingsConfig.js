@@ -35,7 +35,9 @@ const RatingsConfig = {
   //     title's native scores. Recheck bundles containing those verdicts.
   // 12: equally strong matches under different localized/original names
   //     could be selected by search order and shared under one TMDB ID.
-  matcherVersion: 12,
+  // 13: native score strings could coerce missing units and nondecimal
+  //     values into confident ratings. Recheck those cached bundles.
+  matcherVersion: 13,
 
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {
