@@ -97,7 +97,7 @@ make build              # Bump version and package unpacked Chrome/Firefox outpu
 make release            # Bump version, build archive artifacts/checksums
 ~~~
 
-Automated tests use local fixtures and temporary extension profiles—**passing them is not proof of compatibility with every live media site or a real Seerr server**. A separate opt-in read-only live-site check documents blocked pages rather than marking them as passes.
+Runtime modules are plain JavaScript rather than a bundled frontend; [`SeerrClient.js`](src/shared/SeerrClient.js) communicates with the background worker. The development-only test dependencies are not included in the installed extension.\n\nAutomated tests use local fixtures and temporary extension profiles—**passing them is not proof of compatibility with every live media site or a real Seerr server**. A separate opt-in read-only live-site check documents blocked pages rather than marking them as passes.
 
 | Documentation | What it covers |
 | --- | --- |
