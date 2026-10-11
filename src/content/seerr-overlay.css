@@ -193,6 +193,21 @@
   min-width: 0;
 }
 .seerr-filter-header { justify-content: space-between; gap: 12px; }
+.seerr-filter-actions {
+  display: grid;
+  grid-template-columns: minmax(200px, 1.4fr) minmax(0, 3fr);
+  align-items: center;
+  gap: 12px;
+}
+.seerr-filter-actions > .seerr-reset-sort { justify-self: start; }
+.seerr-filter-secondary-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
 .seerr-filter-eyebrow, .seerr-presets-label {
   font-size: 10px;
   font-weight: 700;
@@ -279,15 +294,18 @@
 .seerr-sort-filter-bar button:disabled, .seerr-sort-filter-bar input:disabled, .seerr-sort-filter-bar select:disabled { opacity: .5; cursor: default; }
 .seerr-sort-filter-bar .seerr-reset-sort { background: transparent; color: var(--seerr-label); }
 .seerr-sort-filter-bar .seerr-toggle-select { background: #7c3aed33; border-color: #a78bfa88; color: #ddd1ff; }
-.seerr-filter-hint { color: var(--seerr-label); font-size: 11px; margin-right: auto; }
+.seerr-filter-hint { color: var(--seerr-label); font-size: 11px; margin: 0 auto 0 0; }
 @container seerr-filters (max-width: 800px) {
   .seerr-filter-controls { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .seerr-filter-actions { grid-template-columns: auto minmax(0, 1fr); }
   .seerr-sort-filter-bar .seerr-filter-presets { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
   .seerr-filter-presets .seerr-presets-label { grid-column: 1 / -1; }
 }
 @container seerr-filters (max-width: 600px) {
   .seerr-threshold-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .seerr-filter-actions > button { flex: 1 1 auto; }
+  .seerr-filter-actions { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+  .seerr-filter-secondary-actions { grid-column: 1; justify-content: flex-start; }
+  .seerr-filter-secondary-actions > button { flex: 1 1 auto; }
   .seerr-filter-hint { order: -1; flex-basis: 100%; margin: 0 0 4px; }
   .seerr-sort-filter-bar .seerr-filter-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .seerr-filter-presets .seerr-preset-actions { grid-column: 1 / -1; }

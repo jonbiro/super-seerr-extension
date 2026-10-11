@@ -1102,8 +1102,18 @@
       }
     }
     const shared = !options.refresh && getPublicRating(key, year);
-    if (shared && previous?.bundle && shared.checkedAt > (previous.publicCheckedAt ?? previous.cachedAt ?? 0)) {
-      const bundle = mergeBundles(shared.bundle, previous.bundle);
+    const sharedIsNewer = shared && previous?.bundle && shared.checkedAt > (previous.publicCheckedAt ?? 0);
+    const sharedPredatesNative = sharedIsNewer && previous.publicCheckedAt == null &&
+      shared.checkedAt <= (previous.cachedAt ?? 0);
+    const sharedFillsGap = sharedPredatesNative && ['rtCriticsScore', 'rtAudienceScore'].some(field =>
+      previous.bundle[field] == null && shared.bundle[field] != null);
+    if (sharedIsNewer && (!sharedPredatesNative || sharedFillsGap)) {
+      // A newer server-specific write can still be missing RT. An older but
+      // unexpired public result fills only those holes; it cannot replace RT
+      // values already stored by that server.
+      const bundle = sharedPredatesNative
+        ? mergeBundles(previous.bundle, shared.bundle)
+        : mergeBundles(shared.bundle, previous.bundle);
       // Reusing a public record cannot extend it past its provider expiry.
       // Preserve any earlier native/partial retry rather than renewing it.
       const nativeRetryAt = previous.retryAt ?? ((previous.cachedAt ?? 0) +
@@ -2171,10 +2181,12 @@
       </div></section></div>
       <div class="seerr-filter-actions">
       <button type="button" class="seerr-reset-sort">Reset</button>
-      <span class="seerr-filter-hint">Minimum ratings · 0 means any score</span>
+      <div class="seerr-filter-secondary-actions">
+      <span class="seerr-filter-hint">0 means any score</span>
       <button type="button" class="seerr-refresh-scores" title="Refetch scores for the titles loaded on this page">Refresh scores</button>
       <button type="button" class="seerr-load-all" title="Load up to ${Config.bulkLoadTarget} more titles and score them, so sorting covers the whole grid. Click again to stop.">Load ${Config.bulkLoadTarget} more</button>
       ${FEATURE_FLAGS.bulkActions && apiConfigured ? '<button type="button" class="seerr-toggle-select" data-seerr-overlay="true">Select titles</button>' : ''}
+      </div>
       </div>
     `;
 

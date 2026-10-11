@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.212]
+
+- Align filter actions with their related sort and rating controls, and keep the hint beside the secondary actions as the panel narrows.
+- Let valid shared Rotten Tomatoes scores fill missing fields in newer server-specific cache entries without replacing scores already stored by that site.
+- Preserve confidence from the actual Rotten Tomatoes source contributing each field when cross-tab cache writes merge.
+
 ## [3.5.211]
 
 - Bind search and diagnostic reads to the active Seerr connection so a site switch stops old lookups from continuing against the newly selected server.

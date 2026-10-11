@@ -146,17 +146,32 @@
         }
       }
       // Public RT can advance without refreshing this server's IMDb/TMDB.
-      // Compare its own timestamp instead of replacing the entire bundle.
+      // Its age is independent of the server snapshot. If that snapshot is
+      // newer but has never adopted public data, let an unexpired public
+      // result fill missing RT fields while preserving native values.
       const rtFields = ['rtCriticsScore', 'rtAudienceScore'];
-      if (!other.bundle || !rtFields.some(field => other.bundle[field] !== null) ||
-          !(other.publicCheckedAt > (newerServer.publicCheckedAt ?? newerServer.cachedAt ?? 0))) return finish(newerServer);
-      const contributors = rtFields.map(field => other.bundle[field] !== null ? other.bundle : newerServer.bundle)
-        .filter((bundle, index) => bundle?.[rtFields[index]] != null);
+      const sharedIsNewer = other.publicCheckedAt > (newerServer.publicCheckedAt ?? 0);
+      const sharedPredatesNative = sharedIsNewer && newerServer.publicCheckedAt == null &&
+        other.publicCheckedAt <= (newerServer.cachedAt ?? 0);
+      const sharedFillsGap = sharedPredatesNative && rtFields.some(field =>
+        newerServer.bundle?.[field] == null && other.bundle?.[field] != null);
+      if (!other.bundle || !rtFields.some(field => other.bundle[field] != null) ||
+          !sharedIsNewer || (sharedPredatesNative && !sharedFillsGap)) return finish(newerServer);
+      const preferShared = !sharedPredatesNative;
+      const contributors = rtFields.flatMap(field => {
+        if (preferShared && other.bundle[field] != null) return [other.bundle];
+        if (newerServer.bundle?.[field] != null) return [newerServer.bundle];
+        return other.bundle[field] != null ? [other.bundle] : [];
+      });
       const bundle = { ...newerServer.bundle,
-        rtCriticsScore: other.bundle.rtCriticsScore ?? newerServer.bundle?.rtCriticsScore ?? null,
-        rtAudienceScore: other.bundle.rtAudienceScore ?? newerServer.bundle?.rtAudienceScore ?? null,
+        rtCriticsScore: preferShared
+          ? other.bundle.rtCriticsScore ?? newerServer.bundle?.rtCriticsScore ?? null
+          : newerServer.bundle?.rtCriticsScore ?? other.bundle.rtCriticsScore ?? null,
+        rtAudienceScore: preferShared
+          ? other.bundle.rtAudienceScore ?? newerServer.bundle?.rtAudienceScore ?? null
+          : newerServer.bundle?.rtAudienceScore ?? other.bundle.rtAudienceScore ?? null,
         confidence: contributors.length ? Math.min(...contributors.map(value => value.confidence ?? 0)) : 0,
-        source: other.bundle.source,
+        source: (preferShared ? other.bundle.source : newerServer.bundle?.source) || other.bundle.source,
         lastUpdated: Math.max(number(other.bundle.lastUpdated) ?? 0, number(newerServer.bundle?.lastUpdated) ?? 0) || null };
       const publicExpiresAt = other.publicCheckedAt + root.RatingsConfig.rtCacheTtlMs;
       const nativeComplete = ['rtCriticsScore', 'rtAudienceScore', 'imdbRating', 'tmdbRating']
@@ -168,7 +183,8 @@
       const diagnosticStatus = newerServer.diagnostics?.status === 'failed' ? 'failed'
         : newerServer.diagnostics?.status === 'uncertain' && !verifiedRt ? 'uncertain'
         : complete && verifiedRt ? 'rated' : 'partial';
-      return finish({ ...newerServer, bundle, publicCheckedAt: other.publicCheckedAt,
+      return finish({ ...newerServer, bundle,
+        publicCheckedAt: Math.max(newerServer.publicCheckedAt ?? 0, other.publicCheckedAt),
         // An already expired fallback must not defeat a failed-read backoff.
         ...(publicExpiresAt > Date.now() ? { retryAt: Math.min(nativeRetryAt, publicExpiresAt) } : {}),
         ...(newerServer.diagnostics ? { diagnostics: { ...newerServer.diagnostics, status: diagnosticStatus, source: bundle.source } } : {}) });
