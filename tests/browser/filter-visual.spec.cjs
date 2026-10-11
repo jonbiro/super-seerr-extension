@@ -45,12 +45,18 @@ for (const width of [1440, 1280, 1024, 768, 600, 390, 320]) test(`filter layout 
   const refreshBounds = await page.getByRole('button', { name: 'Refresh scores' }).boundingBox();
   const resetBounds = await page.getByRole('button', { name: 'Reset', exact: true }).boundingBox();
   if (width > 600) {
-    // Keep reset, the hint, and its actions grouped instead of stretching across empty columns.
-    expect(Math.abs(hintBounds.x - resetBounds.x - resetBounds.width - 12)).toBeLessThanOrEqual(1);
+    // Reset should stay with the rest of the actions instead of floating under the sort field.
+    expect(Math.abs(resetBounds.x - panelBounds.x - 17)).toBeLessThanOrEqual(1);
+    expect(Math.abs(hintBounds.x - resetBounds.x - resetBounds.width - 8)).toBeLessThanOrEqual(1);
     expect(Math.abs(refreshBounds.x - hintBounds.x - hintBounds.width - 8)).toBeLessThanOrEqual(1);
   } else {
     // The wrapped mobile hint needs only the normal flex row gap before actions.
     expect(Math.abs(refreshBounds.y - hintBounds.y - hintBounds.height - 8)).toBeLessThanOrEqual(1);
+    const loadBounds = await page.getByRole('button', { name: /Load 500 more/ }).boundingBox();
+    const selectBounds = await page.getByRole('button', { name: 'Select titles', exact: true }).boundingBox();
+    expect(Math.abs(loadBounds.x - refreshBounds.x - refreshBounds.width - 8)).toBeLessThanOrEqual(1);
+    expect(Math.abs(selectBounds.x - refreshBounds.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(selectBounds.width - refreshBounds.width)).toBeLessThanOrEqual(1);
   }
   if (width >= 600 && width <= 768) {
     expect(Math.abs(presetBounds.y - nameBounds.y)).toBeLessThanOrEqual(1);

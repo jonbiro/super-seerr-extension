@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.215]
+
+- Keep filter actions together across desktop and tablet widths, and balance narrow-screen action buttons so no control is stranded at full width.
+
 ## [3.5.214]
 
 - Tear down site-specific Seerr overlays as soon as a site activation or server URL change starts, so late scores cannot repaint the previous site while configuration is loading.
