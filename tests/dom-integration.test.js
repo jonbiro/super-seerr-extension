@@ -1085,3 +1085,31 @@ for (const response of [null, { success: true, data: {} },
     assert.equal(f.window.document.querySelector('.seerr-card-badge'), null);
   });
 }
+
+test('Refresh scores starts fresh reads when every queue slot has an ordinary lookup pending', async t => {
+  const f = createOverlay();
+  const releases = [];
+  t.after(() => { releases.forEach(resolve => resolve({ success: false })); f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  const doc = f.window.document;
+  const card = doc.querySelector('article').cloneNode(true);
+  card.dataset.id = '4'; card.querySelector('a').href = '/movie/4'; card.querySelector('h2').textContent = 'Fourth';
+  doc.getElementById('grid').append(card);
+  const send = f.window.chrome.runtime.sendMessage;
+  let fresh = 0;
+  f.window.chrome.runtime.sendMessage = message => {
+    if (message.action !== 'getRottenTomatoesRatings') return send(message);
+    if (!message.data.refresh) return new Promise(resolve => releases.push(resolve));
+    fresh++;
+    return Promise.resolve({ success: true, data: { rtCriticsScore: 80, rtAudienceScore: 90, confidence: 1 } });
+  };
+  await settle();
+  assert.equal(releases.length, 4);
+  const button = doc.querySelector('.seerr-refresh-scores');
+  button.click();
+  await settle();
+  assert.equal(fresh, 4, 'refresh must not wait for old provider replies or the resolver deadline');
+  assert.equal(button.disabled, false);
+  releases.forEach(resolve => resolve({ success: true, data: { rtCriticsScore: 99, confidence: 1 } }));
+  await settle();
+  for (const current of doc.querySelectorAll('article')) assert.equal(current.__seerrRatings.rtCriticsScore, 80);
+});

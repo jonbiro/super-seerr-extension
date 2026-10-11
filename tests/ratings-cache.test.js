@@ -119,3 +119,27 @@ test('clearing the card queue releases a running provider wait so the new page c
     assert.equal(await old, null);
   } finally { release(null); await Promise.all([old, current]); }
 });
+
+test('an explicit refresh supersedes an ordinary lookup but coalesces other refreshes', async () => {
+  const overlay = loadOverlay();
+  const starts = [], releases = [];
+  overlay.setResolver((id, title, year, type, options) => {
+    starts.push(options.refresh === true);
+    return new Promise(resolve => releases.push(resolve));
+  });
+  const old = overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  await settle();
+  const fresh = overlay.getRatings(550, 'Fight Club', 1999, 'movie', { refresh: true });
+  const duplicate = overlay.getRatings(550, 'Fight Club', 1999, 'movie', { refresh: true });
+  await settle();
+  try {
+    assert.deepEqual(starts, [false, true], 'refresh must reach the provider independently of an ordinary pending read');
+    assert.equal(await old, null);
+    releases[1](overlay.Model.createRatingsBundle({ rtCriticsScore: 80, confidence: 1 }));
+    assert.equal((await fresh).rtCriticsScore, 80);
+    assert.equal((await duplicate).rtCriticsScore, 80);
+    releases[0](overlay.Model.createRatingsBundle({ rtCriticsScore: 99, confidence: 1 }));
+    await settle();
+    assert.equal(overlay.ratingsCache.get('movie:550').bundle.rtCriticsScore, 80);
+  } finally { releases.forEach(resolve => resolve(null)); await Promise.all([old, fresh, duplicate]); }
+});

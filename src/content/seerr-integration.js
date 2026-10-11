@@ -1031,6 +1031,9 @@
     const titles = loadedTitles(grid);
     if (titles.length === 0) return 0;
 
+    // Release ordinary/background reads before enqueuing forced refreshes.
+    // Otherwise a full queue can keep the Refresh button waiting on old work.
+    cardRatingQueue.clear();
     // Keep the previous bundle visible and available as a fallback on failure.
     forgetRatings(titles, { preserveCache: true });
     pageRatingsFetches.clear();
@@ -1125,16 +1128,20 @@
       return cached.bundle;
     }
 
-    // Coalesce concurrent requests
+    // Refreshes share fresh work, but must not join an ordinary provider read.
+    if (options.signal?.aborted) return null;
     const pendingKey = `pending:${key}`;
-    if (ratingsCache.has(pendingKey)) {
-      log(`Coalescing request for ${key}`);
-      return ratingsCache.get(pendingKey);
+    const existing = ratingsCache.get(pendingKey);
+    if (existing) {
+      if (options.refresh !== true || existing.isRefresh) {
+        log(`Coalescing request for ${key}`);
+        return existing;
+      }
+      existing.cancel();
     }
 
     // Whether a null result means "nothing knows this title" or "we could not
     // find out". Only the first is worth remembering.
-    if (options.signal?.aborted) return null;
     const outcome = { signal: options.signal };
     const resolution = resolveRatings(tmdbId, title, year, mediaType, { ...options, outcome });
     // A hung channel must not pin the coalesced promise forever: after the
@@ -1147,19 +1154,23 @@
 
     // A worker message cannot be canceled once sent. Stop waiting locally so
     // navigation releases the queue immediately; late replies have no cache slot.
-    let onAbort = null;
-    const canceled = options.signal ? new Promise(resolve => {
-      onAbort = () => resolve(null);
+    let abandoned = false;
+    let cancel;
+    const canceled = new Promise(resolve => {
+      cancel = () => { abandoned = true; resolve(null); };
+    });
+    const onAbort = options.signal ? cancel : null;
+    if (onAbort) {
       if (options.signal.aborted) onAbort();
       else options.signal.addEventListener('abort', onAbort, { once: true });
-    }) : null;
+    }
 
     // Coalesce the complete operation, including its deadline, fallback and
     // cleanup. Sharing the raw provider promise left later callers unbounded.
     const pending = (async () => {
       try {
-        const bundle = await Promise.race(canceled ? [resolution, deadline, canceled] : [resolution, deadline]);
-        if (options.signal?.aborted) return null;
+        const bundle = await Promise.race([resolution, deadline, canceled]);
+        if (abandoned || options.signal?.aborted) return null;
         // Storing the absence is the point: without it every visit asks again.
         let storable = bundle && Model.hasAnyScore(bundle) ? bundle : null;
         // An unavailable source is not evidence that a previously known score
@@ -1208,6 +1219,8 @@
         if (ratingsCache.get(pendingKey) === pending) ratingsCache.delete(pendingKey);
       }
     })();
+    pending.isRefresh = options.refresh === true;
+    pending.cancel = cancel;
     ratingsCache.set(pendingKey, pending);
     return pending;
   }

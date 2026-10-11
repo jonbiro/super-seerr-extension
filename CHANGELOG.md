@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.92]
+
+- Make explicit ratings refreshes supersede ordinary in-flight lookups while continuing to coalesce concurrent refreshes.
+- Release obsolete card queue work when Refresh scores starts, so a full queue cannot delay fresh provider reads.
+- Reject late replies from superseded lookups and add regression coverage for shared refreshes, queue saturation and refreshed card scores.
+
 ## [3.5.91]
 
 - Settle canceled content-side ratings lookups immediately instead of waiting for a provider reply or the 30-second resolver deadline.
