@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.127]
+
+- Keep pending Forget match actions disabled across filtering and saved-match list refreshes, preventing duplicate removal requests.
+- Re-enable the currently displayed control after a failed removal so users can retry without reloading Settings.
+
 ## [3.5.126]
 
 - Restore keyboard focus to the popup's site selector after a successful or failed switch, including any queued list refresh.

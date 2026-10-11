@@ -9,6 +9,8 @@
   search.placeholder = 'Search title, server or TMDB ID'; search.setAttribute('aria-label', 'Search saved matches'); search.hidden = true;
   let matches = [];
   let matchRevision = 0;
+  const pendingRemovals = new Set();
+  const resetButtons = new Map();
   function serverLabel(entry) {
     try {
       const parts = JSON.parse(entry.key);
@@ -21,6 +23,7 @@
     const query = search.value.trim().toLocaleLowerCase();
     const visible = matches.filter(entry => [entry.title, entry.selectedTitle, entry.mediaType, entry.year, entry.tmdbId, serverLabel(entry)].join(' ').toLocaleLowerCase().includes(query));
     list.replaceChildren();
+    resetButtons.clear();
     for (const entry of visible) {
       const row = document.createElement('li');
       const text = document.createElement('span'); text.textContent = `${entry.title} → ${entry.selectedTitle} (${entry.year || 'unknown year'}, ${entry.mediaType}, TMDB ${entry.tmdbId})`;
@@ -34,7 +37,11 @@
       }
       details.append(summary, fields);
       const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'button secondary'; reset.textContent = 'Forget match';
+      reset.disabled = pendingRemovals.has(entry.key);
+      resetButtons.set(entry.key, reset);
       reset.addEventListener('click', async () => {
+        if (pendingRemovals.has(entry.key)) return;
+        pendingRemovals.add(entry.key);
         reset.disabled = true;
         try {
           const result = await chrome.runtime.sendMessage({ action: 'removeTitleCorrection', key: entry.key });
@@ -42,7 +49,12 @@
           matchRevision++;
           matches = matches.filter(item => item.key !== entry.key); render(); search.focus();
           status.textContent = 'Match forgotten. Reload its page to choose again.';
-        } catch (_) { reset.disabled = false; status.textContent = 'Could not forget match.'; }
+        } catch (_) { status.textContent = 'Could not forget match.'; }
+        finally {
+          pendingRemovals.delete(entry.key);
+          const current = resetButtons.get(entry.key);
+          if (current) current.disabled = false;
+        }
       });
       row.append(text, reset, details); list.appendChild(row);
     }
