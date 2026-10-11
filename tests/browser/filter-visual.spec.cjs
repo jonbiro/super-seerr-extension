@@ -12,6 +12,7 @@ async function showFilter(page, width) {
     window.chrome = { storage: { sync: { get: async () => ({ seerrUrl: 'https://seerr.example' }) }, onChanged: { addListener() {}, removeListener() {} } },
       runtime: { onMessage: { addListener() {} }, sendMessage: async message => {
         if (message.action === 'getConfigState') return { success: true, data: { serverUrl: 'https://seerr.example', apiConfigured: true } };
+        if (message.action === 'saveFilterPreset') { window.savedPreset = message.data; return { success: true, data: [message.data] }; }
         if (message.action === 'getFilterPresets') return { success: true, data: [{ name: 'Movie night', sort: 'default', filters: {} }] };
         return { success: true, data: {} };
       } } };
@@ -66,3 +67,26 @@ for (const width of [1440, 1280, 1024, 768, 600, 390, 320]) test(`filter layout 
     });
   })).toBe(true);
 });
+
+for (const [label, key, max] of [['Critics ≥', 'minCritics', 100], ['Audience ≥', 'minAudience', 100], ['TMDB ≥', 'minTmdb', 10], ['IMDb ≥', 'minImdb', 10]]) {
+  const high = key === 'minAudience' ? 90.5 : max === 100 ? 80.5 : 8.5;
+  for (const [form, value, expected, visible] of [
+    ['decimal', String(high), String(high), false],
+    ['exponent', max === 100 ? `${high / 10}e1` : '8.5e-1', max === 100 ? `${high / 10}e1` : '8.5e-1', max !== 100],
+    ['above maximum', '1000', String(max), false],
+    ['negative', '-5', '0', true]
+  ]) test(`typed ${label} threshold matches filtering and saved presets (${form})`, async ({ page }) => {
+    await showFilter(page, 1280);
+    const input = page.getByLabel(label, { exact: true });
+    await input.fill(value);
+    await input.dispatchEvent('input');
+    await expect(input).toHaveValue(expected);
+    await expect(page.locator('[data-testid="title-card"]')).toBeVisible({ visible });
+    if (Number(expected) > 0) await expect(input.locator('..')).toHaveClass(/is-active/);
+    else await expect(input.locator('..')).not.toHaveClass(/is-active/);
+    await page.getByLabel('Preset name').fill('Threshold');
+    await page.getByRole('button', { name: 'Save preset', exact: true }).click();
+    await expect(page.getByRole('status')).toHaveText('Saved Threshold');
+    expect(await page.evaluate(key => window.savedPreset.filters[key], key)).toBe(Number(expected));
+  });
+}

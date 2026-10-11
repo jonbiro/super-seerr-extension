@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.206]
+
+- Apply typed decimal and exponent rating thresholds exactly rather than truncating critics/audience decimals or reading only an exponent's leading digits.
+- Clamp typed thresholds to their displayed score scale, keeping the grid, active highlights, and saved presets consistent.
+- Cover all four sources with decimal, exponent, oversized, and negative input in Chromium.
+
 ## [3.5.205]
 
 - Tighten filter panel spacing and align sorting and rating inputs along the same baseline.

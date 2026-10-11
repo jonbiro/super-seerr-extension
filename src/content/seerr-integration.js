@@ -2294,10 +2294,15 @@
 
     // ── Filter logic ──
     function applyFilters() {
-      currentFilters.minCritics = parseInt(bar.querySelector('.seerr-min-critics').value, 10) || 0;
-      currentFilters.minAudience = parseInt(bar.querySelector('.seerr-min-audience').value, 10) || 0;
-      currentFilters.minTmdb = parseFloat(bar.querySelector('.seerr-min-tmdb').value) || 0;
-      currentFilters.minImdb = parseFloat(bar.querySelector('.seerr-min-imdb').value) || 0;
+      for (const [key, field] of Object.entries({ minCritics: 'critics', minAudience: 'audience', minTmdb: 'tmdb', minImdb: 'imdb' })) {
+        const input = bar.querySelector(`.seerr-min-${field}`);
+        // Number inputs accept decimals and exponents. Parse the whole value,
+        // then enforce the same limits used by saved presets.
+        const value = Number(input.value);
+        const bounded = Number.isFinite(value) ? Math.max(0, Math.min(Number(input.max), value)) : 0;
+        currentFilters[key] = bounded;
+        if (Number.isFinite(value) && bounded !== value) input.value = String(bounded);
+      }
       markActiveFilters(bar);
       applyScoreFilters(grid);
       updateCoverage();
