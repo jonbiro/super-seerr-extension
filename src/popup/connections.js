@@ -47,6 +47,7 @@
     const site = connections?.sites.find(item => item.id === select.value);
     if (!site || switching || loading) return;
     const url = new URL(site.url);
+    const restoreFocus = document.activeElement === select;
     generation++; switching = true;
     select.disabled = true; status.textContent = 'Switching sites…';
     try {
@@ -66,7 +67,8 @@
       switching = false; select.disabled = false;
       const reload = refreshPending && !alreadyRendered(pendingChange);
       refreshPending = false; pendingChange = null;
-      if (reload) void load(true);
+      if (reload) await load(true);
+      if (restoreFocus && !loading && !select.disabled && document.activeElement === document.body) select.focus();
     }
   });
   chrome.storage?.onChanged?.addListener((changes, namespace) => {

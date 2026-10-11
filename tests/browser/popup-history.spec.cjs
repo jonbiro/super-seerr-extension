@@ -78,3 +78,27 @@ test('saved-site retry fits a narrow popup and restores focus to the recovered s
   await expect(page.locator('#activeSeerrSite')).toBeFocused();
   await expect(page.locator('#siteSwitchStatus')).toBeEmpty();
 });
+
+for (const success of [true, false]) for (const moved of [false, true]) test(`site switching restores keyboard focus only when still owned (${success ? 'success' : 'failure'}, ${moved ? 'moved' : 'unchanged'})`, async ({ page }) => {
+  await page.evaluate(() => {
+    const sites = [{ id: 'home', name: 'Home', url: 'https://home.example' }, { id: 'family', name: 'Family', url: 'https://family.example' }];
+    window.switchSites = sites;
+    window.chrome = { permissions: { request: async () => true }, runtime: { sendMessage: async message => {
+      if (message.action === 'activateSeerrConnection') return new Promise(resolve => { window.finishSwitch = resolve; });
+      return { success: true, data: { revision: 1, activeId: 'home', sites } };
+    } } };
+  });
+  await page.addScriptTag({ path: path.resolve('src/popup/connections.js') });
+  const select = page.locator('#activeSeerrSite');
+  await expect(select).toBeEnabled();
+  await select.focus();
+  await select.selectOption('family');
+  await expect(select).toBeDisabled();
+  if (moved) await page.locator('#openOptions').focus();
+  await page.evaluate(success => window.finishSwitch(success
+    ? { success: true, data: { revision: 2, activeId: 'family', sites: window.switchSites } }
+    : { success: false, error: 'Switch failed' }), success);
+  await expect(select).toBeEnabled();
+  await expect(select).toHaveValue(success ? 'family' : 'home');
+  await expect(page.locator(moved ? '#openOptions' : '#activeSeerrSite')).toBeFocused();
+});

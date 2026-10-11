@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.126]
+
+- Restore keyboard focus to the popup's site selector after a successful or failed switch, including any queued list refresh.
+- Preserve focus moved to another control while switching; add browser regressions and verify focus in the installed multi-site flow.
+
 ## [3.5.125]
 
 - Cancel unread Rotten Tomatoes HTTP error bodies before releasing their request slot, avoiding background downloads from refused pages.

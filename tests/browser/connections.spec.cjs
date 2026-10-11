@@ -149,8 +149,10 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await popup.goto(`chrome-extension://${id}/src/popup/popup.html`);
     await expect(popup.locator('#activeSeerrSite')).toHaveValue(second.origin);
     await options.locator('#apiKey').fill('unsaved-family-key');
+    await popup.locator('#activeSeerrSite').focus();
     await popup.locator('#activeSeerrSite').selectOption(first.origin);
     await expect(popup.locator('#siteSwitchStatus')).toContainText('Site switched');
+    await expect(popup.locator('#activeSeerrSite')).toBeFocused();
     await expect(options.locator('#activeSeerrSite')).toContainText('Active site: Home');
     await expect(options.locator('#savedSeerrSites')).toHaveValue(second.origin);
     await expect(options.locator('#serverUrl')).toHaveValue(second.origin);
