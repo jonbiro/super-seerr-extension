@@ -19,7 +19,8 @@
       const title = typeof data.title === 'string' ? data.title.trim() : '';
       const tmdbId = data.tmdbId == null && !requireId ? undefined : this.tmdbId(data.tmdbId);
       if (tmdbId === undefined && !title) throw new Error('A title or TMDB id is required');
-      if (data.year != null && (!/^\d{4}$/.test(String(data.year)) || Number(data.year) < 1800)) {
+      if (data.year != null && ((typeof data.year !== 'number' && typeof data.year !== 'string') ||
+          !/^\d{4}$/.test(String(data.year)) || Number(data.year) < 1800)) {
         throw new Error('A valid release year is required');
       }
       return { ...data, title, mediaType, tmdbId, year: data.year == null ? null : Number(data.year) };

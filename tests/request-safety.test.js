@@ -290,3 +290,22 @@ for (const mediaType of ['movie', 'tv']) {
     assert.equal(await api.resolveMediaMatch(media), null, 'distinct IDs remain ambiguous');
   });
 }
+
+for (const year of [[1999], ['1999'], [[1999]]]) {
+  test(`array year ${JSON.stringify(year)} cannot authorize a title request`, async () => {
+    const worker = loadWorker(CONFIGURED); await worker.ready;
+    let calls = 0;
+    worker.api.makeAPIRequest = async (method, endpoint) => {
+      calls++;
+      return endpoint.includes('/request?') ? { results: [] } : { id: 550, title: 'Fight Club', releaseDate: '1999-01-01' };
+    };
+    await assert.rejects(worker.api.requestMedia({ ...wanted, tmdbId: 550, year }), /valid release year/);
+    assert.equal(calls, 0, 'malformed identity must fail before any server traffic');
+  });
+}
+
+test('release-year validation retains numeric, string, and unknown years', () => {
+  assert.equal(Validation.media({ ...wanted, year: '1999' }).year, 1999);
+  assert.equal(Validation.media(wanted).year, 1999);
+  assert.equal(Validation.media({ ...wanted, year: null }).year, null);
+});
