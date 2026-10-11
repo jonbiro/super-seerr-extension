@@ -2631,12 +2631,14 @@
 
       const resultKind = failed === 0 ? 'success' : succeeded === 0 ? 'error' : 'warning';
       const resultTitle = failed === 0 ? 'Bulk Request Complete' : succeeded === 0 ? 'Bulk Request Failed' : 'Some Requests Failed';
-      notifyResult(resultTitle, `${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}`, resultKind);
 
       if (bulkMode) toggleBulkMode();
       // Preserve an unrelated control the user chose while requests ran.
       // If cleanup removed their selected-card control, offer its replacement.
       if (restoreFocus || document.activeElement === document.body) document.querySelector('.seerr-toggle-select')?.focus();
+      // Notifications remember the current control for keyboard dismissal.
+      // Capture the surviving control after cleanup and focus restoration.
+      notifyResult(resultTitle, `${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}`, resultKind);
     });
   }
 

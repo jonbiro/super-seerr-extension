@@ -139,5 +139,13 @@ for (const success of [true, false]) for (const focus of ['dialog', 'outside', '
     await expect(page.getByRole('button', { name: 'Select titles', exact: true })).toBeVisible();
     await expect(focus === 'outside' ? page.locator('#outside') : page.getByRole('button', { name: 'Select titles', exact: true })).toBeFocused();
     expect(await page.evaluate(() => window.writes.length)).toBe(1);
+    // The completion notification must remember the surviving focus target,
+    // rather than the review button or card control removed by cleanup.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const dismiss = page.getByRole('button', { name: 'Dismiss notification', exact: true });
+    await dismiss.focus();
+    await page.keyboard.press('Enter');
+    await expect(dismiss).toHaveCount(0);
+    await expect(focus === 'outside' ? page.locator('#outside') : page.getByRole('button', { name: 'Select titles', exact: true })).toBeFocused();
   });
 }

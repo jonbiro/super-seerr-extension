@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.172]
+
+- Create bulk-result notifications after selection cleanup and focus restoration, so keyboard dismissal returns to a surviving control rather than dropping focus onto the page.
+- Preserve return to an unrelated control when the user moved focus during requests.
+- Extend success/failure browser regressions to dismiss each completion notification and verify its focus destination.
+
 ## [3.5.171]
 
 - Preserve focus on unrelated page controls when delayed bulk requests finish successfully or fail.
