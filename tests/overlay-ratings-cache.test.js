@@ -179,6 +179,21 @@ test('the cap evicts least recently used, not merely oldest', async () => {
   assert.ok(!overlay.ratingsCache.has('movie:2'), 'the genuinely least recently used entry goes');
 });
 
+test('a full cache loaded from disk evicts an old rating before a recent one', async () => {
+  const previous = Config.overlayCacheMaxEntries;
+  Config.overlayCacheMaxEntries = 3;
+  try {
+    const overlay = loadOverlay({ pathname: '/discover', settings, local: { overlayRatingsByServerV1: { 'https://seerr.example': {
+      server: SERVER, matcher: Config.matcherVersion, epoch: 0,
+      entries: Object.fromEntries([3, 2, 1].map(id => [`movie:${id}`, { bundle: scored(), cachedAt: id }]))
+    } } } });
+    withResolver(overlay, scored); await overlay.loadPersistedRatings();
+    await overlay.getRatings(4, 'New title', 2000, 'movie');
+    assert.equal(overlay.ratingsCache.has('movie:1'), false);
+    assert.equal(overlay.ratingsCache.has('movie:3'), true);
+  } finally { Config.overlayCacheMaxEntries = previous; }
+});
+
 test('clearing the cache from Settings empties an open tab', async () => {
   const overlay = loadOverlay({ settings });
   const resolved = withResolver(overlay, scored);

@@ -58,6 +58,28 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await expect(seerr.locator('.seerr-card-badge')).toHaveCount(2);
     const cachedSites = () => options.evaluate(async () => (await chrome.storage.local.get('overlayRatingsByServerV1')).overlayRatingsByServerV1 || {});
     await expect.poll(async () => Object.keys((await cachedSites())[second.origin]?.entries || {})).toContain('movie:550');
+    // Two independently loaded cache clients must preserve each other's
+    // ratings and title indexes while using the real worker/storage bridge.
+    const sibling = await context.newPage();
+    await sibling.goto(`${second.origin}/discover?cache-probe=second`);
+    await expect(sibling.locator('.seerr-card-badge')).toHaveCount(2);
+    await options.evaluate(async origin => {
+      const tabs = (await chrome.tabs.query({})).filter(tab => tab.url?.startsWith(`${origin}/discover`));
+      await Promise.all(tabs.map(tab => chrome.scripting.executeScript({ target: { tabId: tab.id }, func: async () => {
+        const id = location.search ? '222222' : '111111';
+        window.cacheProbe = window.createOverlayCache({ Config: window.RatingsConfig, Model: window.RatingsModel,
+          log() {}, getServer: () => new URL(location.origin),
+          getListIndex: () => [{ tmdbId: id, mediaType: 'movie', title: `Tab ${id}` }], restoreListIndex() {} });
+        await window.cacheProbe.loadPersistedRatings();
+        window.cacheProbe.ratingsCache.set(`movie:${id}`, { bundle: window.RatingsModel.createRatingsBundle({ rtCriticsScore: Number(id[0]) * 10 }), cachedAt: Date.now() });
+      } })));
+      await Promise.all(tabs.map(tab => chrome.scripting.executeScript({ target: { tabId: tab.id },
+        func: () => window.cacheProbe.flushPersistedRatings() })));
+    }, second.origin);
+    expect((await cachedSites())[second.origin].entries['movie:111111'].bundle.rtCriticsScore).toBe(10);
+    expect((await cachedSites())[second.origin].entries['movie:222222'].bundle.rtCriticsScore).toBe(20);
+    expect((await cachedSites())[second.origin].index.map(item => item.tmdbId)).toEqual(expect.arrayContaining(['111111', '222222']));
+    await sibling.close();
     expect(await options.locator('.connection-options').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     await options.locator('.connection-options').screenshot({ path: '/tmp/super-seerr-multiple-sites-settings.png' });
 

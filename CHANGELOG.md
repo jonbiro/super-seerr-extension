@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.72]
+
+- Merge changes from multiple tabs on the same Seerr site instead of replacing the site's entire ratings cache and title index with each tab's snapshot.
+- Preserve fresher ratings and updated title metadata when an older tab saves, and prevent unchanged old snapshots from restoring forgotten scores.
+- Retry failed cache reads and recover from rejected writes after a missed cache-clear notification without restoring pre-clear ratings.
+- Load persisted ratings in age order so a full in-memory cache evicts old entries before recent ones.
+- Add concurrent-tab, clear-recovery, and reload-eviction regressions, plus a real Chromium worker/storage check with two independent cache clients.
+
 ## [3.5.71]
 
 - Persist separate ratings and title indexes for up to ten Seerr sites, preserving each cache when switching sites or restarting the browser.

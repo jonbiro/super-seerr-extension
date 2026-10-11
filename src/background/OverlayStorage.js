@@ -89,6 +89,21 @@
       }
       return Object.fromEntries(Object.entries(caches).slice(-10));
     },
+    mergeOverlayCache(previous, incoming, removed) {
+      const entries = previous?.matcher === incoming.matcher ? { ...previous.entries } : {};
+      for (const item of (Array.isArray(removed) ? removed : []).slice(-root.RatingsConfig.overlayCacheMaxEntries)) {
+        if (item && entries[item.key] && entries[item.key].cachedAt === item.cachedAt) delete entries[item.key];
+      }
+      for (const [key, entry] of Object.entries(incoming.entries)) {
+        if (!entries[key] || (entry.cachedAt ?? 0) >= (entries[key].cachedAt ?? 0)) entries[key] = entry;
+      }
+      const index = new Map((previous?.index || []).map(item => [`${item.mediaType}:${item.tmdbId}`, item]));
+      for (const item of incoming.index) {
+        const key = `${item.mediaType}:${item.tmdbId}`;
+        index.delete(key); index.set(key, item);
+      }
+      return { ...incoming, entries, index: [...index.values()].slice(-root.RatingsConfig.listIndexMaxEntries) };
+    },
     async getOverlayCache(sender) {
       const server = this.overlayStorageServer(sender);
       await this.cacheClearPending;
@@ -118,8 +133,9 @@
         if (!clean) return { stored: false };
         const caches = this.overlayCachesFromStorage(local, local.ratingsCacheEpoch ?? 0);
         const key = serverKey(server);
+        const merged = value.delta === true ? this.mergeOverlayCache(caches[key], clean, value.removed) : clean;
         delete caches[key];
-        caches[key] = this.boundedOverlayCache(clean);
+        caches[key] = this.boundedOverlayCache(merged);
         await chrome.storage.local.set({ [SITES_KEY]: Object.fromEntries(Object.entries(caches).slice(-10)), [KEY]: null });
         return { stored: true };
       });
