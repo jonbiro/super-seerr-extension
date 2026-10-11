@@ -11,6 +11,52 @@ async function setup() {
 }
 const addSecond = worker => message(worker, 'saveSeerrConnection', { url: second, apiKey: 'family-secret', name: 'Family' });
 
+for (const operation of ['saveTitleCorrection', 'getSavedTitleCorrection']) {
+  for (const stage of operation === 'saveTitleCorrection' ? ['candidates', 'queue', 'storage'] : ['candidates', 'storage']) {
+    test(`${operation} discards an in-flight ${stage} result after switching away and back`, async () => {
+      const w = await setup(); await addSecond(w);
+      const original = { title: 'The Thing', mediaType: 'movie' };
+      const choices = [{ tmdbId: 2, title: 'The Thing', mediaType: 'movie', year: 2011 }];
+      w.api.getMediaCandidates = async () => choices;
+      await w.api.saveTitleCorrection({ original, tmdbId: 2 });
+      const saved = JSON.stringify(w.localStore.titleCorrectionsV1);
+      let finish, started;
+      const entered = new Promise(resolve => { started = resolve; });
+      const gate = new Promise(resolve => { finish = resolve; });
+      if (stage === 'candidates') w.api.getMediaCandidates = () => { started(); return gate.then(() => choices); };
+      else if (stage === 'queue') w.api.queueRecentAction(() => { started(); return gate; });
+      else {
+        const read = w.api.getTitleCorrections.bind(w.api);
+        w.api.getTitleCorrections = async () => { const rows = await read(); started(); await gate; return rows; };
+      }
+      const pending = w.api[operation](operation === 'saveTitleCorrection' ? { original, tmdbId: 2 } : original);
+      // Attach the rejection handler before deliberately invalidating the operation.
+      const result = operation === 'saveTitleCorrection' ? assert.rejects(pending, /changed/i) : pending;
+      await entered;
+      await message(w, 'activateSeerrConnection', { id: first });
+      await message(w, 'activateSeerrConnection', { id: second });
+      const writeCount = w.localWrites.length;
+      finish();
+      if (operation === 'getSavedTitleCorrection') assert.equal(await result, null);
+      else await result;
+      assert.equal(w.localWrites.length, writeCount, 'a stale choice must not be persisted');
+      assert.equal(JSON.stringify(w.localStore.titleCorrectionsV1), saved);
+    });
+  }
+}
+
+test('changing the active site API key invalidates a pending saved title choice', async () => {
+  const w = await setup(); await addSecond(w);
+  let finish;
+  w.api.getMediaCandidates = () => new Promise(resolve => { finish = resolve; });
+  const pending = w.api.saveTitleCorrection({ original: { title: 'Example', mediaType: 'movie' }, tmdbId: 1 });
+  const rejected = assert.rejects(pending, /changed/i);
+  await message(w, 'saveSeerrConnection', { id: second, url: second, apiKey: 'replacement-key' });
+  finish([{ tmdbId: 1, title: 'Example', mediaType: 'movie' }]);
+  await rejected;
+  assert.equal(w.localStore.titleCorrectionsV1, undefined);
+});
+
 for (const action of ['requestMedia', 'addToWatchlist', 'getSeasonOptions']) {
   for (const stage of ['identity', 'search']) {
     test(`${action} stops an in-flight ${stage} check after switching away and back`, async () => {

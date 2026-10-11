@@ -428,53 +428,50 @@
       mediaType,
       tmdbId: String(tmdbId),
       title: objectTitle(candidate),
-      year: objectYear(candidate)
+      year: Number.isInteger(candidate.year) ? candidate.year : objectYear(candidate)
     };
   }
 
-  // Both the observer and explicit list fetches feed this, so it accumulates
-  // and is bounded rather than replaced.
+  // Both the observer and explicit fetches feed this. Keep one compact entry
+  // per identity so overlapping/refetched lists cannot crowd out other titles.
   function rememberListItems(items) {
     if (!Array.isArray(items) || items.length === 0) return;
     // Fix route-inferred types at ingestion; a later TV/movie route must not
     // reinterpret an older untyped catalogue item under its own fallback.
-    lastListItems = lastListItems.concat(items.map(item => {
-      const info = mediaInfoFromListItem(item);
-      return info ? { ...item, mediaType: info.mediaType } : item;
-    }));
-    if (lastListItems.length > Config.overlayCacheMaxEntries) {
-      lastListItems = lastListItems.slice(-Config.overlayCacheMaxEntries);
-    }
+    lastListItems = projectListIndex(lastListItems.concat(items), Config.overlayCacheMaxEntries);
   }
 
   // What a cold load needs per title to identify cards before Seerr's own
   // lists arrive. Raw items carry far more fields than that; only the
   // identifying ones cross into storage, in a shape the live pipeline reads
   // back directly (poster matching, media info, page metadata).
-  function projectListIndex(items = lastListItems) {
-    const seen = new Set();
-    const projected = [];    for (const item of items) {
+  function projectListIndex(items = lastListItems, limit = Config.listIndexMaxEntries ?? 2000) {
+    const projected = new Map();
+    for (const item of items) {
       if (!item || typeof item !== 'object') continue;
       const info = mediaInfoFromListItem(item);
       if (!info || !/^\d+$/.test(String(info.tmdbId))) continue;
       if (info.mediaType !== 'movie' && info.mediaType !== 'tv') continue;
       const key = `${info.mediaType}:${info.tmdbId}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
+      const previous = projected.get(key);
       const raw = item.media || item.mediaInfo || item.movie || item.tv || item;
       const poster = item.posterPath || item.poster_path || raw.posterPath || raw.poster_path || null;
-      projected.push({
+      // New observations win, but a minimal request response must not erase
+      // a known poster, original title or year. Move updates to the recent end.
+      projected.delete(key);
+      projected.set(key, {
+        ...previous,
         tmdbId: String(info.tmdbId),
         mediaType: info.mediaType,
-        title: info.title || '',
-        originalTitle: objectOriginalTitle(item) || '',
-        year: info.year ?? null,
-        posterPath: typeof poster === 'string' && poster.length > 1 ? poster : null,
-        ...(typeof raw.releaseDate === 'string' ? { releaseDate: raw.releaseDate } : {}),
-        ...(typeof raw.firstAirDate === 'string' ? { firstAirDate: raw.firstAirDate } : {})
+        title: info.title || previous?.title || '',
+        originalTitle: objectOriginalTitle(item) || previous?.originalTitle || '',
+        year: info.year ?? previous?.year ?? null,
+        posterPath: typeof poster === 'string' && poster.length > 1 ? poster : previous?.posterPath ?? null,
+        ...(typeof raw.releaseDate === 'string' && raw.releaseDate ? { releaseDate: raw.releaseDate } : {}),
+        ...(typeof raw.firstAirDate === 'string' && raw.firstAirDate ? { firstAirDate: raw.firstAirDate } : {})
       });
     }
-    return projected.slice(-(Config.listIndexMaxEntries ?? 2000));
+    return [...projected.values()].slice(-limit);
   }
 
   // The loader calls this with the stored array after the server and epoch

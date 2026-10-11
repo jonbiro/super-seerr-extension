@@ -14,11 +14,20 @@
     async saveTitleCorrection(data) {
       const key = this.correctionKey(data.original);
       const server = this.baseUrl;
+      const apiKey = this.apiKey;
+      const token = this.connectionToken();
+      const assertCurrent = () => {
+        if (server !== this.baseUrl || apiKey !== this.apiKey || token !== this.connectionToken()) {
+          throw new Error('Settings changed. Choose the title again.');
+        }
+      };
       const selected = (await this.getMediaCandidates(data.original)).find(row => row.tmdbId === data.tmdbId);
-      if (!selected || server !== this.baseUrl) throw new Error('Match changed. Choose the title again.');
+      assertCurrent();
+      if (!selected) throw new Error('Match changed. Choose the title again.');
       return this.queueRecentAction(async () => {
+        assertCurrent();
         const rows = await this.getTitleCorrections();
-        if (server !== this.baseUrl) throw new Error('Server changed. Choose the title again.');
+        assertCurrent();
         const entry = { key, title: String(data.original.title).slice(0, 300), selectedTitle: selected.title, mediaType: selected.mediaType, tmdbId: selected.tmdbId, year: selected.year };
         await chrome.storage.local.set({ [KEY]: [entry, ...rows.filter(row => row.key !== key)].slice(0, 200) });
         this.invalidateSeerrReads();
@@ -27,11 +36,14 @@
     async getSavedTitleCorrection(data) {
       if (!this.baseUrl) return null;
       const server = this.baseUrl;
+      const apiKey = this.apiKey;
+      const token = this.connectionToken();
+      const isCurrent = () => server === this.baseUrl && apiKey === this.apiKey && token === this.connectionToken();
       const key = this.correctionKey(data);
       const saved = (await this.getTitleCorrections()).find(row => row.key === key);
-      if (!saved || server !== this.baseUrl) return null;
+      if (!saved || !isCurrent()) return null;
       const selected = (await this.getMediaCandidates(data)).find(row => row.tmdbId === saved.tmdbId);
-      return server === this.baseUrl ? selected || null : null;
+      return isCurrent() ? selected || null : null;
     },
     removeTitleCorrection(key) {
       return this.queueRecentAction(async () => {

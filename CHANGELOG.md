@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.77]
+
+- Keep one recent catalogue entry per movie/TV identity, replacing stale titles and posters while retaining original titles, years and other metadata omitted by partial responses; repeated lists no longer crowd other titles out of the cache.
+- Preserve explicit years when restoring and projecting stored title indexes, keeping movie and TV IDs separate.
+- Invalidate pending saved-title-choice reads and writes after switching sites, switching away and back, or editing the active site's credentials, including operations delayed by storage reads or queued writes.
+- Add catalogue update/cold-reload and saved-choice race regressions, including real Chromium persistence and poster-only card coverage.
+
 ## [3.5.76]
 
 - Revalidate observed title API URLs against the active Seerr origin and base path before accepting catalogue or rating data; reject other installations, credentials in URLs, and non-title endpoints.

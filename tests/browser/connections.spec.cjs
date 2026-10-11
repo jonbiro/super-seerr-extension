@@ -77,6 +77,29 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     expect((await cachedSites())[second.origin].entries['movie:550'].bundle.imdbRating).toBe(8);
     await expect(options.locator('#ratingsCacheCount')).toHaveText(/\d+ cache entries/);
     await expect(options.locator('#clearRatingsCache')).toBeEnabled();
+    // Overlapping catalogue responses must persist the newest identity, even
+    // when a later minimal request response omits its poster and release date.
+    const addPosterOnlyCard = () => {
+      const card = document.createElement('article');
+      card.dataset.testid = 'title-card'; card.id = 'updated-catalogue-card';
+      card.innerHTML = '<img alt="" src="/catalogue-updated.jpg">';
+      document.querySelector('main .grid').append(card);
+    };
+    await seerr.evaluate(addPosterOnlyCard);
+    await seerr.evaluate(() => {
+      for (const item of [
+        { id: 444444, mediaType: 'movie', title: 'Old catalogue title', posterPath: '/catalogue-old.jpg', releaseDate: '2020-01-01' },
+        { id: 444444, mediaType: 'movie', title: 'Updated catalogue title', posterPath: '/catalogue-updated.jpg', releaseDate: '2021-01-01',
+          rtCriticsScore: 71, rtAudienceScore: 82, imdbRating: 8, voteAverage: 8 },
+        { media: { tmdbId: 444444, mediaType: 'movie', title: 'Updated catalogue title' } }
+      ]) window.postMessage({ channel: 'super-seerr:api', url: '/api/v1/discover/movies', items: [item] }, location.origin);
+    });
+    await expect.poll(async () => (await cachedSites())[second.origin]?.index.find(item => item.tmdbId === '444444'))
+      .toMatchObject({ title: 'Updated catalogue title', posterPath: '/catalogue-updated.jpg', year: 2021 });
+    await seerr.reload();
+    await seerr.evaluate(addPosterOnlyCard);
+    await expect(seerr.locator('#updated-catalogue-card .seerr-card-badge').first()).toBeVisible();
+    await seerr.locator('#updated-catalogue-card').evaluate(node => node.remove());
     // Two independently loaded cache clients must preserve each other's
     // ratings and title indexes while using the real worker/storage bridge.
     const sibling = await context.newPage();

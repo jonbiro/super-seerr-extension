@@ -273,6 +273,60 @@ test('the projected index is bounded and deduplicated', async t => {
   assert.equal(new Set(projected.map(entry => `${entry.mediaType}:${entry.tmdbId}`)).size, projected.length);
 });
 
+test('new catalogue observations replace stale identities while preserving missing metadata on reload', async t => {
+  const fixture = openGrid({ plexConfigured: true });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  const observe = items => fixture.window.testOverlay.handleObservedApiResponse({ source: fixture.window, origin: fixture.window.location.origin,
+    data: { channel: 'super-seerr:api', url: '/api/v1/discover/movies', items } });
+  observe([{ id: 123, mediaType: 'movie', title: 'Old title', originalTitle: 'Original title', posterPath: '/old.jpg', releaseDate: '2020-01-01' }]);
+  observe([{ id: 123, mediaType: 'movie', title: 'New title', posterPath: '/p123.jpg', releaseDate: '2021-10-22' }]);
+  // A partial request response must not erase the freshly observed identity.
+  observe([{ media: { tmdbId: 123, mediaType: 'movie', title: 'New title' } }]);
+  await fixture.window.testOverlay.flushPersistedRatings();
+  const index = fixture.localStore.overlayRatingsByServerV1['https://seerr.example'].index;
+  assert.equal(index.length, 1);
+  assert.equal(index[0].title, 'New title');
+  assert.equal(index[0].posterPath, '/p123.jpg');
+  assert.equal(index[0].originalTitle, 'Original title');
+  assert.equal(index[0].year, 2021);
+  assert.equal(fixture.window.testOverlay.listItemCount(), 1, 'refetches cannot crowd out other titles');
+  const reloaded = openGrid({ local: fixture.localStore, plexConfigured: true });
+  t.after(() => { reloaded.window.dispatchEvent(new reloaded.window.Event('pagehide')); reloaded.dom.window.close(); });
+  await flush(reloaded.window);
+  reloaded.window.testOverlay.injectPlexCardButtons();
+  assert.equal(reloaded.window.document.querySelector('.seerr-plex-card-button')?.getAttribute('aria-label'), 'Add New title to Plex Watchlist');
+});
+
+test('projecting catalogue updates keeps movie and TV identities separate and retains explicit years', async t => {
+  const fixture = openGrid();
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  const index = fixture.window.testOverlay.projectListIndex([
+    { tmdbId: 123, mediaType: 'movie', title: 'Film', year: 2021, posterPath: '/film.jpg' },
+    { tmdbId: 123, mediaType: 'tv', title: 'Series', year: 2024, posterPath: '/series.jpg' },
+    { media: { tmdbId: 123, mediaType: 'movie', title: 'Updated Film' } }
+  ]);
+  assert.equal(index.length, 2);
+  assert.equal(index.find(row => row.mediaType === 'movie').title, 'Updated Film');
+  assert.equal(index.find(row => row.mediaType === 'movie').year, 2021);
+  assert.equal(index.find(row => row.mediaType === 'movie').posterPath, '/film.jpg');
+  assert.equal(index.find(row => row.mediaType === 'tv').year, 2024);
+});
+
+test('repeated catalogue refetches cannot evict unrelated useful titles', async t => {
+  const fixture = openGrid({ local: seedBlob() });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  fixture.window.testOverlay.handleObservedApiResponse({ source: fixture.window, origin: fixture.window.location.origin,
+    data: { channel: 'super-seerr:api', url: '/api/v1/discover/movies',
+      items: Array.from({ length: Config.overlayCacheMaxEntries + 1 }, () => ({ id: 456, mediaType: 'movie', title: 'Repeated title', posterPath: '/repeated.jpg' })) } });
+  await fixture.window.testOverlay.flushPersistedRatings();
+  const index = fixture.localStore.overlayRatingsByServerV1['https://seerr.example'].index;
+  assert.equal(index.length, 2);
+  assert.ok(index.some(row => row.tmdbId === '123'), 'the stored Dune identity remains useful across refetches');
+});
+
 test('lists arriving before settings load are replayed, not dropped', async t => {
   // Cold boot: Seerr speaks before the worker answers getConfigState.
   const fixture = openGrid({ serverUrl: null, plexConfigured: true });
