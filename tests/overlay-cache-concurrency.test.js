@@ -424,3 +424,35 @@ test('an unchanged stale flush still detects a missed cache clear', async () => 
   assert.equal(cache.ratingsCache.size, 0, 'even an empty delta must validate the worker epoch');
   assert.equal(worker.localStore.overlayRatingsByServerV1, undefined);
 });
+
+for (const mediaType of ['movie', 'tv']) for (const posterFirst of [true, false]) {
+  test(`concurrent ${mediaType} catalogue updates preserve complementary metadata (poster first: ${posterFirst})`, async () => {
+    const worker = await setup();
+    const base = { tmdbId: '1', mediaType };
+    const a = tab(worker, { index: [{ ...base, title: 'Dune', originalTitle: 'Original Dune', year: 2021,
+      ...(mediaType === 'movie' ? { releaseDate: '2021-01-01' } : { firstAirDate: '2021-01-01' }) }] });
+    const b = tab(worker, { index: [{ ...base, posterPath: '/dune.jpg' }] });
+    await Promise.all([a.loadPersistedRatings(), b.loadPersistedRatings()]);
+    for (const cache of posterFirst ? [b, a] : [a, b]) await cache.flushPersistedRatings();
+    const result = stored(worker).index[0];
+    assert.equal(result.title, 'Dune');
+    assert.equal(result.originalTitle, 'Original Dune');
+    assert.equal(result.year, 2021);
+    assert.equal(result.posterPath, '/dune.jpg');
+    assert.equal(result[mediaType === 'movie' ? 'releaseDate' : 'firstAirDate'], '2021-01-01');
+    const restarted = await setup(worker.localStore);
+    assert.equal(stored(restarted).index[0].posterPath, '/dune.jpg');
+    assert.equal(stored(restarted).index[0].year, 2021);
+    // A genuine correction still replaces known values.
+    const correction = tab(restarted, { index: [{ ...base, title: 'Corrected Dune', originalTitle: 'Corrected original',
+      year: 2022, posterPath: '/new.jpg', releaseDate: '2022-01-01', firstAirDate: '2022-01-01' }] });
+    await correction.loadPersistedRatings(); await correction.flushPersistedRatings();
+    const corrected = stored(restarted).index[0];
+    assert.equal(corrected.title, 'Corrected Dune');
+    assert.equal(corrected.originalTitle, 'Corrected original');
+    assert.equal(corrected.year, 2022);
+    assert.equal(corrected.posterPath, '/new.jpg');
+    assert.equal(corrected.releaseDate, '2022-01-01');
+    assert.equal(corrected.firstAirDate, '2022-01-01');
+  });
+}

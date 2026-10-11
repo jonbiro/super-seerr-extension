@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.176]
+
+- Preserve complementary title, original-title, poster, release-date, and year metadata when tabs write partial catalogue updates to the same server's cache.
+- Continue accepting explicit metadata corrections instead of treating known fields as immutable.
+- Add movie and TV concurrency regressions for both write orders, worker restart, and later corrections; all four failed before the fix.
+
 ## [3.5.175]
 
 - Validate catalogue release years using the worker's date format instead of coercing arrays, numeric dates, or partial strings into identity evidence.

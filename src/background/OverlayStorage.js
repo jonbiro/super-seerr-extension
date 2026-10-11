@@ -198,7 +198,16 @@
       const index = new Map((previous?.index || []).map(item => [`${item.mediaType}:${item.tmdbId}`, item]));
       for (const item of incoming.index) {
         const key = `${item.mediaType}:${item.tmdbId}`;
-        index.delete(key); index.set(key, item);
+        // Catalogue observations can be partial (for example request rows
+        // with a title but no poster). Match the tab's gap-filling policy so
+        // another tab's complementary metadata survives the shared write.
+        const previousItem = index.get(key);
+        const merged = { ...item };
+        for (const field of ['title', 'originalTitle', 'posterPath', 'releaseDate', 'firstAirDate']) {
+          if (!merged[field] && previousItem?.[field]) merged[field] = previousItem[field];
+        }
+        if (merged.year == null && previousItem?.year != null) merged.year = previousItem.year;
+        index.delete(key); index.set(key, merged);
       }
       return { ...incoming, entries, index: [...index.values()].slice(-root.RatingsConfig.listIndexMaxEntries) };
     },
