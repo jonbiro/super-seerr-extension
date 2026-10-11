@@ -1120,8 +1120,10 @@
     }
     let cached = options.refresh === true ? null : previous;
     // Missing scores expire sooner than complete results.
-    const absenceTtl = cached?.provisional ? Config.inconclusiveRetryMs : Config.unratedRetryMs;
-    if (cached && !cached.bundle && Date.now() - (cached.cachedAt ?? 0) >= absenceTtl) {
+    const absenceTtl = cached?.provisional ? Config.inconclusiveRetryMs
+      : cached?.diagnostics?.status === 'uncertain' ? Config.partialRatingsRetryMs : Config.unratedRetryMs;
+    const absenceRetryAt = Math.min((cached?.cachedAt ?? 0) + absenceTtl, cached?.retryAt ?? Infinity);
+    if (cached && !cached.bundle && Date.now() >= absenceRetryAt) {
       ratingsCache.delete(key);
       cached = null;
     }

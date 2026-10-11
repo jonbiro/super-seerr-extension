@@ -84,8 +84,10 @@
             if (ratingsCache.has(key)) continue;
             if (!bundle) {
               // A remembered "nothing", worth keeping only while it is current.
-              if (cachedAt === null || Date.now() - cachedAt >= Config.unratedRetryMs) continue;
-              ratingsCache.set(key, { bundle: null, cachedAt, diagnostics: entry.diagnostics ?? null });
+              const retryMs = entry.diagnostics?.status === 'uncertain' ? Config.partialRatingsRetryMs : Config.unratedRetryMs;
+              const retryAt = Math.min((cachedAt ?? 0) + retryMs, loaded.retryAt ?? Infinity);
+              if (cachedAt === null || Date.now() >= retryAt) continue;
+              ratingsCache.set(key, loaded);
               continue;
             }
             if (typeof bundle !== 'object') continue;

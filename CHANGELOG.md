@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.114]
+
+- Retry uncertain matches with no usable scores after their shorter deadline instead of suppressing lookups for the six-hour confirmed-unrated interval.
+- Preserve null-bundle retry metadata across reloads and honor earlier retry deadlines while retaining existing provisional and confirmed-unrated limits.
+- Add same-tab and reload regressions for current, earlier and legacy uncertain deadlines, plus fresh-cache metadata preservation.
+
 ## [3.5.113]
 
 - Refresh open-popup history statuses after the worker confirms credential and permission changes, preventing obsolete availability labels after an API key is replaced or cleared.

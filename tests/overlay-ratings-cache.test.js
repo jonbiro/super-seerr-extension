@@ -375,3 +375,35 @@ test('a hung lookup stops pinning its title after the resolve deadline', async (
     Config.resolveTimeoutMs = previous;
   }
 });
+
+for (const deadline of ['ordinary', 'earlier', 'legacy']) {
+for (const reloaded of [false, true]) test(`an uncertain empty rating retries on its ${deadline} deadline (${reloaded ? 'reloaded' : 'same tab'})`, async () => {
+  const cachedAt = Date.now() - (deadline === 'earlier' ? 10000 : Config.partialRatingsRetryMs) - 1000;
+  const uncertain = { bundle: null, cachedAt, ...(deadline === 'legacy' ? {} : { retryAt: cachedAt + (deadline === 'earlier' ? 10000 : Config.partialRatingsRetryMs) }),
+    diagnostics: { status: 'uncertain', checkedAt: cachedAt, source: 'rotten-tomatoes' } };
+  const overlay = loadOverlay({ settings, local: reloaded ? { [CACHE_KEY]: {
+    server: SERVER, matcher: Config.matcherVersion, entries: { 'movie:550': uncertain }
+  } } : {} });
+  if (!reloaded) { await overlay.loadPersistedRatings(); overlay.ratingsCache.set('movie:550', uncertain); }
+  const resolved = withResolver(overlay, scored);
+  const bundle = await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(resolved.timesFor(550), 1);
+  assert.equal(bundle.rtCriticsScore, 80);
+});
+
+}
+
+test('reloading a fresh uncertain absence preserves its retry deadline and diagnostics', async () => {
+  const cachedAt = Date.now();
+  const retryAt = cachedAt + 10000;
+  const overlay = loadOverlay({ settings, local: { [CACHE_KEY]: {
+    server: SERVER, matcher: Config.matcherVersion, entries: { 'movie:550': {
+      bundle: null, cachedAt, retryAt, diagnostics: { status: 'uncertain', checkedAt: cachedAt, source: 'rotten-tomatoes' }
+    } }
+  } } });
+  const resolved = withResolver(overlay, scored);
+  assert.equal(await overlay.getRatings(550, 'Fight Club', 1999, 'movie'), null);
+  assert.equal(resolved.timesFor(550), 0);
+  assert.equal(overlay.ratingsCache.get('movie:550').retryAt, retryAt);
+  assert.equal(overlay.ratingsCache.get('movie:550').diagnostics.status, 'uncertain');
+});
