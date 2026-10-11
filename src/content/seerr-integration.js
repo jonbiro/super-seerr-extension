@@ -1072,9 +1072,11 @@
     await loadRatingsAvailability();
     if (options.signal?.aborted) return null;
 
-    // Resolve a heading's year before the cache fast path as well as before
-    // provider lookup. A cached public result must respect known identity data.
-    year = year ?? splitDisplayTitle(title).year;
+    // Resolve all known year evidence before the cache fast path as well as
+    // provider lookup. Callers without a visible year still have catalogue
+    // metadata; they must not bypass shared-cache identity checks.
+    const catalogueYear = pageMetadataByTmdbId.get(ratingKey(tmdbId, mediaType))?.year;
+    year = year ?? splitDisplayTitle(title).year ?? catalogueYear ?? null;
     const key = ratingsCacheKey(tmdbId, title, year, mediaType);
     let previous = ratingsCache.get(key);
     const publicRecord = previous?.publicCheckedAt && getPublicRating(key);

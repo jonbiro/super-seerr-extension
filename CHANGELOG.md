@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.179]
+
+- Apply known catalogue years before the ratings cache fast path, preventing callers without a visible year from reconciling a shared public score for a contradictory remake.
+- Preserve native server scores while rejecting mismatched public ratings.
+- Extend movie and TV shared-cache regressions with yearless callers; both mismatched-year cases failed before the fix and matching-year controls still pass.
+
 ## [3.5.178]
 
 - Merge a delayed stored catalogue into live observations field by field, retaining cached posters and years when current records omit them while keeping newer live values.

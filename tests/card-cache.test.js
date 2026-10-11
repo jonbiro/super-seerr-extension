@@ -650,6 +650,12 @@ for (const mediaType of ['movie', 'tv']) {
       assert.equal(card.__seerrRatings.rtCriticsScore, matchedYear === 2021 ? 99 : 90,
         'a contradictory public year must not overwrite the server-specific cached score');
       assert.equal(card.__seerrRatings.imdbRating, 7, 'native IMDb survives public RT reconciliation');
+      // Detail/action callers may know the ID and title before a visible year.
+      // The restored catalogue still supplies identity evidence for that ID.
+      const withoutVisibleYear = await fixture.window.testOverlay.getRatings(123, 'Dune', null, mediaType);
+      assert.equal(withoutVisibleYear.rtCriticsScore, matchedYear === 2021 ? 99 : 90,
+        'omitting a visible year cannot bypass the known catalogue year');
+      assert.equal(withoutVisibleYear.imdbRating, 7);
     });
   }
 }
