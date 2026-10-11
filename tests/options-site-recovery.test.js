@@ -220,3 +220,33 @@ for (const action of ['useConnection', 'removeConnection']) test(`${action} lock
   assert.equal(f.doc.querySelector('button[type=submit]').disabled, false);
   assert.equal(f.doc.getElementById('apiKey').value, action === 'useConnection' ? 'family-key' : 'home-key');
 });
+
+for (const outcome of ['success', 'failure']) for (const timing of ['during read', 'after read']) {
+  test(`site selection replaces obsolete connection-test ${outcome} (${timing})`, async t => {
+    const f = await fixture(t);
+    let finishTest;
+    f.window.chrome.runtime.sendMessage = message => message.action === 'testConnection'
+      ? new Promise(resolve => { finishTest = resolve; }) : Promise.resolve(f.reply());
+    const testing = f.manager.testConnection();
+    await settle();
+    assert.equal(typeof finishTest, 'function');
+    const get = f.window.chrome.storage.local.get;
+    let finishRead;
+    f.window.chrome.storage.local.get = () => new Promise(resolve => { finishRead = resolve; });
+    f.doc.getElementById('savedSeerrSites').value = 'home';
+    const editing = f.manager.editConnection();
+    assert.match(f.doc.getElementById('status').textContent, /Loading saved site/);
+    const reply = outcome === 'success' ? { success: true, data: { user: 'Old family account' } }
+      : { success: false, error: 'Old family failure' };
+    if (timing === 'during read') {
+      finishTest(reply); await testing;
+      assert.match(f.doc.getElementById('status').textContent, /Loading saved site/);
+    }
+    finishRead(await get()); await editing;
+    if (timing === 'after read') { finishTest(reply); await testing; }
+    assert.equal(f.doc.getElementById('serverUrl').value, 'https://home.example/');
+    assert.match(f.doc.getElementById('status').textContent, /Saved site loaded/);
+    assert.doesNotMatch(f.doc.getElementById('status').textContent, /Old family|Connected as|Settings changed during/);
+    assert.equal(f.doc.getElementById('testConnection').disabled, false);
+  });
+}

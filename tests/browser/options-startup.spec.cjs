@@ -44,3 +44,46 @@ for (const outcome of ['success', 'failure']) test(`Settings protects its initia
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(errors).toEqual([]);
 });
+
+for (const success of [true, false]) test(`selecting a saved site clears an obsolete test reply (success: ${success})`, async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 640 });
+  const html = fs.readFileSync('src/options/options.html', 'utf8')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/g, '').replace(/<link\b[^>]*>/g, '');
+  await page.setContent(html);
+  await page.addStyleTag({ path: path.resolve('src/options/options.css') });
+  await page.evaluate(() => {
+    window.profiles = { revision: 1, activeId: 'home', sites: [
+      { id: 'home', name: 'Home', url: 'https://home.example/', apiKey: 'home-key' },
+      { id: 'family', name: 'Family', url: 'https://family.example/', apiKey: 'family-key' }
+    ] };
+    window.chrome = {
+      storage: { onChanged: { addListener() {} }, sync: { get: async () => ({}) },
+        local: { get: async () => ({ seerrConnectionsV1: profiles }) } },
+      permissions: { contains: async () => true, request: async () => true },
+      runtime: { sendMessage: message => message.action === 'testConnection'
+        ? new Promise(resolve => { window.finishTest = resolve; })
+        : Promise.resolve({ success: true, data: profiles }) }
+    };
+  });
+  await page.addScriptTag({ content: fs.readFileSync('src/options/options.js', 'utf8').split('// Initialize when DOM is loaded')[0] + '\nwindow.manager = new OptionsManager();' });
+  await expect(page.locator('#apiKey')).toHaveValue('home-key');
+  await page.locator('#testConnection').click();
+  await page.waitForFunction(() => typeof window.finishTest === 'function');
+  await page.evaluate(() => {
+    chrome.storage.local.get = () => new Promise(resolve => { window.finishRead = () => {
+      chrome.storage.local.get = async () => ({ seerrConnectionsV1: profiles });
+      resolve({ seerrConnectionsV1: profiles });
+    }; });
+  });
+  await page.locator('#savedSeerrSites').selectOption('family');
+  await expect(page.locator('#status')).toContainText('Loading saved site');
+  await page.evaluate(success => finishTest(success ? { success: true, data: { user: 'Old home account' } }
+    : { success: false, error: 'Old home failure' }), success);
+  await expect(page.locator('#testConnection')).toBeEnabled();
+  await expect(page.locator('#status')).toContainText('Loading saved site');
+  await page.evaluate(() => finishRead());
+  await expect(page.locator('#apiKey')).toHaveValue('family-key');
+  await expect(page.locator('#status')).toContainText('Saved site loaded');
+  await expect(page.locator('#status')).not.toContainText('Old home');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

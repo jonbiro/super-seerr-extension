@@ -443,6 +443,7 @@ class OptionsManager {
 
   async editConnection() {
     this.editingConnectionId = document.getElementById('savedSeerrSites').value;
+    this.showStatus('loading', 'Loading saved site…');
     this._connectionBusy = true; this.updateConnectionControls();
     try {
       const id = this.editingConnectionId;
@@ -459,6 +460,7 @@ class OptionsManager {
       }
       this.apiKeyInput.type = 'password'; this.toggleButton.textContent = 'Show';
       this.toggleButton.setAttribute('aria-label', 'Show Seerr API key');
+      this.showStatus('info', 'Saved site loaded. Test its connection or edit and save its settings.');
     } catch (_) {
       // The fields still belong to the last successfully loaded site.
       this.selectConnectionChoice(this.connectionId);

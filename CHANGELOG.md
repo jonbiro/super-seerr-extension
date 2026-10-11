@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.190]
+
+- Replace previous connection-test feedback as soon as a different saved site starts loading in Settings, then confirm when its fields are ready.
+- Invalidate pending test messages so old success or failure replies cannot describe the newly selected site's settings.
+- Cover both reply outcomes arriving during and after a delayed site read.
+
 ## [3.5.189]
 
 - Skip empty or malformed entries in ungrouped Plex search results so one null record cannot prevent an otherwise verified movie or TV addition.
