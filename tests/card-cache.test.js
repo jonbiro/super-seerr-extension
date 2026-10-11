@@ -21,10 +21,10 @@ const INDEX_ENTRY = {
 const CARDS = `<article data-testid="title-card"><div><img src="https://image.tmdb.org/t/p/w300/p123.jpg" alt=""></div></article>
   <article data-testid="title-card"><div><img src="https://image.tmdb.org/t/p/w300/unknown.jpg" alt=""></div></article>`;
 
-function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverUrl = 'https://seerr.example', apiConfigured = false,
+function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverUrl = 'https://seerr.example', apiConfigured = false, detailTitle = 'Dune (2021)',
   configForPage = null, deferCache = false, pageUrl = 'https://seerr.example/discover', detail = false } = {}) {
   const { JSDOM } = require('jsdom');
-  const dom = new JSDOM(`<main>${detail ? '<section class="media-header"><h1>Dune (2021)</h1></section>' : ''}<div id="grid">${CARDS}</div></main>`,
+  const dom = new JSDOM(`<main>${detail ? `<section class="media-header"><h1>${detailTitle}</h1></section>` : ''}<div id="grid">${CARDS}</div></main>`,
     { url: pageUrl, runScripts: 'outside-only' });
   const { window } = dom;
   const localStore = { ...local };
@@ -892,4 +892,23 @@ test('cached-only catalogue records cannot evict fresher live observations at th
   const projected = f.window.testOverlay.projectListIndex(undefined, Config.overlayCacheMaxEntries);
   assert.equal(projected[0].tmdbId, '10000');
   assert.equal(projected.some(item => item.tmdbId === '123'), false);
+});
+
+for (const mediaType of ['movie', 'tv']) for (const [heading, title, year] of [
+  ['Dune (2021)', 'Dune', 2021], ['Blade Runner 2049', 'Blade Runner 2049', null]
+]) test(`Plex ${mediaType} detail sends separate title and year evidence (${heading})`, async t => {
+  const f = openGrid({ detail: true, detailTitle: heading, plexConfigured: true, pageUrl: `${SERVER}${mediaType}/123` });
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.dom.window.close(); });
+  await flush(f.window);
+  const button = f.window.document.querySelector('.seerr-plex-watchlist-button');
+  assert.ok(button);
+  button.click(); await flush(f.window);
+  for (const action of ['plexWatchlistState', 'plexAddToWatchlist']) {
+    const message = f.messages.find(item => item.action === action);
+    assert.ok(message, action);
+    assert.equal(message.data.title, title);
+    assert.equal(message.data.year, year);
+    assert.equal(message.data.mediaType, mediaType);
+    assert.equal(message.data.tmdbId, 123);
+  }
 });

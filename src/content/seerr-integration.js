@@ -1766,7 +1766,8 @@
     if (!container || container.querySelector('.seerr-plex-watchlist-button')) return;
 
     const tmdbId = route.id;
-    const title = document.querySelector('h1')?.textContent?.trim() || '';
+    const heading = document.querySelector('h1')?.textContent?.trim() || '';
+    const { title, year } = splitDisplayTitle(heading);
     const mediaType = route.type === 'tv-detail' ? 'tv' : 'movie';
     if (!tmdbId) return;
 
@@ -1787,7 +1788,7 @@
       try {
         const response = await chrome.runtime.sendMessage({
           action: 'plexAddToWatchlist',
-          data: { tmdbId: Number(tmdbId), title, mediaType }
+          data: { tmdbId: Number(tmdbId), title, year, mediaType }
         });
         if (!ownsButton()) return;
         if (response && response.success) {
@@ -1813,7 +1814,7 @@
     // it disables the button first, so this late answer stands down.
     chrome.runtime.sendMessage({
       action: 'plexWatchlistState',
-      data: { tmdbId: Number(tmdbId), title, mediaType }
+      data: { tmdbId: Number(tmdbId), title, year, mediaType }
     }).then(response => {
       if (!ownsButton() || button.disabled) return;
       if (response && response.success && response.data && response.data.onWatchlist) {
