@@ -519,12 +519,11 @@ class SeerrAPI {
     }
 
     const response = await this.makeAPIRequest('GET', `/api/v1/search?query=${encodeURIComponent(query)}&page=1&language=en`);
-
-    if (mediaType) {
-      return response.results?.filter(result => result.mediaType === mediaType) || [];
+    if (!Array.isArray(response?.results)) {
+      throw new Error('Search results unavailable. Retry the title lookup.');
     }
-
-    return response.results || [];
+    return response.results.filter(result => result && typeof result === 'object' &&
+      !Array.isArray(result) && (!mediaType || result.mediaType === mediaType));
   }
 
   async debugSearch(title, mediaType = 'movie') {
