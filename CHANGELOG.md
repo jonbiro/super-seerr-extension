@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.161]
+
+- Cancel unread failed Seerr session-response bodies before completing rating jobs, preventing error-page downloads from continuing after a grid lookup finishes.
+- Preserve HTTP status and cache absence/failure semantics even when stream cancellation rejects.
+- Add concurrent movie/TV response-cleanup regressions and a local streaming HTTP test that verifies the connection closes.
+
 ## [3.5.160]
 
 - Validate download progress before rendering it, accepting bounded numeric percentages and avoiding object text, duplicate percent suffixes and impossible values.

@@ -40,3 +40,74 @@ test('a direct session response still uses the configured base path and authenti
   assert.equal(captured.url, 'https://seerr.example/family/api/v1/movie/550/ratingscombined');
   assert.equal(captured.options.credentials, 'include');
 });
+
+for (const status of [404, 503]) for (const cancellationFails of [false, true]) {
+  test(`session HTTP ${status} releases its unread body even when cancellation ${cancellationFails ? 'rejects' : 'succeeds'}`, async () => {
+    let open = 0, cancelled = 0;
+    const responses = [];
+    const context = vm.createContext({ URL, AbortSignal, fetch: async () => {
+      open++;
+      const response = new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new TextEncoder().encode('Error response still downloading')); },
+        cancel() { open--; cancelled++; if (cancellationFails) throw new Error('Cancellation failed'); }
+      }), { status });
+      responses.push(response);
+      return response;
+    }, window: { location: { origin: 'https://seerr.example' } } });
+    vm.runInContext(fs.readFileSync('src/content/SeerrSession.js', 'utf8'), context);
+    const session = context.window.createSeerrSession({ Config, Model, log() {}, getServer: () => new URL('https://seerr.example/family') });
+    try {
+      const results = await Promise.all(Array.from({ length: 12 }, (_, id) => session.fetchJsonFromSeerr(`/api/v1/movie/${id + 1}/ratingscombined`)));
+      assert.ok(results.every(result => result.ok === false && result.status === status && result.data === null));
+      assert.equal(open, 0, 'completed lookups must not leave refused response bodies downloading');
+      assert.equal(cancelled, 12);
+    } finally { await Promise.allSettled(responses.map(response => response.body.cancel())); }
+  });
+}
+
+for (const mediaType of ['movie', 'tv']) for (const status of [404, 503]) {
+  test(`releasing ${mediaType} HTTP ${status} bodies preserves cache absence/failure semantics`, async () => {
+    let opened = 0, cancelled = 0;
+    const responses = [];
+    const context = vm.createContext({ URL, AbortSignal, fetch: async () => {
+      opened++;
+      const response = new Response(new ReadableStream({
+        start(controller) { controller.enqueue(new Uint8Array([1])); },
+        cancel() { cancelled++; }
+      }), { status });
+      responses.push(response);
+      return response;
+    }, window: { location: { origin: 'https://seerr.example' } } });
+    vm.runInContext(fs.readFileSync('src/content/SeerrSession.js', 'utf8'), context);
+    const session = context.window.createSeerrSession({ Config, Model, log() {}, getServer: () => new URL('https://seerr.example/family'),
+      mergeBundles: (a, b) => a || b, isBundleComplete: () => false });
+    const outcome = {};
+    try {
+      assert.equal(await session.fetchSeerrSessionRatings(550, mediaType, null, outcome), null);
+      assert.equal(outcome.conclusive === false, status !== 404, 'only an actual absence can be negatively cached');
+      assert.equal(opened, status === 404 || mediaType === 'tv' ? 2 : 3);
+      assert.equal(cancelled, opened, 'every failed endpoint must release its body');
+    } finally { await Promise.allSettled(responses.map(response => response.body.cancel())); }
+  });
+}
+
+test('a failed session read closes an actual streaming HTTP response', { timeout: 3000 }, async t => {
+  let closed;
+  const responseClosed = new Promise(resolve => { closed = resolve; });
+  const seen = [];
+  const server = http.createServer((request, response) => {
+    seen.push(request.url);
+    response.once('close', closed);
+    response.writeHead(503, { 'Content-Type': 'text/html' });
+    response.write('Proxy error body still downloading');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => new Promise(resolve => { server.closeAllConnections(); server.close(resolve); }));
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  const context = vm.createContext({ URL, fetch, AbortSignal, window: { location: { origin } } });
+  vm.runInContext(fs.readFileSync('src/content/SeerrSession.js', 'utf8'), context);
+  const session = context.window.createSeerrSession({ Config, Model, log() {}, getServer: () => new URL(`${origin}/family`) });
+  assert.equal((await session.fetchJsonFromSeerr('/api/v1/movie/550/ratingscombined')).status, 503);
+  await responseClosed;
+  assert.deepEqual(seen, ['/family/api/v1/movie/550/ratingscombined']);
+});

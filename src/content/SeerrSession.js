@@ -15,6 +15,9 @@
       });
 
       if (!response.ok) {
+        // Fetch settles at headers. Stop unread error bodies before releasing
+        // a rating job, without turning a known HTTP result into a transport error.
+        try { await response.body?.cancel(); } catch (_) { /* Preserve the HTTP status. */ }
         log(`Seerr ratings endpoint ${endpoint} returned ${response.status}`);
         return { ok: false, status: response.status, data: null };
       }
