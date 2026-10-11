@@ -235,7 +235,9 @@ class BaseIntegration {
           await this.updateStatus();
           return;
         }
-        if (this.isFlyoutExpanded()) this.cleanupUI();
+        // Retire action guards and status from the old identity even when
+        // its panel is collapsed; replacement controls must start independently.
+        if (!sameIdentity && this.mediaData) this.cleanupUI();
         if (!sameIdentity) this.plexOnWatchlist = false;
         this.mediaData = mediaData;
         this._mediaConnectionToken = connectionToken;

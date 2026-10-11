@@ -212,3 +212,53 @@ test('a newly discovered IMDb identity replaces an expanded same-page flyout', a
   assert.equal(original.isConnected, false, 'the old action identity is removed');
   assert.equal(fixture.window.document.querySelectorAll('.seerr-flyout').length, 1);
 });
+
+for (const [handler, clientAction] of [
+  ['handleRequest', 'requestMedia'], ['handleWatchlistClick', 'addToWatchlist'], ['handlePlexWatchlistClick', 'plexAddToWatchlist']
+]) {
+  test(`a collapsed same-page identity replacement retires the old ${clientAction} attempt`, async t => {
+    const fixture = loadIntegration(); t.after(() => fixture.window.close());
+    const integration = new fixture.window.BaseIntegration('Probe', { uiTheme: 'flyout' });
+    t.after(() => integration.destroy());
+    let title = 'Old', finish;
+    integration.extractMediaData = async () => ({ title, mediaType: 'movie', tmdbId: title === 'Old' ? 1 : 2 });
+    integration.client.sendMessage = async message => ({ success: true, data: message.action === 'getConfigState'
+      ? { connectionToken: 'Home', plexConfigured: false } : null });
+    integration.client.getMediaStatus = async () => ({ status: 'available', buttonClass: 'request', buttonText: 'Request' });
+    integration.client[clientAction] = () => new Promise(resolve => { finish = resolve; });
+    const notices = [];
+    integration.ui.createNotification = (...args) => notices.push(args);
+    await integration.extractAndSetup();
+    const oldPanel = integration.uiElements.flyout;
+    const sending = integration[handler]();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(typeof finish, 'function');
+    title = 'New';
+    await integration.extractAndSetup();
+    assert.equal(oldPanel.isConnected, false);
+    assert.equal(integration.mediaData.tmdbId, 2);
+    assert.equal(integration.uiElements.button.disabled, false, 'new title must finish its own status check');
+    assert.equal(integration.uiElements.button.textContent, 'Request');
+    finish({}); await sending;
+    assert.equal(notices.length, 0, 'old completion cannot claim success for the replacement title');
+    assert.equal(integration.plexOnWatchlist, false);
+  });
+}
+
+test('same-page identity replacement rebuilds button-theme controls with the new status', async t => {
+  const fixture = loadIntegration(); t.after(() => fixture.window.close());
+  const integration = new fixture.window.BaseIntegration('Probe', { uiTheme: 'button' });
+  t.after(() => integration.destroy());
+  let title = 'Old';
+  integration.extractMediaData = async () => ({ title, mediaType: 'movie', tmdbId: title === 'Old' ? 1 : 2 });
+  integration.getButtonInsertionPoint = () => fixture.window.document.body;
+  integration.client.sendMessage = async () => ({ success: true, data: {} });
+  integration.client.getMediaStatus = async media => ({ status: 'available', buttonClass: 'request', buttonText: `Request ${media.title}` });
+  await integration.extractAndSetup();
+  const oldButton = integration.uiElements.button;
+  title = 'New';
+  await integration.extractAndSetup();
+  assert.equal(oldButton.isConnected, false);
+  assert.equal(integration.uiElements.button.textContent, 'Request New');
+  assert.equal(integration.currentStatusData.buttonText, 'Request New');
+});
