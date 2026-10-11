@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.192]
+
+- Discard pending remembered-title lookups when a saved match is forgotten or replaced, so a confirmed change cannot be undone by an older storage or candidate reply.
+- Invalidate only after successful persistence; failed changes retain the existing saved choice.
+- Cover movie and TV lookups during both read phases, replacement recovery, and failed-mutation controls.
+
 ## [3.5.191]
 
 - Disable Seerr and Plex connection-test buttons while a saved site's fields are loading, preventing tests against the previous draft.

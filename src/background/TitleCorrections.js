@@ -30,6 +30,7 @@
         assertCurrent();
         const entry = { key, title: String(data.original.title).slice(0, 300), selectedTitle: selected.title, mediaType: selected.mediaType, tmdbId: selected.tmdbId, year: selected.year };
         await chrome.storage.local.set({ [KEY]: [entry, ...rows.filter(row => row.key !== key)].slice(0, 200) });
+        this.titleCorrectionGeneration = (this.titleCorrectionGeneration || 0) + 1;
         this.invalidateSeerrReads();
       });
     },
@@ -38,7 +39,9 @@
       const server = this.baseUrl;
       const apiKey = this.apiKey;
       const token = this.connectionToken();
-      const isCurrent = () => server === this.baseUrl && apiKey === this.apiKey && token === this.connectionToken();
+      const generation = this.titleCorrectionGeneration || 0;
+      const isCurrent = () => server === this.baseUrl && apiKey === this.apiKey && token === this.connectionToken()
+        && generation === (this.titleCorrectionGeneration || 0);
       const key = this.correctionKey(data);
       const saved = (await this.getTitleCorrections()).find(row => row.key === key);
       if (!saved || !isCurrent()) return null;
@@ -49,6 +52,7 @@
       return this.queueRecentAction(async () => {
         const rows = await this.getTitleCorrections();
         await chrome.storage.local.set({ [KEY]: rows.filter(row => row.key !== key) });
+        this.titleCorrectionGeneration = (this.titleCorrectionGeneration || 0) + 1;
         this.invalidateSeerrReads();
       });
     }
