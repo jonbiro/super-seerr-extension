@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.175]
+
+- Validate catalogue release years using the worker's date format instead of coercing arrays, numeric dates, or partial strings into identity evidence.
+- Treat numeric years outside 1800–9999 as unknown, including when restoring a server's saved title index, while retaining valid catalogue years and date strings.
+- Add ten bulk-flow regressions covering malformed metadata and valid-year controls; eight failed before the fix.
+
 ## [3.5.174]
 
 - Preserve the selected card's catalogue release year in bulk season reviews and requests, allowing the worker's existing same-name remake checks to use that evidence.

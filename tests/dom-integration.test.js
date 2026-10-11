@@ -1321,3 +1321,34 @@ for (const mediaType of ['movie', 'tv']) test(`bulk ${mediaType} retains the cat
   assert.equal(writes[0].tmdbId, 1);
   assert.equal(writes[0].mediaType, mediaType);
 });
+
+for (const [label, metadata, expected] of [
+  ['array date', { releaseDate: ['2021-01-01'] }, null],
+  ['numeric date', { releaseDate: 2021 }, null],
+  ['truncated date', { releaseDate: '2021garbage' }, null],
+  ['short date', { releaseDate: '202' }, null],
+  ['early date', { releaseDate: '0170-01-01' }, null],
+  ['negative year', { year: -2021 }, null],
+  ['oversized year', { year: 10000 }, null],
+  ['zero year', { year: 0 }, null],
+  ['year-only date', { releaseDate: '2021' }, 2021],
+  ['numeric catalogue year', { year: 2021 }, 2021]
+]) test(`bulk catalogue identity handles ${label}`, async t => {
+  const f = createOverlay({ posters: true, listItems: [
+    { id: 1, mediaType: 'movie', title: 'Low', posterPath: '/poster1.jpg', ...metadata }
+  ] });
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const original = f.window.chrome.runtime.sendMessage, writes = [];
+  f.window.chrome.runtime.sendMessage = async message => {
+    if (message.action === 'requestMedia') { writes.push(message.data); return { success: true }; }
+    return original(message);
+  };
+  const doc = f.window.document;
+  doc.querySelector('.seerr-toggle-select').click();
+  doc.querySelector('[data-id="1"] .seerr-select-checkbox').click();
+  doc.querySelector('.seerr-bulk-review').click();
+  doc.querySelector('.confirm-btn').click(); await settle();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].year, expected);
+});

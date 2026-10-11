@@ -367,9 +367,13 @@
 
   function objectYear(obj) {
     if (!obj || typeof obj !== 'object') return null;
+    if (Number.isInteger(obj.year) && obj.year >= 1800 && obj.year <= 9999) return obj.year;
     const date = obj.releaseDate || obj.firstAirDate || obj.mediaInfo?.releaseDate || obj.mediaInfo?.firstAirDate || obj.media?.releaseDate || obj.media?.firstAirDate || '';
-    const year = parseInt(String(date).slice(0, 4), 10);
-    return Number.isFinite(year) ? year : null;
+    // Use the same evidence format as the worker's release-year checks.
+    // Coerced arrays and partial dates must not become title identities.
+    if (typeof date !== 'string' || !/^\d{4}(?:-\d{2}-\d{2})?$/.test(date)) return null;
+    const year = Number(date.slice(0, 4));
+    return year >= 1800 ? year : null;
   }
 
   function indexEmbeddedRatings() {
@@ -487,7 +491,7 @@
       mediaType,
       tmdbId: String(tmdbId),
       title: objectTitle(candidate),
-      year: Number.isInteger(candidate.year) ? candidate.year : objectYear(candidate)
+      year: objectYear(candidate)
     };
   }
 
@@ -551,7 +555,7 @@
       seen.add(key);
       const title = typeof entry.title === 'string' ? entry.title : '';
       const originalTitle = typeof entry.originalTitle === 'string' ? entry.originalTitle : '';
-      const year = Number.isInteger(entry.year) ? entry.year : null;
+      const year = objectYear(entry);
       const posterPath = typeof entry.posterPath === 'string' && entry.posterPath.length > 1 ? entry.posterPath : null;
       restored.push({
         tmdbId, mediaType, title, originalTitle, year, posterPath,
