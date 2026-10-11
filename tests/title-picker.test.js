@@ -29,7 +29,7 @@ test('title picker escapes remote text, traps keyboard focus and cancels without
   const pending = ui.chooseTitle([{ title: '<img src=x onerror=alert(1)>', year: 1982, tmdbId: 1, mediaType: 'movie', overview: '<script>bad()</script>' }], { title: 'Film' });
   const dialog = page.window.document.querySelector('[role="dialog"]');
   assert.equal(dialog.querySelectorAll('img,script').length, 0);
-  assert.equal(page.window.document.activeElement.textContent, 'Cancel');
+  assert.equal(page.window.document.activeElement, dialog.querySelector('h2'));
   dialog.dispatchEvent(new page.window.KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
   assert.equal(page.window.document.activeElement.className, 'seerr-title-choice');
   dialog.dispatchEvent(new page.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));

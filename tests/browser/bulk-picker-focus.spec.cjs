@@ -75,3 +75,42 @@ test('bulk review keeps host shortcuts from cancelling keyboard navigation', asy
   expect(await page.evaluate(() => window.hostKeys)).toEqual(['h']);
   expect(await page.evaluate(() => window.writes)).toEqual([]);
 });
+
+test('bulk review starts at its heading on a short screen', async ({ page }) => {
+  await page.addStyleTag({ path: path.resolve('src/content/seerr-overlay.css') });
+  await page.getByRole('dialog', { name: 'Review your bulk request' }).getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.setViewportSize({ width: 320, height: 220 });
+  await page.evaluate(() => {
+    for (let i = 1; i <= 20; i++) {
+      const card = document.createElement('article');
+      card.dataset.testid = 'title-card';
+      const link = document.createElement('a'); link.href = `/movie/${1000 + i}`;
+      const heading = document.createElement('h2'); heading.textContent = `Movie ${i}`;
+      link.append(heading); card.append(link); document.querySelector('main').append(card);
+    }
+  });
+  await expect(page.locator('.seerr-select-checkbox')).toHaveCount(21);
+  await page.locator('.seerr-select-checkbox').evaluateAll(nodes => nodes.forEach(node => {
+    if (node.getAttribute('aria-checked') !== 'true') node.click();
+  }));
+  const review = page.locator('.seerr-bulk-review');
+  await review.click();
+  const dialog = page.getByRole('dialog', { name: 'Review your bulk request' });
+  const scroll = await dialog.evaluate(node => node.scrollTop);
+  await dialog.screenshot({ path: `/tmp/super-seerr-3.5.170-bulk-${scroll ? 'scrolled' : 'top'}.png` });
+  expect(scroll).toBe(0);
+  await expect(dialog.getByRole('heading')).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(dialog.getByRole('button', { name: 'Choose seasons' })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await expect(review).toBeFocused();
+  expect(await page.evaluate(() => window.writes)).toEqual([]);
+});
+
+test('bulk review uses a singular title count for one selected title', async ({ page }) => {
+  const dialog = page.getByRole('dialog', { name: 'Review your bulk request' });
+  await expect(dialog).toContainText('1 title ready to request');
+  await expect(dialog.getByRole('button', { name: 'Request 1 title', exact: true })).toBeDisabled();
+  expect(await page.evaluate(() => window.writes)).toEqual([]);
+});

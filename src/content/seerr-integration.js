@@ -2503,10 +2503,10 @@
     modal.setAttribute('aria-label', 'Review your bulk request');
     modal.setAttribute('data-seerr-overlay', 'true');
     modal.innerHTML = `
-      <h3>Review your bulk request</h3>
+      <h3 tabindex="-1">Review your bulk request</h3>
       <div style="margin-bottom:12px">
-        <strong style="color:#10b981">✅ ${readyTitles.length} titles ready to request</strong>
-        ${excludedTitles.length > 0 ? `<br><strong style="color:#f59e0b">⚠️ ${excludedTitles.length} titles excluded</strong>` : ''}
+        <strong style="color:#10b981">✅ ${readyTitles.length} title${readyTitles.length === 1 ? '' : 's'} ready to request</strong>
+        ${excludedTitles.length > 0 ? `<br><strong style="color:#f59e0b">⚠️ ${excludedTitles.length} title${excludedTitles.length === 1 ? '' : 's'} excluded</strong>` : ''}
       </div>
       <ul>
         ${readyTitles.map((t, index) => `<li>• ${escapeHtml(t.title)}${t.mediaType === 'tv' ? ` <button type="button" data-season-index="${index}">Choose seasons</button><span class="seerr-season-choice"></span>` : ''}</li>`).join('')}
@@ -2560,7 +2560,9 @@
       });
     }
     modal.querySelector('.cancel-btn').addEventListener('click', closeModal);
-    modal.querySelector('.cancel-btn').focus();
+    // Review starts at the summary even when the title list exceeds the
+    // available height. Keyboard navigation enters its first enabled action.
+    modal.querySelector('h3').focus({ preventScroll: true });
     modal.addEventListener('keydown', event => {
       event.stopPropagation();
       if (event.key === 'Escape') { event.preventDefault(); closeModal(); }

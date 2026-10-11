@@ -25,7 +25,7 @@ class UIComponents {
       backdrop.style.cssText = 'box-sizing:border-box;position:fixed;inset:0;background:#0009;z-index:2147483647;display:grid;place-items:center;padding:20px;color:#f9fafb;font:14px system-ui;';
       const dialog = this.el('div', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Choose matching title', tabindex: '-1' });
       dialog.style.cssText = 'box-sizing:border-box;min-width:0;overflow-wrap:anywhere;background:#171b25;color:#f9fafb;border:1px solid #64748b;border-radius:12px;padding:20px;max-width:540px;width:100%;max-height:min(85vh, calc(100dvh - 40px));overflow:auto;';
-      const heading = this.el('h2', { textContent: 'Choose matching title' });
+      const heading = this.el('h2', { textContent: 'Choose matching title', tabindex: '-1' });
       const explanation = this.el('p', { textContent: `Select the correct match for “${title || ''}”. This checks availability; it does not send a request.` });
       dialog.append(heading, explanation);
       const remember = this.el('input', { type: 'checkbox' });
@@ -63,7 +63,8 @@ class UIComponents {
           else if (!event.shiftKey && (index === controls.length - 1 || index < 0)) { event.preventDefault(); controls[0].focus(); }
         }
       });
-      cancel.focus();
+      // Keep the explanation visible instead of scrolling to the footer.
+      heading.focus({ preventScroll: true });
     });
   }
 

@@ -162,7 +162,7 @@ test('bulk dialog supports keyboard selection and cancellation stops subsequent 
   assert.equal(boxes[0].getAttribute('aria-checked'), 'true');
   doc.querySelector('.seerr-bulk-review').click();
   assert.equal(doc.querySelector('[role="dialog"]').getAttribute('aria-modal'), 'true');
-  assert.equal(doc.activeElement.className, 'cancel-btn');
+  assert.equal(doc.activeElement, doc.querySelector('.seerr-confirmation-modal h3'));
   let requests = 0, release;
   const originalSend = fixture.window.chrome.runtime.sendMessage;
   fixture.window.chrome.runtime.sendMessage = message => {

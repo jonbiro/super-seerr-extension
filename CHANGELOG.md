@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.170]
+
+- Keep title-match explanations and bulk-review summaries visible on opening by focusing their headings instead of their footer Cancel buttons.
+- Preserve keyboard entry into dialog controls, Escape cancellation and focus return; correct singular ready/excluded title counts.
+- Add narrow-screen regressions for empty/single/long candidate lists and a 21-title bulk review, with before/after render inspection.
+
 ## [3.5.169]
 
 - Open TV season review at its title and instructions instead of scrolling to the Cancel button at the bottom of long lists.
