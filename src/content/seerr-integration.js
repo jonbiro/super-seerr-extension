@@ -1108,8 +1108,7 @@
     // find out". Only the first is worth remembering.
     if (options.signal?.aborted) return null;
     const outcome = { signal: options.signal };
-    const promise = resolveRatings(tmdbId, title, year, mediaType, { ...options, outcome });
-    ratingsCache.set(pendingKey, promise);
+    const resolution = resolveRatings(tmdbId, title, year, mediaType, { ...options, outcome });
     // A hung channel must not pin the coalesced promise forever: after the
     // deadline the title goes provisional (retried in minutes, never stored)
     // and the late answer finds its slot already cleared and drops itself.
@@ -1118,55 +1117,61 @@
       resolveTimer = setTimeout(() => { outcome.conclusive = false; resolve(null); }, Config.resolveTimeoutMs);
     });
 
-    try {
-      const bundle = await Promise.race([promise, deadline]);
-      if (options.signal?.aborted) return null;
-      // Storing the absence is the point: without it every visit asks again.
-      let storable = bundle && Model.hasAnyScore(bundle) ? bundle : null;
-      // An unavailable source is not evidence that a previously known score
-      // disappeared. Keep those values visible and retry the missing source.
-      if (options.refresh && outcome.conclusive === false && previous?.bundle) {
-        storable = mergeBundles(storable, previous.bundle);
-      }
-      // A lookup that could not complete tells us nothing about the title, so
-      // it is held briefly and in memory only: long enough that the page stops
-      // re-asking on every pass, short enough to cost nothing once the server
-      // or the worker is back.
-      const provisional = !storable && outcome.conclusive === false;
-      const publicCheckedAt = outcome.publicCheckedAt ?? (outcome.conclusive === false ? previous?.publicCheckedAt : null);
-      if (ratingsCache.get(pendingKey) === promise) {
-        while (resolvedCacheSize() >= Config.overlayCacheMaxEntries) {
-          const lru = [...ratingsCache.keys()].find(existingKey => !existingKey.startsWith('pending:'));
-          if (lru === undefined) break;
-          ratingsCache.delete(lru);
+    // Coalesce the complete operation, including its deadline, fallback and
+    // cleanup. Sharing the raw provider promise left later callers unbounded.
+    const pending = (async () => {
+      try {
+        const bundle = await Promise.race([resolution, deadline]);
+        if (options.signal?.aborted) return null;
+        // Storing the absence is the point: without it every visit asks again.
+        let storable = bundle && Model.hasAnyScore(bundle) ? bundle : null;
+        // An unavailable source is not evidence that a previously known score
+        // disappeared. Keep those values visible and retry the missing source.
+        if (options.refresh && outcome.conclusive === false && previous?.bundle) {
+          storable = mergeBundles(storable, previous.bundle);
         }
-        const checkedAt = Date.now();
-        const status = outcome.conclusive === false ? 'failed' : outcome.uncertain ? 'uncertain'
-          : !storable ? 'unrated' : isBundleComplete(storable) ? 'rated' : 'partial';
-        const retryMs = outcome.conclusive === false ? Config.inconclusiveRetryMs
-          : status === 'unrated' ? Config.unratedRetryMs
-          : status === 'rated' ? Config.ratingsFreshMs : Config.partialRatingsRetryMs;
-        // Expired provider data stays visible after a failed refresh, but its
-        // old expiry must not cause another lookup on every badge pass.
-        const retryAt = outcome.conclusive === false ? checkedAt + retryMs
-          : Math.min(checkedAt + retryMs, (publicCheckedAt ?? checkedAt) + Config.rtCacheTtlMs);
-        ratingsCache.set(key, { bundle: storable, cachedAt: checkedAt,
-          ...(publicCheckedAt ? { publicCheckedAt } : {}), retryAt,
-          diagnostics: { status, checkedAt, source: storable?.source || 'No source returned a score' },
-          ...(provisional ? { provisional: true } : {}) });
-        if (!provisional) schedulePersistedRatingsFlush();
+        // A lookup that could not complete tells us nothing about the title, so
+        // it is held briefly and in memory only: long enough that the page stops
+        // re-asking on every pass, short enough to cost nothing once the server
+        // or the worker is back.
+        const provisional = !storable && outcome.conclusive === false;
+        const publicCheckedAt = outcome.publicCheckedAt ?? (outcome.conclusive === false ? previous?.publicCheckedAt : null);
+        if (ratingsCache.get(pendingKey) === pending) {
+          while (resolvedCacheSize() >= Config.overlayCacheMaxEntries) {
+            const lru = [...ratingsCache.keys()].find(existingKey => !existingKey.startsWith('pending:'));
+            if (lru === undefined) break;
+            ratingsCache.delete(lru);
+          }
+          const checkedAt = Date.now();
+          const status = outcome.conclusive === false ? 'failed' : outcome.uncertain ? 'uncertain'
+            : !storable ? 'unrated' : isBundleComplete(storable) ? 'rated' : 'partial';
+          const retryMs = outcome.conclusive === false ? Config.inconclusiveRetryMs
+            : status === 'unrated' ? Config.unratedRetryMs
+            : status === 'rated' ? Config.ratingsFreshMs : Config.partialRatingsRetryMs;
+          // Expired provider data stays visible after a failed refresh, but its
+          // old expiry must not cause another lookup on every badge pass.
+          const retryAt = outcome.conclusive === false ? checkedAt + retryMs
+            : Math.min(checkedAt + retryMs, (publicCheckedAt ?? checkedAt) + Config.rtCacheTtlMs);
+          ratingsCache.set(key, { bundle: storable, cachedAt: checkedAt,
+            ...(publicCheckedAt ? { publicCheckedAt } : {}), retryAt,
+            diagnostics: { status, checkedAt, source: storable?.source || 'No source returned a score' },
+            ...(provisional ? { provisional: true } : {}) });
+          if (!provisional) schedulePersistedRatingsFlush();
+        }
+        return storable || bundle;
+      } catch (error) {
+        if (options.refresh && previous?.bundle && ratingsCache.get(pendingKey) === pending) {
+          ratingsCache.set(key, { ...previous, refreshing: false, retryAt: Date.now() + Config.inconclusiveRetryMs,
+            diagnostics: { status: 'failed', checkedAt: Date.now(), source: previous.bundle.source } });
+        }
+        throw error;
+      } finally {
+        if (resolveTimer !== null) clearTimeout(resolveTimer);
+        if (ratingsCache.get(pendingKey) === pending) ratingsCache.delete(pendingKey);
       }
-      return storable || bundle;
-    } catch (error) {
-      if (options.refresh && previous?.bundle && ratingsCache.get(pendingKey) === promise) {
-        ratingsCache.set(key, { ...previous, refreshing: false, retryAt: Date.now() + Config.inconclusiveRetryMs,
-          diagnostics: { status: 'failed', checkedAt: Date.now(), source: previous.bundle.source } });
-      }
-      throw error;
-    } finally {
-      if (resolveTimer !== null) clearTimeout(resolveTimer);
-      if (ratingsCache.get(pendingKey) === promise) ratingsCache.delete(pendingKey);
-    }
+    })();
+    ratingsCache.set(pendingKey, pending);
+    return pending;
   }
 
   function appendRatingDetails(container, info) {

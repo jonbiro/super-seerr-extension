@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.87]
+
+- Share the complete bounded ratings lookup between concurrent callers, including its deadline, cached-score fallback and cleanup, instead of exposing the raw provider promise to duplicate cards.
+- Ensure every caller finishes when the provider deadline expires and every coalesced failed refresh retains the same previously known score.
+- Add deterministic regressions for hung concurrent lookups and failed concurrent refreshes while preserving per-title and movie/TV separation.
+
 ## [3.5.86]
 
 - Remove stale Seerr controls and cached snapshots when settings storage or the worker configuration read fails, instead of retaining the previous active site or falling back to a synced URL.
