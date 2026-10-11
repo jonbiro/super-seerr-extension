@@ -94,3 +94,13 @@ for (const outcome of ['unconfigured', 'failure']) {
     assert.equal(f.plexUpdates.at(-1)[2].plexConfigured, true);
   });
 }
+
+test('an unknown Plex lookup preserves a previously confirmed watchlist state', async t => {
+  const f = fixture(t);
+  f.integration.plexOnWatchlist = true;
+  await f.integration.updateStatus();
+  f.resolve({ onWatchlist: false, unknown: true });
+  await settle();
+  assert.equal(f.integration.plexOnWatchlist, true);
+  assert.equal(f.plexUpdates.at(-1)[2].plexOnWatchlist, true);
+});

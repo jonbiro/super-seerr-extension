@@ -726,3 +726,23 @@ test('detail button stays actionable when the title is not watchlisted', async t
   assert.equal(button.textContent, '＋ Add to Plex Watchlist');
   assert.equal(button.disabled, false);
 });
+
+for (const failure of ['network', 'HTTP 401', 'invalid JSON', 'non-JSON response']) {
+  test(`a Plex user-state ${failure} failure is unknown rather than confirmed off-watchlist`, async () => {
+    const worker = loadWorker({
+      get: async () => ({}), local: { plexToken: 't' },
+      fetch: async url => {
+        assert.match(String(url), /\/userState$/);
+        if (failure === 'network') throw new TypeError('Failed to fetch');
+        if (failure === 'HTTP 401') return jsonResponse({}, { status: 401 });
+        if (failure === 'non-JSON response') return { ...jsonResponse({}), headers: { get: () => 'text/html' }, text: async () => '<html>Unavailable</html>' };
+        return { ...jsonResponse({}), headers: { get: () => 'application/json' }, json: async () => { throw new SyntaxError('Invalid JSON'); } };
+      }
+    });
+    await worker.ready;
+    worker.api.plexResolveRatingKey = async () => ({ ratingKey: 'rk1', title: 'Dune' });
+    const result = await worker.api.plexWatchlistState({ title: 'Dune', mediaType: 'movie', tmdbId: 438631 });
+    assert.equal(result.unknown, true);
+    assert.equal(result.onWatchlist, false);
+  });
+}

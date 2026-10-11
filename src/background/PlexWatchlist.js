@@ -245,14 +245,16 @@
       return matching[0];
     },
 
+    // null means a successful empty state; undefined means the read failed.
     async plexUserState(ratingKey, token) {
       try {
         const state = await this.plexFetch(`${METADATA}/library/metadata/${encodeURIComponent(ratingKey)}/userState`, { token });
-        const container = state && state.MediaContainer ? state.MediaContainer : state;
-        const item = container && (container.UserState || container.userState);
+        if (!state || typeof state !== 'object' || Array.isArray(state)) return undefined;
+        const container = state.MediaContainer || state;
+        const item = container.UserState || container.userState;
         return this.asPlexList(item)[0] || null;
       } catch (_) {
-        return null;
+        return undefined;
       }
     },
 
@@ -267,6 +269,7 @@
         if (this.plexToken !== token) return { onWatchlist: false, unknown: true };
         const state = await this.plexUserState(resolved.ratingKey, token);
         if (this.plexToken !== token) return { onWatchlist: false, unknown: true };
+        if (state === undefined) return { onWatchlist: false, unknown: true };
         const onWatchlist = !!(state && (state.watchlistedAt || state.watchlisted || state.onWatchlist));
         return { onWatchlist, ratingKey: resolved.ratingKey, title: resolved.title || media.title };
       } catch (_) {
