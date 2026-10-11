@@ -78,10 +78,11 @@
             const checkedAt = entry.checkedAt ?? entry.expiresAt - RatingsConfig.rtCacheTtlMs;
             if (!Number.isFinite(checkedAt) || checkedAt <= 0 || checkedAt > now + 60000) continue;
             const diagnostic = ['uncertain', 'failed', 'unrated', 'rated'].includes(entry.diagnostic) ? entry.diagnostic : null;
-            // Older versions kept failed detail reads for an hour. Honor the
-            // short failure backoff on upgrade as well as for new results.
-            const expiresAt = diagnostic === 'failed'
-              ? Math.min(entry.expiresAt, checkedAt + RatingsConfig.inconclusiveRetryMs) : entry.expiresAt;
+            // Persisted expiry cannot extend a verdict beyond its check time's
+            // TTL. This also shortens older failure records on upgrade.
+            const ttl = diagnostic === 'failed' ? RatingsConfig.inconclusiveRetryMs
+              : entry.value == null ? RatingsConfig.rtNegativeCacheTtlMs : RatingsConfig.rtCacheTtlMs;
+            const expiresAt = Math.min(entry.expiresAt, checkedAt + ttl);
             if (now >= expiresAt) continue;
             this.rtCache.set(key, { value: entry.value ?? null, expiresAt, checkedAt, diagnostic });
             // Title-only, negative and failed lookups also use the monotonic

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.194]
+
+- Bound persisted Rotten Tomatoes title-cache expiry by its recorded check time and the scored, negative, or failure TTL.
+- Recheck expired verdicts even when stored expiry is inflated, while retaining fresh records and their original check times.
+- Cover scored, unrated, uncertain, and failed entries, provider request counts, and corrected expiry after persistence.
+
 ## [3.5.193]
 
 - Prevent an older pending saved-match write from restoring a forgotten choice or overwriting a newer confirmed choice after delayed candidate validation.

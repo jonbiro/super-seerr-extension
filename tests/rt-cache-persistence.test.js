@@ -317,3 +317,29 @@ for (const invalid of [
   assert.ok(entry.checkedAt <= Date.now() + 60000);
   assert.ok(Number.isFinite(entry.expiresAt));
 });
+
+for (const [diagnostic, value, ttl] of [
+  ['rated', { rtCriticsScore: 11, confidence: 1 }, Config.rtCacheTtlMs],
+  ['unrated', null, Config.rtNegativeCacheTtlMs],
+  ['uncertain', null, Config.rtNegativeCacheTtlMs],
+  ['failed', { rtCriticsScore: 11, confidence: 1 }, Config.inconclusiveRetryMs]
+]) for (const expired of [false, true]) {
+  test(`persisted ${diagnostic} expiry is bounded by its check time (expired: ${expired})`, async () => {
+    const now = Date.now(), checkedAt = now - (expired ? ttl + 1000 : 1000);
+    const key = 'movie:Example:2020';
+    const worker = loadWorker({ local: stored({ [key]: {
+      value, diagnostic, checkedAt, expiresAt: now + Config.rtCacheTtlMs * 10
+    } }) });
+    await worker.ready;
+    const provider = stubRt(worker.api);
+    await worker.api.loadRtCache();
+    if (expired) assert.equal(worker.api.rtCache.has(key), false, 'an inflated expiry cannot extend an expired verdict');
+    else assert.equal(worker.api.rtCache.get(key).expiresAt, checkedAt + ttl);
+    const result = await worker.api.getRottenTomatoesRatings({ title: 'Example', year: 2020 });
+    assert.equal(result?.rtCriticsScore ?? null, expired ? 80 : value?.rtCriticsScore ?? null);
+    assert.equal(provider.fetches, expired ? 2 : 0, 'fresh records still avoid provider requests');
+    await worker.api.flushRtCache();
+    const entry = worker.localStore.rtCacheV1.entries[key];
+    assert.ok(entry.expiresAt <= entry.checkedAt + (expired ? Config.rtCacheTtlMs : ttl));
+  });
+}
