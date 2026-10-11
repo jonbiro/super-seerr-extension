@@ -15,7 +15,9 @@
     const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Retry loading presets'; retry.hidden = true;
     const status = document.createElement('span'); status.setAttribute('role', 'status');
     const heading = document.createElement('span'); heading.className = 'seerr-presets-label'; heading.textContent = 'Presets';
-    wrapper.append(heading, select, name, save, remove, retry, status); bar.appendChild(wrapper);
+    const actions = document.createElement('span'); actions.className = 'seerr-preset-actions';
+    actions.append(save, remove, retry);
+    wrapper.append(heading, select, name, actions, status); bar.appendChild(wrapper);
     const sorts = new Set([...bar.querySelector('.seerr-sort-select').options].map(option => option.value));
     const limits = { minCritics: 100, minAudience: 100, minTmdb: 10, minImdb: 10 };
     let presets = [];

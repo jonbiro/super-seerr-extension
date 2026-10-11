@@ -32,15 +32,27 @@ for (const width of [1440, 1280, 1024, 768, 600, 390, 320]) test(`filter layout 
   if (process.env.FILTER_PREVIEW) await page.locator('#seerr-filter-bar').screenshot({ path: `/tmp/super-seerr-filter-${process.env.FILTER_PREVIEW}-${width}.png` });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const critics = page.getByLabel('Critics ≥', { exact: true });
+  const sortBounds = await page.getByLabel('Sort titles', { exact: true }).boundingBox();
+  const presetBounds = await page.getByLabel('Saved filter presets').boundingBox();
+  const nameBounds = await page.getByLabel('Preset name').boundingBox();
+  const saveBounds = await page.getByRole('button', { name: 'Save preset', exact: true }).boundingBox();
+  const deleteBounds = await page.getByRole('button', { name: 'Delete preset', exact: true }).boundingBox();
+  // Preset actions stay together instead of leaving Delete on an orphan row.
+  expect(Math.abs(saveBounds.y - deleteBounds.y)).toBeLessThanOrEqual(1);
+  const panelBounds = await page.locator('#seerr-filter-bar').boundingBox();
+  expect(Math.abs(sortBounds.x - panelBounds.x - 17)).toBeLessThanOrEqual(1);
+  if (width >= 600 && width <= 768) {
+    expect(Math.abs(presetBounds.y - nameBounds.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(presetBounds.width - nameBounds.width)).toBeLessThanOrEqual(1);
+  }
   if (width >= 1024) {
-    const sortBounds = await page.getByLabel('Sort titles', { exact: true }).boundingBox();
+    const headingBounds = await page.locator('.seerr-presets-label').boundingBox();
+    expect(presetBounds.x - headingBounds.x - headingBounds.width).toBeLessThanOrEqual(12);
     const scoreBounds = await critics.boundingBox();
     expect(Math.abs(sortBounds.y + sortBounds.height - scoreBounds.y - scoreBounds.height)).toBeLessThanOrEqual(1);
     expect((await page.getByLabel('Saved filter presets').boundingBox()).width).toBeLessThanOrEqual(280);
   }
   if (width <= 390) {
-    const presetBounds = await page.getByLabel('Saved filter presets').boundingBox();
-    const nameBounds = await page.getByLabel('Preset name').boundingBox();
     expect(Math.abs(presetBounds.width - nameBounds.width)).toBeLessThanOrEqual(1);
   }
   await critics.fill('85'); await critics.dispatchEvent('input');

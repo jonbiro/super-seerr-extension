@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.209]
+
+- Align filter fields with the panel edges and use consistent spacing between sorting, rating thresholds, and actions.
+- Keep preset actions together, align the preset selector and name at medium widths, and stack them cleanly on narrow screens.
+- Retain active-rating highlights and consistent keyboard focus rings, with rendered spacing and action-group checks at seven widths from 320px to 1440px.
+
 ## [3.5.208]
 
 - Clear an applied preset's selection when manual sorting, thresholds, or Reset diverge from it, allowing that preset to be selected again directly.
