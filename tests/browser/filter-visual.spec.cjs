@@ -41,6 +41,17 @@ for (const width of [1440, 1280, 1024, 768, 600, 390, 320]) test(`filter layout 
   expect(Math.abs(saveBounds.y - deleteBounds.y)).toBeLessThanOrEqual(1);
   const panelBounds = await page.locator('#seerr-filter-bar').boundingBox();
   expect(Math.abs(sortBounds.x - panelBounds.x - 17)).toBeLessThanOrEqual(1);
+  const hintBounds = await page.locator('.seerr-filter-hint').boundingBox();
+  const refreshBounds = await page.getByRole('button', { name: 'Refresh scores' }).boundingBox();
+  const resetBounds = await page.getByRole('button', { name: 'Reset', exact: true }).boundingBox();
+  if (width > 600) {
+    // Keep reset, the hint, and its actions grouped instead of stretching across empty columns.
+    expect(Math.abs(hintBounds.x - resetBounds.x - resetBounds.width - 12)).toBeLessThanOrEqual(1);
+    expect(Math.abs(refreshBounds.x - hintBounds.x - hintBounds.width - 8)).toBeLessThanOrEqual(1);
+  } else {
+    // The wrapped mobile hint needs only the normal flex row gap before actions.
+    expect(Math.abs(refreshBounds.y - hintBounds.y - hintBounds.height - 8)).toBeLessThanOrEqual(1);
+  }
   if (width >= 600 && width <= 768) {
     expect(Math.abs(presetBounds.y - nameBounds.y)).toBeLessThanOrEqual(1);
     expect(Math.abs(presetBounds.width - nameBounds.width)).toBeLessThanOrEqual(1);

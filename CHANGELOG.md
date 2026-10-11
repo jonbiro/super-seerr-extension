@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.213]
+
+- Keep Reset, the score hint, and refresh/load actions grouped across desktop and narrow filter layouts, with consistent spacing when the hint wraps on mobile.
+
 ## [3.5.212]
 
 - Align filter actions with their related sort and rating controls, and keep the hint beside the secondary actions as the panel narrows.
