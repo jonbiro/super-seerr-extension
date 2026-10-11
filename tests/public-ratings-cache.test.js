@@ -442,3 +442,51 @@ for (const [name, override] of [
   assert.equal(result.rtCriticsScore, 12);
   assert.equal(calls.length, 2, 'malformed identity must use its own title lookup');
 });
+
+for (const mediaType of ['movie', 'tv']) for (const reverse of [false, true]) {
+  test(`equally strong localized/original ${mediaType} matches stay uncertain (reversed: ${reverse})`, async () => {
+    const worker = loadWorker(); await worker.ready;
+    const prefix = mediaType === 'tv' ? 'tv' : 'm';
+    const rows = [
+      { title: 'Localized Title', year: 2020, href: `/${prefix}/localized_title`, rtCriticsScore: 90 },
+      { title: 'Original Title', year: 2020, href: `/${prefix}/original_title`, rtCriticsScore: 10 }
+    ];
+    if (reverse) rows.reverse();
+    const detailFetches = [];
+    worker.api.fetchRtHtml = async url => { if (!url.includes('/search?')) detailFetches.push(url); return ''; };
+    worker.api.parseRtSearchResults = () => rows;
+    worker.api.parseRtScorecard = () => ({ rtAudienceScore: 80 });
+    const media = { title: 'Localized Title', originalTitle: 'Original Title', year: 2020, mediaType, tmdbId: 42 };
+    assert.equal(await worker.api.getRottenTomatoesRatings(media), null);
+    assert.equal(detailFetches.length, 0, 'no candidate is safe to fetch as the selected title');
+    assert.equal(worker.api.rtCache.get(worker.api.rtTitleCacheKey(media)).diagnostic, 'uncertain');
+    await worker.api.flushRtCache();
+    assert.equal(Object.keys(worker.localStore.publicRatingsV1.entries).length, 0, 'search ordering must not decide a cross-site score');
+  });
+}
+
+for (const mediaType of ['movie', 'tv']) test(`a stronger original-title ${mediaType} match still wins over a weaker localized match`, async () => {
+  const worker = loadWorker(); await worker.ready;
+  const prefix = mediaType === 'tv' ? 'tv' : 'm';
+  worker.api.fetchRtHtml = async () => '';
+  worker.api.parseRtSearchResults = () => [
+    { title: 'Localized Title', year: 2019, href: `/${prefix}/localized_title`, rtCriticsScore: 10 },
+    { title: 'Original Title', year: 2020, href: `/${prefix}/original_title`, rtCriticsScore: 90 }
+  ];
+  worker.api.parseRtScorecard = () => ({ rtAudienceScore: 80 });
+  const rating = await worker.api.getRottenTomatoesRatings({ title: 'Localized Title', originalTitle: 'Original Title', year: 2020, mediaType, tmdbId: 42 });
+  assert.equal(rating.rtCriticsScore, 90);
+  assert.equal(worker.api.publicRatings.get(`${mediaType}:42`).value.rtCriticsScore, 90);
+});
+
+test('equally strong approximate matches with different titles are not decided by ordering', async () => {
+  const worker = loadWorker(); await worker.ready;
+  worker.api.fetchRtHtml = async () => '';
+  worker.api.parseRtSearchResults = () => [
+    { title: 'Example: One', year: 2020, href: '/m/example_one', rtCriticsScore: 90 },
+    { title: 'Example: Two', year: 2020, href: '/m/example_two', rtCriticsScore: 10 }
+  ];
+  worker.api.parseRtScorecard = () => ({ rtAudienceScore: 80 });
+  assert.equal(await worker.api.getRottenTomatoesRatings({ title: 'Example', year: 2020, mediaType: 'movie', tmdbId: 42 }), null);
+  assert.equal(worker.api.rtCache.get('movie:Example:2020').diagnostic, 'uncertain');
+});

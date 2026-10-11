@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.156]
+
+- Refuse equally strong Rotten Tomatoes matches to distinct provider entries even when their localized/original titles differ, preventing search order from choosing a score to share across sites.
+- Preserve stronger matches, original-title rescue and duplicate rows for the same provider URL.
+- Advance the matcher revision to recheck old cached verdicts; add movie/TV result-order and approximate-match ambiguity regressions.
+
 ## [3.5.155]
 
 - Restore lookup ordering from persisted title-only, unrated and failed Rotten Tomatoes results, preventing worker restarts from silently discarding successful refreshes.

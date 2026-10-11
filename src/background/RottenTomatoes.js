@@ -99,13 +99,13 @@
       return Math.max(0, Math.min(1, score));
     },
 
-    // Whether another candidate is as good a match as the best one, which means
-    // the choice between them rests on Rotten Tomatoes' own ordering.
+    // Equally strong candidates can match different localized/original titles.
+    // Distinct provider entries remain ambiguous regardless of their spelling;
+    // search ordering supplies no evidence for choosing between them.
     rtMatchIsAmbiguous(candidates, best) {
       return candidates.some(candidate =>
         candidate !== best && candidate.href !== best.href &&
-        candidate.confidence >= best.confidence &&
-        this.normalizeTitleForMatch(candidate.title) === this.normalizeTitleForMatch(best.title));
+        candidate.confidence >= best.confidence);
     },
 
     parseRtScorecard(html) {
@@ -243,7 +243,7 @@
       // still be unambiguous.
       if (this.rtMatchIsAmbiguous(candidates, best)) {
         outcome.uncertain = true;
-        this.log(`Rotten Tomatoes has more than one "${best.title}" with equally strong matches; not guessing`);
+        this.log(`Rotten Tomatoes has equally strong matches for "${query}"; not guessing`);
         return null;
       }
       if (best.confidence < RatingsConfig.confidenceThreshold) outcome.uncertain = true;

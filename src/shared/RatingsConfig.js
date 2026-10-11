@@ -33,7 +33,9 @@ const RatingsConfig = {
   //     IDs/types could be treated as verified identities. Recheck old bundles.
   // 11: contradictory Seerr detail identities could contribute another
   //     title's native scores. Recheck bundles containing those verdicts.
-  matcherVersion: 11,
+  // 12: equally strong matches under different localized/original names
+  //     could be selected by search order and shared under one TMDB ID.
+  matcherVersion: 12,
 
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {
