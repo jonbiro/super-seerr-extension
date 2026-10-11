@@ -6,6 +6,7 @@
   const identity = entry => JSON.stringify([entry.at, entry.kind, entry.mediaType, entry.title, entry.tmdbId ?? null, entry.server ?? null]);
   let generation = 0;
   let clearing = false;
+  let refreshFocusOwner = null;
   async function load() {
     const current = ++generation;
     // Historical actions remain valid; statuses and links belong to the
@@ -63,6 +64,7 @@
   }
   clear.addEventListener('click', async () => {
     const restoreFocus = document.activeElement === clear;
+    refreshFocusOwner = null;
     clearing = true;
     generation++; clear.disabled = true; refresh.disabled = true;
     list.setAttribute('aria-busy', 'true');
@@ -87,15 +89,22 @@
   clear.className = 'button secondary';
   const actions = document.createElement('div'); actions.className = 'recent-action-controls';
   clear.before(actions); actions.append(refresh, clear);
+  document.addEventListener('focusin', event => {
+    if (refreshFocusOwner && event.target !== refreshFocusOwner && event.target !== document.body) refreshFocusOwner = null;
+  });
   async function refreshHistory() {
-    const restoreFocus = document.activeElement === refresh;
+    const active = document.activeElement;
+    if (active === refresh || list.contains(active)) refreshFocusOwner = active;
+    else if (active !== document.body) refreshFocusOwner = null;
     refresh.disabled = true;
     const pending = load();
     const current = generation;
     await pending;
     if (current === generation) {
+      const owner = refreshFocusOwner;
+      refreshFocusOwner = null;
       refresh.disabled = false;
-      if (restoreFocus && (document.activeElement === refresh || document.activeElement === document.body)) refresh.focus();
+      if (owner && (document.activeElement === owner || document.activeElement === document.body)) refresh.focus();
     }
   }
   refresh.addEventListener('click', refreshHistory);

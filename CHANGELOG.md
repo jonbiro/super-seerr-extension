@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.198]
+
+- Preserve keyboard focus ownership when a site-change refresh removes a focused history link, returning to Refresh statuses when the latest refresh finishes.
+- Carry ownership across superseding refreshes, discard it when another control receives focus, and prevent obsolete replies from moving focus.
+- Cover successful and failed site-change refreshes, overlapping replies, and deliberately moved focus in Chromium.
+
 ## [3.5.197]
 
 - Remove previous history statuses and links immediately when a refresh begins, including after switching Seerr sites; confirmed action records remain visible if the read fails.
