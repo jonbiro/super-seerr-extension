@@ -129,3 +129,43 @@ test('failed site selection restores a removed previous site as an unsaved draft
   assert.equal(f.doc.getElementById('useSeerrSite').disabled, true);
   assert.equal(f.doc.getElementById('removeSeerrSite').disabled, true);
 });
+
+for (const action of ['useConnection', 'removeConnection']) {
+  test(`${action} reports a committed change separately from failed settings reload`, async t => {
+    const f = await fixture(t);
+    const original = f.reply().data;
+    const committed = action === 'useConnection'
+      ? { ...original, revision: 2, activeId: 'family' }
+      : { ...original, revision: 2, sites: original.sites.filter(site => site.id !== 'family') };
+    let mutations = 0;
+    f.window.chrome.runtime.sendMessage = async message => {
+      if (message.action !== 'getSeerrConnections') mutations++;
+      return { success: true, data: committed };
+    };
+    f.window.chrome.storage.local.get = async () => { throw new Error('Temporary read failure'); };
+    await f.manager[action]();
+    assert.equal(mutations, 1, 'a failed refresh must not resend the completed mutation');
+    const status = f.doc.getElementById('status');
+    assert.ok(status.classList.contains('error'));
+    assert.match(status.textContent, action === 'useConnection' ? /Site switched/ : /Saved site removed/);
+    assert.match(status.textContent, /settings could not be loaded.*Reload this Settings page/i);
+    assert.equal(f.doc.getElementById('apiKey').value, 'unsaved-family-key', 'the failed read must preserve the draft');
+    assert.equal(f.manager.connectionChoices.activeId, committed.activeId);
+    assert.equal(f.doc.getElementById('useSeerrSite').disabled, true);
+    assert.equal(f.doc.getElementById('removeSeerrSite').disabled, true);
+  });
+}
+
+test('a failed legacy fallback read cannot relabel the previous draft as another site', async t => {
+  const f = await fixture(t);
+  f.doc.getElementById('savedSeerrSites').value = 'home';
+  f.window.chrome.storage.local.get = async keys => {
+    if (typeof keys === 'string') return {};
+    throw new Error('Temporary settings read failure');
+  };
+  await f.manager.editConnection();
+  assert.equal(f.manager.connectionId, 'family');
+  assert.equal(f.doc.getElementById('savedSeerrSites').value, 'family');
+  assert.equal(f.doc.getElementById('apiKey').value, 'unsaved-family-key');
+  assert.match(f.doc.getElementById('status').textContent, /Could not load this site/);
+});

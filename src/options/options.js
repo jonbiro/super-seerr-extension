@@ -210,9 +210,11 @@ class OptionsManager {
       document.querySelectorAll('[data-overlay-feature]').forEach(input => {
         input.checked = settings.overlayFeatures?.[input.dataset.overlayFeature] !== false;
       });
+      return true;
     } catch (error) {
       console.error('Error loading settings:', error);
       this.showStatus('error', 'Failed to load settings');
+      return false;
     }
   }
 
@@ -430,7 +432,10 @@ class OptionsManager {
         this.connectionMode = true; this.connectionId = site.id;
         this.serverUrlInput.value = site.url; this.apiKeyInput.value = site.apiKey;
         document.getElementById('seerrSiteName').value = site.name;
-      } else { await this.loadSettings(); this.connectionId = id; }
+      } else {
+        if (!await this.loadSettings()) throw new Error('Settings unavailable');
+        this.connectionId = id;
+      }
       this.apiKeyInput.type = 'password'; this.toggleButton.textContent = 'Show';
       this.toggleButton.setAttribute('aria-label', 'Show Seerr API key');
     } catch (_) {
@@ -455,8 +460,12 @@ class OptionsManager {
       if (!await permission) throw new Error('Site access was declined. The active site has not changed.');
       const response = await chrome.runtime.sendMessage({ action: 'activateSeerrConnection', data: { id: selected.id } });
       if (!response?.success) throw new Error(response?.error || 'Could not switch sites');
-      await this.loadSettings(); await this.loadConnectionChoices(); await this.refreshPermissionWarning();
-      this.showStatus('success', `Now using ${selected.name}. Reload its Seerr tab if ratings are not visible yet.`);
+      const loaded = await this.loadSettings();
+      await this.loadConnectionChoices();
+      if (loaded) await this.refreshPermissionWarning();
+      this.showStatus(loaded ? 'success' : 'error', loaded
+        ? `Now using ${selected.name}. Reload its Seerr tab if ratings are not visible yet.`
+        : 'Site switched, but the saved settings could not be loaded. Reload this Settings page before saving changes.');
     } catch (error) { this.showStatus('error', error.message); }
     finally { this._connectionBusy = false; this.updateConnectionControls(); }
   }
@@ -467,8 +476,11 @@ class OptionsManager {
     try {
       const response = await chrome.runtime.sendMessage({ action: 'removeSeerrConnection', data: { id: this.connectionId } });
       if (!response?.success) throw new Error(response?.error || 'Could not remove this site');
-      await this.loadSettings(); await this.loadConnectionChoices();
-      this.showStatus('success', 'Saved site removed. Its server and historical actions were not changed.');
+      const loaded = await this.loadSettings();
+      await this.loadConnectionChoices();
+      this.showStatus(loaded ? 'success' : 'error', loaded
+        ? 'Saved site removed. Its server and historical actions were not changed.'
+        : 'Saved site removed, but the saved settings could not be loaded. Reload this Settings page before saving changes.');
     } catch (error) { this.showStatus('error', error.message); }
     finally { this._connectionBusy = false; this.updateConnectionControls(); }
   }

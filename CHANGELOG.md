@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.152]
+
+- Report successful site activation/removal separately from a failed Settings reload, preserving the error instead of replacing it with a success message.
+- Preserve the previous draft identity when a legacy site-selection fallback cannot load settings.
+- Add regressions covering committed changes, preserved drafts, disabled stale actions and preventing duplicate mutations after refresh failures.
+
 ## [3.5.151]
 
 - Conceal a revealed Seerr API key before a settings reload replaces its site or credential, preventing site removal from revealing the active site's key.
