@@ -236,3 +236,34 @@ for (const failBodies of [false, true]) test(`RT concurrency includes response b
   assert.equal(worker.api.rtInFlight, 0);
   assert.equal(results.filter(result => result.status === 'rejected').length, failBodies ? 6 : 0);
 });
+
+for (const cancellationFails of [false, true]) test(`refused RT pages cancel unread bodies (${cancellationFails ? 'cancellation rejects' : 'cancellation succeeds'})`, { timeout: 15000 }, async () => {
+  const worker = loadWorker(); await worker.ready;
+  let open = 0, peak = 0, cancelled = 0;
+  const responses = [];
+  worker.context.fetch = async () => {
+    peak = Math.max(peak, ++open);
+    const response = new Response(new ReadableStream({
+      start(controller) { controller.enqueue(new TextEncoder().encode('Refused response still downloading')); },
+      cancel() {
+        open--; cancelled++;
+        if (cancellationFails) throw new Error('Stream cancellation failed');
+      }
+    }), { status: 429 });
+    responses.push(response);
+    return response;
+  };
+  try {
+    const results = await Promise.allSettled(Array.from({ length: 12 }, (_, i) => worker.api.fetchRtHtml(`/m/refused${i}`)));
+    assert.equal(open, 0, 'refused response bodies must not continue downloading');
+    assert.equal(cancelled, 12);
+    assert.ok(peak <= Config.rtMaxConcurrent);
+    assert.equal(worker.api.rtInFlight, 0);
+    for (const result of results) {
+      assert.equal(result.status, 'rejected');
+      assert.match(result.reason.message, /HTTP 429 for \/m\/refused\d+$/);
+    }
+  } finally {
+    await Promise.allSettled(responses.map(response => response.body.cancel()));
+  }
+});

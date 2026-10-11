@@ -159,6 +159,9 @@
           }
         });
         if (!response.ok) {
+          // The unread body may still be downloading after headers arrive.
+          // Stop it before freeing this slot; cancellation must not mask HTTP errors.
+          try { await response.body?.cancel(); } catch (_) { /* Preserve the refusal below. */ }
           // Keep the refused page in the error so search and detail failures
           // can be distinguished without logging page contents.
           throw new Error(`Rotten Tomatoes returned HTTP ${response.status} for ${target.pathname}${target.search}`);

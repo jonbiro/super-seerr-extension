@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.125]
+
+- Cancel unread Rotten Tomatoes HTTP error bodies before releasing their request slot, avoiding background downloads from refused pages.
+- Preserve the original HTTP status and page path even if stream cancellation fails; verify queued refusals release all slots.
+
 ## [3.5.124]
 
 - Hold Rotten Tomatoes concurrency slots through response-body downloads, preventing slow pages from exceeding the shared three-request limit.
