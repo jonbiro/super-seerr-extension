@@ -83,7 +83,7 @@ test('a late status error from the previous site cannot evict the current site c
   await worker.api.loadSettings();
   assert.equal((await worker.api.getMediaStatus(media)).status, 'available_watch');
   finish({ status: 'error', action: 'retryStatus' });
-  await previous;
+  await assert.rejects(previous, /site changed/);
   assert.equal((await worker.api.getMediaStatus(media)).status, 'available_watch');
   assert.equal(calls, 2, 'new site retains its own completed status read');
 });

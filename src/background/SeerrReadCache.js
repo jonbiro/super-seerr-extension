@@ -12,8 +12,18 @@
       const existing = entries.get(key);
       if (existing && (existing.pending || existing.expiresAt > Date.now())) return existing.promise;
       const generation = this.seerrReadGeneration || 0;
+      const server = this.baseUrl, apiKey = this.apiKey, token = this.connectionToken();
+      const assertConnection = () => {
+        if (this.baseUrl !== server || this.apiKey !== apiKey || this.connectionToken() !== token) {
+          throw new Error('Active Seerr site changed. Refresh the title and review it again.');
+        }
+      };
       const entry = { pending: true, expiresAt: 0, promise: null };
-      entry.promise = Promise.resolve().then(loader).then(value => {
+      entry.promise = Promise.resolve().then(() => {
+        assertConnection();
+        return loader();
+      }).then(value => {
+        assertConnection();
         // Errors represented as status objects must be retryable immediately.
         if (generation !== (this.seerrReadGeneration || 0) || value?.status === 'error') {
           if (entries.get(key) === entry) entries.delete(key);
@@ -22,7 +32,7 @@
           entry.expiresAt = Date.now() + ttlMs;
         }
         return value;
-      }, error => {
+      }).catch(error => {
         if (entries.get(key) === entry) entries.delete(key);
         throw error;
       });

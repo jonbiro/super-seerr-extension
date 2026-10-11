@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.110]
+
+- Bind cached server reads and status lookups to their original server, API key and saved-site revision, rejecting queued or in-flight results after a connection change.
+- Prevent deferred reads from starting with a newly active site's credentials; retain normal request coalescing and write invalidation.
+- Add queued/in-flight server, credential, revision and stale-status regressions.
+
 ## [3.5.109]
 
 - Validate account replies consistently in Settings connection tests and popup diagnostics, rejecting malformed successful responses.

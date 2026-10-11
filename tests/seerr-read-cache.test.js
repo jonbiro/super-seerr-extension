@@ -58,7 +58,7 @@ test('settings change invalidates caches and old in-flight results cannot repopu
   const first = worker.api.makeAPIRequest('GET', '/api/v1/movie/1');
   await Promise.resolve(); server = 'https://two.example'; await worker.api.loadSettings();
   const second = await worker.api.makeAPIRequest('GET', '/api/v1/movie/1');
-  old.resolve({ server: 'old' }); await first;
+  old.resolve({ server: 'old' }); await assert.rejects(first, /site changed/);
   assert.equal(second.server, server);
   assert.equal((await worker.api.makeAPIRequest('GET', '/api/v1/movie/1')).server, server);
   assert.equal(calls, 2);
@@ -73,4 +73,43 @@ test('expired reads refetch, rejected reads retry, and cache size is bounded', a
   assert.equal(await api.cachedSeerrRead('failed', async () => 'recovered'), 'recovered');
   for (let i = 0; i < 250; i++) await api.cachedSeerrRead(`key:${i}`, async () => i);
   assert.ok(api.seerrReads.size <= 200);
+});
+
+for (const change of ['server', 'key', 'switch-back']) {
+  for (const stage of ['queued', 'in-flight']) {
+    test(`cached reads reject a ${change} change while ${stage}`, async () => {
+      const { api } = await fixture();
+      const pending = deferred(); let calls = 0;
+      api.sendAPIRequest = async () => { calls++; return pending.promise; };
+      const first = api.makeAPIRequest('GET', '/api/v1/movie/1');
+      const rejected = assert.rejects(first, /site changed/);
+      if (stage === 'in-flight') await Promise.resolve();
+      if (change === 'server') api.baseUrl = 'https://other.example';
+      else if (change === 'key') api.apiKey = 'replacement';
+      else api.connections = { revision: 2, activeId: api.baseUrl };
+      api.invalidateSeerrReads();
+      pending.resolve({ id: 1 });
+      await rejected;
+      assert.equal(calls, stage === 'queued' ? 0 : 1);
+      assert.equal(api.seerrReads.size, 0);
+      api.sendAPIRequest = async () => ({ id: 1, server: api.baseUrl, key: api.apiKey });
+      const fresh = await api.makeAPIRequest('GET', '/api/v1/movie/1');
+      assert.equal(fresh.server, api.baseUrl);
+      assert.equal(fresh.key, api.apiKey);
+    });
+  }
+}
+
+test('a pending status cannot return the previous site status after a switch', async () => {
+  const { api } = await fixture();
+  const pending = deferred();
+  api.getMediaStatusUncached = () => pending.promise;
+  const first = api.getMediaStatus({ tmdbId: 1, mediaType: 'movie' });
+  const rejected = assert.rejects(first, /site changed/);
+  await Promise.resolve();
+  api.baseUrl = 'https://other.example'; api.invalidateSeerrReads();
+  pending.resolve({ status: 'available_watch' });
+  await rejected;
+  api.getMediaStatusUncached = async () => ({ status: 'available' });
+  assert.equal((await api.getMediaStatus({ tmdbId: 1, mediaType: 'movie' })).status, 'available');
 });
