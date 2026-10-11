@@ -96,7 +96,7 @@
         }
         return true;
       });
-      return [...new Map(candidates.map(candidate => [String(candidate.id), candidate])).values()];
+      return [...new Map(candidates.map(candidate => [root.MediaValidation.tmdbId(candidate.id), candidate])).values()];
     },
 
     areTitlesSimilar(title1, title2) {
@@ -110,9 +110,11 @@
     },
 
     extractYear(dateString) {
-      if (typeof dateString !== 'string' || !dateString) return null;
-      const year = parseInt(dateString.substring(0, 4));
-      return isNaN(year) ? null : year;
+      // Accept the API's date format and year-only metadata, never a partial
+      // parse or a coerced array/object as identity evidence.
+      if (typeof dateString !== 'string' || !/^\d{4}(?:-\d{2}-\d{2})?$/.test(dateString)) return null;
+      const year = Number(dateString.slice(0, 4));
+      return year >= 1800 ? year : null;
     },
 
     // A page-supplied TMDB id is trusted only while nothing contradicts it.
@@ -139,8 +141,8 @@
       if (!details || typeof details !== 'object') return true;
       const known = [details.title, details.originalTitle, details.name, details.originalName]
         .filter(title => typeof title === 'string' && title.trim());
-      const detailYear = parseInt(String(details.releaseDate || details.firstAirDate || '').slice(0, 4), 10);
-      if (!mediaData.year || !Number.isFinite(detailYear) || Math.abs(detailYear - mediaData.year) <= 1) return true;
+      const detailYear = this.extractYear(details.releaseDate || details.firstAirDate);
+      if (!mediaData.year || !detailYear || Math.abs(detailYear - mediaData.year) <= 1) return true;
       this.log('TMDB id names a different title; resolving by search instead:', {
         provided: mediaData.tmdbId, detailTitle: known[0], detailYear
       });

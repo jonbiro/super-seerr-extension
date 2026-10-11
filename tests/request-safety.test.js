@@ -248,3 +248,45 @@ test('a matching page title retains the one-year release-date tolerance', async 
   api.makeAPIRequest = async () => ({ id: 1, title: 'Dune', releaseDate: '2020-12-31' });
   assert.equal(await api.tmdbIdentityMatches({ title: 'Dune', year: 2021, mediaType: 'movie', tmdbId: 1 }), true);
 });
+
+for (const mediaType of ['movie', 'tv']) {
+  test(`malformed ${mediaType} search dates cannot corroborate a release year`, async () => {
+    const { api, ready } = loadWorker(CONFIGURED); await ready;
+    const media = { title: 'Dune', year: 2021, mediaType };
+    let writes = 0;
+    api.makeAPIRequest = async () => { writes++; return {}; };
+    for (const releaseDate of ['2021garbage', '2021-unknown', '2021-01-01suffix', ['2021-01-01']]) {
+      api.searchMedia = async () => [{ id: 2, title: media.title, mediaType, releaseDate }];
+      assert.equal((await api.getMediaCandidates(media)).length, 0);
+      for (const method of ['requestMedia', 'addToWatchlist']) {
+        await assert.rejects(api[method]({ ...media, ...(mediaType === 'tv' ? { seasons: [1] } : {}) }), /No unambiguous match/);
+      }
+    }
+    assert.equal(writes, 0);
+    for (const releaseDate of ['2021', '2021-01-01', '2020-12-31']) {
+      api.searchMedia = async () => [{ id: 2, title: media.title, mediaType, releaseDate }];
+      assert.equal((await api.getMediaCandidates(media)).length, 1);
+    }
+  });
+
+  test(`malformed ${mediaType} detail dates are unknown rather than contradictory years`, async () => {
+    const { api, ready } = loadWorker(CONFIGURED); await ready;
+    for (const date of [['1984-01-01'], '1984garbage', '1984-unknown']) {
+      api.makeAPIRequest = async () => ({ id: 2, title: 'Dune',
+        [mediaType === 'tv' ? 'firstAirDate' : 'releaseDate']: date });
+      assert.equal(await api.tmdbIdentityMatches({ title: 'Dune', year: 2021, mediaType, tmdbId: 2 }), true);
+    }
+  });
+
+  test(`equivalent ${mediaType} TMDB IDs produce one title choice and one resolved match`, async () => {
+    const { api, ready } = loadWorker(CONFIGURED); await ready;
+    const media = { title: 'Dune', year: 2021, mediaType };
+    api.searchMedia = async () => [film(2, 'Dune', 2021, mediaType), film('002', 'Dune', 2021, mediaType), film('2', 'Dune', 2021, mediaType)];
+    const choices = await api.getMediaCandidates(media);
+    assert.equal(choices.length, 1, 'the picker must not repeat the same title ID');
+    assert.equal(choices[0].tmdbId, 2);
+    assert.equal(Number((await api.resolveMediaMatch(media)).id), 2, 'duplicate records must not create false ambiguity');
+    api.searchMedia = async () => [film(2, 'Dune', 2021, mediaType), film(3, 'Dune', 2021, mediaType)];
+    assert.equal(await api.resolveMediaMatch(media), null, 'distinct IDs remain ambiguous');
+  });
+}

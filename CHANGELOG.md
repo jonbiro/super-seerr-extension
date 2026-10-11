@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.154]
+
+- Require a complete release-date format or a four-digit year before using Seerr metadata as title-identity evidence; do not coerce malformed detail dates into contradictory years.
+- Combine equivalent numeric TMDB IDs in search results, preventing duplicate title choices and false ambiguity.
+- Add movie/TV regressions for malformed-date write safety, detail identity checks, valid release dates and distinct-title ambiguity.
+
 ## [3.5.153]
 
 - Treat a conflicting release year as evidence against a page-supplied TMDB ID even when a remake has the same title, triggering a fresh match before status lookups or writes.
