@@ -42,18 +42,27 @@
       reset.addEventListener('click', async () => {
         if (pendingRemovals.has(entry.key)) return;
         pendingRemovals.add(entry.key);
+        const restoreFocus = document.activeElement === reset;
         reset.disabled = true;
         try {
           const result = await chrome.runtime.sendMessage({ action: 'removeTitleCorrection', key: entry.key });
           if (!result?.success) throw new Error();
           matchRevision++;
-          matches = matches.filter(item => item.key !== entry.key); render(); search.focus();
+          const current = resetButtons.get(entry.key);
+          const focusOwned = restoreFocus && (document.activeElement === document.body || document.activeElement === current);
+          matches = matches.filter(item => item.key !== entry.key);
+          current?.closest('li')?.remove();
+          resetButtons.delete(entry.key);
+          if (focusOwned) search.focus();
           status.textContent = 'Match forgotten. Reload its page to choose again.';
         } catch (_) { status.textContent = 'Could not forget match.'; }
         finally {
           pendingRemovals.delete(entry.key);
           const current = resetButtons.get(entry.key);
-          if (current) current.disabled = false;
+          if (current) {
+            current.disabled = false;
+            if (restoreFocus && document.activeElement === document.body) current.focus();
+          }
         }
       });
       row.append(text, reset, details); list.appendChild(row);

@@ -133,3 +133,35 @@ test('edits made during a pending site save remain visibly unsaved', async ({ pa
   expect(await page.evaluate(key => savedDraftWrites.find(write => write.overlayFeatures).overlayFeatures[key], key)).toBe(true);
   expect(await page.evaluate(() => savedDraftWrites.find(write => 'debugLogging' in write).debugLogging)).toBe(false);
 });
+
+for (const [success, destination] of [[true, 'search'], [true, 'outside'], [true, 'other-match'], [false, 'retry']]) test(`forgetting a saved match preserves nearby controls (${destination})`, async ({ page }) => {
+  await page.evaluate(() => {
+    window.matchRows = ['First', 'Second'].map((title, index) => ({
+      key: JSON.stringify(['https://seerr.example/', 'movie', title]), title, selectedTitle: title,
+      mediaType: 'movie', year: 2000, tmdbId: index + 1
+    }));
+    chrome.runtime.sendMessage = async ({ action }) => {
+      if (action === 'removeTitleCorrection') return new Promise(resolve => { window.finishRemoval = resolve; });
+      return { success: true, data: window.matchRows };
+    };
+  });
+  await page.addScriptTag({ path: path.resolve('src/options/support-tools.js') });
+  await page.getByRole('button', { name: 'Inspect saved title matches', exact: true }).click();
+  const first = page.locator('.support-tools li').filter({ hasText: 'First' });
+  const second = page.locator('.support-tools li').filter({ hasText: 'Second' });
+  await second.locator('summary').click();
+  await first.getByRole('button', { name: 'Forget match' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(first.getByRole('button', { name: 'Forget match' })).toBeDisabled();
+  if (destination === 'outside') await page.getByRole('button', { name: 'Prepare diagnostic report' }).focus();
+  if (destination === 'other-match') await second.locator('summary').focus();
+  await page.evaluate(success => window.finishRemoval({ success }), success);
+  await expect(second.locator('details')).toHaveAttribute('open', '');
+  if (success) await expect(first).toHaveCount(0);
+  else await expect(first.getByRole('button', { name: 'Forget match' })).toBeEnabled();
+  const focused = destination === 'outside' ? page.getByRole('button', { name: 'Prepare diagnostic report' })
+    : destination === 'other-match' ? second.locator('summary')
+      : destination === 'retry' ? first.getByRole('button', { name: 'Forget match' })
+        : page.getByRole('searchbox', { name: 'Search saved matches' });
+  await expect(focused).toBeFocused();
+});

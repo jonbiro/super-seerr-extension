@@ -156,6 +156,7 @@ test('saved matches search server and title details without rendering markup or 
   search.value = 'nonexistent'; search.dispatchEvent(new dom.window.Event('input'));
   assert.match(doc.querySelector('[role=status]').textContent, /0 of 2/);
   search.value = '42'; search.dispatchEvent(new dom.window.Event('input'));
+  doc.querySelector('li button').focus();
   doc.querySelector('li button').click(); await new Promise(resolve => setImmediate(resolve));
   assert.equal(removed, entries[0].key);
   assert.equal(doc.activeElement, search);

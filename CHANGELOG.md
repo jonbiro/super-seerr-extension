@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.128]
+
+- Remove only the forgotten saved-match row, preserving other open match details and their keyboard focus.
+- Restore focus to search after removal or to the retry button after failure only when the pending action still owns focus.
+- Add Chromium checks for normal completion, moved focus, open neighboring details and failure recovery.
+
 ## [3.5.127]
 
 - Keep pending Forget match actions disabled across filtering and saved-match list refreshes, preventing duplicate removal requests.
