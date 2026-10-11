@@ -39,18 +39,26 @@
   // The Plex token stays out the same way: only plexConfigured crosses.
   async function checkApiConfig() {
     const generation = ++configGeneration;
+    routeConfigPending = true;
     try {
       const settings = await chrome.storage.sync.get(['seerrUrl', 'overlayFeatures']);
-      const response = await chrome.runtime.sendMessage({ action: 'getConfigState' }).catch(() => null);
-      if (generation !== configGeneration) return;
-      connectionToken = response?.data?.connectionToken;
-      const serverUrl = response?.success && response.data && 'serverUrl' in response.data ? response.data.serverUrl : settings.seerrUrl;
+      const response = await chrome.runtime.sendMessage({ action: 'getConfigState' });
+      if (generation !== configGeneration) return false;
+      if (response?.success !== true || !response.data || typeof response.data !== 'object' ||
+        !Object.prototype.hasOwnProperty.call(response.data, 'serverUrl')) {
+        throw new Error(response?.error || 'Could not confirm the active Seerr site');
+      }
+      const serverUrl = response.data.serverUrl;
+      if (serverUrl !== null && typeof serverUrl !== 'string') throw new Error('Invalid Seerr site URL');
+      connectionToken = response.data.connectionToken;
       const previousServer = configuredServer?.href;
       for (const flag of Object.keys(FEATURE_FLAGS)) FEATURE_FLAGS[flag] = settings.overlayFeatures?.[flag] !== false;
       try {
         configuredServer = serverUrl ? new URL(serverUrl) : null;
-      } catch (_) {
-        configuredServer = null;
+        if (configuredServer && (!['http:', 'https:'].includes(configuredServer.protocol) ||
+          configuredServer.username || configuredServer.password)) throw new Error('Invalid Seerr site URL');
+      } catch (error) {
+        throw new Error('Invalid Seerr site URL');
       }
       // A different server's ratings are meaningless here.
       if (previousServer !== configuredServer?.href) {
@@ -62,10 +70,22 @@
       plexConfigured = response?.success === true && response.data?.plexConfigured === true;
       log('API configured:', apiConfigured, 'Plex configured:', plexConfigured);
     } catch (error) {
+      if (generation !== configGeneration) return false;
+      // The synced URL cannot establish which saved installation is active.
+      // A failed refresh must not retain the previous site's actions/cache.
+      configuredServer = null;
+      connectionToken = undefined;
+      apiConfigured = false;
+      plexConfigured = false;
+      forgetPersistedRatings();
+      lastListItems = [];
       log('Could not load Seerr settings:', error);
+    } finally {
+      if (generation === configGeneration) routeConfigPending = false;
     }
+    return true;
   }
-  checkApiConfig().then(() => injectOverlay());
+  checkApiConfig().then(current => { if (current) injectOverlay(); });
 
   // Update when settings change (e.g., user configures from options page).
   // The URL and feature flags sync; the API keys are device-local.
@@ -91,13 +111,13 @@
       return;
     }
     const relevant = namespace === 'sync' && (changes.seerrUrl || changes.overlayFeatures);
-    if (relevant) checkApiConfig().then(() => { cleanupOverlay(); injectOverlay(); });
+    if (relevant) checkApiConfig().then(current => { if (current) { cleanupOverlay(); injectOverlay(); } });
   }
   chrome.storage.onChanged.addListener(handleSettingsChange);
   chrome.runtime.onMessage?.addListener(message => {
     if (message?.action !== 'seerrStateChanged') return;
     if (message.cacheCleared) handleSettingsChange({ ratingsCacheEpoch: {} }, 'local');
-    else checkApiConfig().then(() => { cleanupOverlay(); injectOverlay(); });
+    else checkApiConfig().then(current => { if (current) { cleanupOverlay(); injectOverlay(); } });
   });
 
   const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';
@@ -196,8 +216,8 @@
       forgetPersistedRatings();
       resetSeerrRatings();
       const generation = ++routeConfigGeneration;
-      void checkApiConfig().then(() => {
-        if (generation !== routeConfigGeneration) return;
+      void checkApiConfig().then(current => {
+        if (!current || generation !== routeConfigGeneration) return;
         routeConfigPending = false;
         injectOverlay();
       });
@@ -216,8 +236,8 @@
     // or return from one that was inactive. Recheck the worker's site verdict.
     routeConfigPending = true;
     const generation = ++routeConfigGeneration;
-    void checkApiConfig().then(() => {
-      if (generation !== routeConfigGeneration) return;
+    void checkApiConfig().then(current => {
+      if (!current || generation !== routeConfigGeneration) return;
       routeConfigPending = false;
       injectOverlay();
     });

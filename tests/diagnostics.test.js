@@ -13,7 +13,8 @@ function seerrPage({ posters = ['/poster1.jpg', '/poster2.jpg'] } = {}) {
   const { window } = dom;
   window.chrome = {
     storage: { sync: { get: async () => ({ seerrUrl: 'https://seerr.example' }) }, local: { get: async () => ({}), set: async () => {}, remove: async () => {} }, onChanged: { addListener() {} } },
-    runtime: { sendMessage: async () => ({ success: true, data: {} }) }
+    runtime: { sendMessage: async message => ({ success: true, data: message.action === 'getConfigState'
+      ? { apiConfigured: false, serverUrl: 'https://seerr.example' } : {} }) }
   };
   window.fetch = async () => ({ ok: true, json: async () => ({ results: [] }) });
   // jsdom leaves event.source null on window.postMessage. Browsers set it to

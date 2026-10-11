@@ -25,7 +25,7 @@ function grid(items) {
     storage: { sync: { get: async () => ({ seerrUrl: 'https://seerr.example' }) },
       local: { get: async () => ({}), set: async () => {}, remove: async () => {} }, onChanged: { addListener() {} } },
     runtime: { sendMessage: async m => { sent.push(m);
-      return m.action === 'getConfigState' ? { success: true, data: { apiConfigured: false } }
+      return m.action === 'getConfigState' ? { success: true, data: { apiConfigured: false, serverUrl: 'https://seerr.example' } }
         : { success: true, data: { rtCriticsScore: 95, confidence: 1 } }; } }
   };
   window.fetch = async () => ({ ok: true, json: async () => ({ results: [] }) });

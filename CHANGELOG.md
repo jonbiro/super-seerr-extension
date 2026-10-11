@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.86]
+
+- Remove stale Seerr controls and cached snapshots when settings storage or the worker configuration read fails, instead of retaining the previous active site or falling back to a synced URL.
+- Require a successful worker verdict with a valid HTTP(S) site URL (or an explicit inactive-site null); confirmed ratings-only configurations remain supported.
+- Ignore obsolete configuration completions before rebuilding overlays, preserving the current toolbar and filter state when an older refresh fails late.
+- Add regressions for storage/transport/worker failures, recovery, invalid replies and delayed refreshes.
+
 ## [3.5.85]
 
 - Release discovery actions and invalidate pending replies when a page enters the browser's back/forward cache; rebuild restored panels using the current Seerr site and its saved title choice.

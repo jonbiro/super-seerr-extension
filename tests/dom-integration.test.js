@@ -1023,3 +1023,65 @@ test('restoration discards frozen rating snapshots even when the Seerr URL is un
   assert.match(low().textContent, /75/);
   assert.doesNotMatch(low().textContent, /30/);
 });
+
+for (const failure of ['storage', 'transport', 'worker']) {
+  test(`a ${failure} configuration failure removes stale controls and recovers on refresh`, async t => {
+    const f = createOverlay();
+    t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+    await settle();
+    assert.ok(f.window.document.querySelector('.seerr-sort-filter-bar'));
+    const get = f.window.chrome.storage.sync.get;
+    const send = f.window.chrome.runtime.sendMessage;
+    if (failure === 'storage') f.window.chrome.storage.sync.get = async () => { throw new Error('Storage unavailable'); };
+    else f.window.chrome.runtime.sendMessage = message => {
+      if (message.action !== 'getConfigState') return send(message);
+      return failure === 'transport' ? Promise.reject(new Error('Worker unavailable'))
+        : Promise.resolve({ success: false, error: 'Could not read configuration' });
+    };
+    f.change({ overlayFeatures: { newValue: {} } });
+    await settle();
+    assert.equal(f.window.document.querySelector('.seerr-sort-filter-bar'), null);
+    assert.equal(f.window.document.querySelector('.seerr-card-badge'), null);
+    f.window.chrome.storage.sync.get = get;
+    f.window.chrome.runtime.sendMessage = send;
+    f.change({ overlayFeatures: { newValue: {} } });
+    await settle();
+    assert.ok(f.window.document.querySelector('.seerr-sort-filter-bar'), 'a successful refresh restores the overlay');
+  });
+}
+
+test('a delayed failed config read cannot disable a newer successful refresh', async t => {
+  const f = createOverlay();
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const get = f.window.chrome.storage.sync.get;
+  let reject;
+  f.window.chrome.storage.sync.get = () => new Promise((_, fail) => { reject = fail; });
+  f.change({ overlayFeatures: { newValue: {} } });
+  f.window.chrome.storage.sync.get = get;
+  f.change({ overlayFeatures: { newValue: {} } });
+  await settle();
+  assert.ok(f.window.document.querySelector('.seerr-sort-filter-bar'));
+  const currentBar = f.window.document.querySelector('.seerr-sort-filter-bar');
+  reject(new Error('Old read failed'));
+  await settle();
+  assert.equal(f.window.document.querySelector('.seerr-sort-filter-bar'), currentBar, 'obsolete replies cannot rebuild current controls');
+  assert.ok(f.window.document.querySelector('.seerr-card-badge'));
+});
+
+for (const response of [null, { success: true, data: {} },
+  { success: true, data: { serverUrl: 42, apiConfigured: true } },
+  { success: true, data: { serverUrl: 'ftp://seerr.example', apiConfigured: true } }]) {
+  test(`an incomplete or invalid worker verdict cannot fall back to the synced URL: ${JSON.stringify(response)}`, async t => {
+    const f = createOverlay();
+    t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+    await settle();
+    const send = f.window.chrome.runtime.sendMessage;
+    f.window.chrome.runtime.sendMessage = message => message.action === 'getConfigState'
+      ? Promise.resolve(response) : send(message);
+    f.change({ overlayFeatures: { newValue: {} } });
+    await settle();
+    assert.equal(f.window.document.querySelector('.seerr-sort-filter-bar'), null);
+    assert.equal(f.window.document.querySelector('.seerr-card-badge'), null);
+  });
+}
