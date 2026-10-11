@@ -674,6 +674,7 @@ class SeerrAPI {
   }
 
   async searchRequests(tmdbId, mediaType) {
+    const assertConnection = this.seerrConnectionGuard();
     try {
       this.log(`📊 [Background] Searching requests for TMDB ID ${tmdbId} (${mediaType})`);
       // Requests are newest-first and unpaginated reads stop at 100, so a
@@ -682,7 +683,11 @@ class SeerrAPI {
       const PAGE_SIZE = 100;
       const MAX_PAGES = 10;
       for (let page = 0; page < MAX_PAGES; page++) {
+        // A status request may span several pages. Do not let a site switch
+        // redirect later pages to a different saved Seerr installation.
+        assertConnection();
         const response = await this.makeAPIRequest('GET', `/api/v1/request?take=${PAGE_SIZE}&skip=${page * PAGE_SIZE}`);
+        assertConnection();
         this.log('📊 [Background] Requests API response:', response);
 
         const requests = response.results || response || [];

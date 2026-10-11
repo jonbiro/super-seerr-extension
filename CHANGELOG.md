@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.210]
+
+- Stop paged request-history status lookups immediately when the active Seerr site changes, so later pages cannot query a different saved server.
+
 ## [3.5.209]
 
 - Align filter fields with the panel edges and use consistent spacing between sorting, rating thresholds, and actions.
