@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.101]
+
+- Mark a public ratings snapshot as notified only after its notification operation succeeds, allowing a later flush to retry when querying tabs temporarily fails.
+- Coalesce matching notifications already in flight and protect newer successful deliveries from older failures or completions.
+- Keep notification delivery outside the storage chain so outstanding tab queries cannot delay cache clearing; add failure-recovery, overlap, ordering and clear regressions.
+
 ## [3.5.100]
 
 - Require complete Seerr route segments, so paths such as /searching, /discoveries and /movie/550junk cannot receive unrelated ratings controls or lookups.

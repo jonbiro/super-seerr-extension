@@ -319,3 +319,76 @@ test('a failed public-cache write can notify tabs after persistence recovers', a
   assert.equal(messages.length, 1);
   assert.equal(messages[0].action, 'publicRatingsChanged');
 });
+
+test('a failed tab query does not mark a public snapshot as delivered', async () => {
+  const worker = await seed(), messages = [];
+  let queries = 0;
+  worker.context.chrome.tabs = {
+    query: async () => { if (++queries === 1) throw new Error('Tabs temporarily unavailable'); return [{ id: 1 }]; },
+    sendMessage: async (id, message) => { messages.push(message); }
+  };
+  provider(worker, { critics: 95 });
+  await worker.api.getRottenTomatoesRatings({ ...input, refresh: true });
+  await worker.api.flushRtCache(); await tick();
+  assert.equal(messages.length, 0);
+  await worker.api.flushRtCache(); await tick();
+  assert.equal(messages.length, 1, 'the next flush must retry the undelivered public snapshot');
+});
+
+test('overlapping flushes coalesce an in-flight public snapshot notification', async () => {
+  const worker = await seed(), messages = [];
+  let release, queries = 0;
+  const gate = new Promise(resolve => { release = resolve; });
+  worker.context.chrome.tabs = {
+    query: async () => { queries++; await gate; return [{ id: 1 }]; },
+    sendMessage: async (id, message) => { messages.push(message); }
+  };
+  provider(worker, { critics: 95 });
+  await worker.api.getRottenTomatoesRatings({ ...input, refresh: true });
+  await worker.api.flushRtCache();
+  await worker.api.flushRtCache();
+  assert.equal(queries, 1);
+  release(); await tick();
+  assert.equal(messages.length, 1);
+  await worker.api.flushRtCache(); await tick();
+  assert.equal(queries, 1);
+});
+
+test('an older notification failure cannot discard a newer successful delivery', async () => {
+  const worker = await seed(), messages = [];
+  let reject, queries = 0;
+  const gate = new Promise((resolve, fail) => { reject = fail; });
+  worker.context.chrome.tabs = {
+    query: async () => ++queries === 1 ? gate : [{ id: 1 }],
+    sendMessage: async (id, message) => { messages.push(message); }
+  };
+  provider(worker, { critics: 95 });
+  await worker.api.getRottenTomatoesRatings({ ...input, refresh: true });
+  await worker.api.flushRtCache();
+  provider(worker, { critics: 97 });
+  await worker.api.getRottenTomatoesRatings({ ...input, refresh: true });
+  await worker.api.flushRtCache(); await tick();
+  reject(new Error('Old query failed')); await tick();
+  assert.equal(messages.length, 1);
+  await worker.api.flushRtCache(); await tick();
+  assert.equal(queries, 2, 'the newer delivered snapshot must remain acknowledged');
+});
+
+test('cache clearing does not wait for an outstanding public notification', async () => {
+  const worker = await seed();
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  worker.context.chrome.tabs = { query: async () => { await gate; return []; }, sendMessage: async () => {} };
+  provider(worker, { critics: 95 });
+  await worker.api.getRottenTomatoesRatings({ ...input, refresh: true });
+  await worker.api.flushRtCache();
+  let cleared = false;
+  const clearing = worker.api.clearRatingsCache().then(() => { cleared = true; });
+  await tick();
+  try {
+    assert.equal(cleared, true, 'notification delivery must not hold the storage/clear chain');
+    assert.equal(worker.localStore.publicRatingsV1, undefined);
+  } finally { release(); await clearing; await tick(); }
+  assert.equal(worker.api.publicRatings.size, 0);
+  assert.equal(worker.localStore.publicRatingsV1, undefined);
+});

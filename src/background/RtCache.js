@@ -128,11 +128,23 @@
             publicRatingsV1: publicPayload
           });
           const fingerprint = JSON.stringify(publicPayload);
-          if (generation === this.rtCacheGeneration && fingerprint !== this.publicRatingsNotified) {
-            this.publicRatingsNotified = fingerprint;
+          const activeNotification = this.publicRatingsNotification;
+          if (generation === this.rtCacheGeneration && fingerprint !== this.publicRatingsNotified &&
+              !(activeNotification?.generation === generation && activeNotification.fingerprint === fingerprint)) {
+            const notification = this.publicRatingsNotification = { generation, fingerprint };
             // No scores, catalogue data or credentials are broadcast. Each
             // authorized Seerr tab reads the public tier through its bridge.
-            void this.notifyContentState(false, true).catch(() => {});
+            // Delivery stays outside the storage chain so a slow tab query
+            // cannot block cache clearing. Failures remain retryable.
+            void this.notifyContentState(false, true).then(() => {
+              if (generation === this.rtCacheGeneration && this.publicRatingsNotification === notification) {
+                this.publicRatingsNotified = fingerprint;
+              }
+            }).catch(error => {
+              this.log('Could not notify tabs of public ratings:', error);
+            }).finally(() => {
+              if (this.publicRatingsNotification === notification) this.publicRatingsNotification = null;
+            });
           }
         } catch (error) {
           console.error('Could not persist the Rotten Tomatoes cache:', error);
