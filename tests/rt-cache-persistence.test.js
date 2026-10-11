@@ -214,3 +214,25 @@ test('a refusal names the page that was refused', async () => {
   await assert.rejects(() => worker.api.fetchRtHtml('/search?search=Moana'), /403 for \/search\?search=Moana/);
   await assert.rejects(() => worker.api.fetchRtHtml('/m/moana_2'), /403 for \/m\/moana_2/);
 });
+
+for (const failBodies of [false, true]) test(`RT concurrency includes response bodies (${failBodies ? 'with failures' : 'successful reads'})`, { timeout: 15000 }, async () => {
+  const worker = loadWorker(); await worker.ready;
+  let inFlight = 0, peak = 0, started = 0;
+  worker.context.fetch = async () => {
+    const number = started++;
+    peak = Math.max(peak, ++inFlight);
+    return { ok: true, text: async () => {
+      try {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        if (failBodies && number % 2 === 0) throw new Error('Body download interrupted');
+        return `page ${number}`;
+      } finally { inFlight--; }
+    } };
+  };
+  const results = await Promise.allSettled(Array.from({ length: 12 }, (_, i) => worker.api.fetchRtHtml(`/m/body${i}`)));
+  assert.equal(peak, Config.rtMaxConcurrent, 'a slot must cover the body download as well as headers');
+  assert.equal(started, 12, 'queued reads must proceed after successes and failures');
+  assert.equal(inFlight, 0);
+  assert.equal(worker.api.rtInFlight, 0);
+  assert.equal(results.filter(result => result.status === 'rejected').length, failBodies ? 6 : 0);
+});

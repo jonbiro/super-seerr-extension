@@ -149,21 +149,23 @@
       if (target.origin !== 'https://www.rottentomatoes.com' || target.username || target.password) {
         throw new Error('Rotten Tomatoes URL is outside the allowed origin');
       }
-      const response = await this.withRtSlot(() => fetch(target.href, {
-        redirect: 'error',
-        signal: AbortSignal.timeout(RatingsConfig.requestTimeoutMs),
-        credentials: 'omit',
-        headers: {
-          Accept: 'text/html,application/xhtml+xml'
+      return this.withRtSlot(async () => {
+        const response = await fetch(target.href, {
+          redirect: 'error',
+          signal: AbortSignal.timeout(RatingsConfig.requestTimeoutMs),
+          credentials: 'omit',
+          headers: {
+            Accept: 'text/html,application/xhtml+xml'
+          }
+        });
+        if (!response.ok) {
+          // Keep the refused page in the error so search and detail failures
+          // can be distinguished without logging page contents.
+          throw new Error(`Rotten Tomatoes returned HTTP ${response.status} for ${target.pathname}${target.search}`);
         }
-      }));
-      if (!response.ok) {
-        // Which page was refused decides what to do about it: the search page
-        // and a title's own page are protected differently, and without the
-        // path every refusal reads the same in the error log.
-        throw new Error(`Rotten Tomatoes returned HTTP ${response.status} for ${target.pathname}${target.search}`);
-      }
-      return response.text();
+        // fetch resolves at headers; the slot must also cover the body read.
+        return response.text();
+      });
     },
 
     rtTitleCacheKey(data) {

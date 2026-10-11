@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.124]
+
+- Hold Rotten Tomatoes concurrency slots through response-body downloads, preventing slow pages from exceeding the shared three-request limit.
+- Verify that successful and interrupted body reads release slots and allow all queued lookups to finish.
+
 ## [3.5.123]
 
 - Treat missing Rotten Tomatoes scorecards as failed detail reads, including empty, consent, truncated and unrelated-script pages.
