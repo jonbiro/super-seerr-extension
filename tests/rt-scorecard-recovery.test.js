@@ -94,3 +94,22 @@ test('another script data-id must not impersonate the scorecard ID', async () =>
     + '<script id="media-scorecard-json">{"criticsScore":{"score":0}}</script>');
   assert.equal(scores.rtCriticsScore, 0);
 });
+
+for (const value of [[90], ['90%'], '0x64', '0b1', '1e2', '9e1%']) test(`malformed percentage ${JSON.stringify(value)} cannot become a shared score`, async () => {
+  const worker = loadWorker(); await worker.ready;
+  worker.api.fetchRtHtml = async url => url.includes('/search?') ? search('')
+    : scorecard(JSON.stringify({ criticsScore: { score: value }, audienceScore: { score: value } }));
+  const result = await worker.api.getRottenTomatoesRatings(input);
+  assert.equal(result.rtCriticsScore, null);
+  assert.equal(result.rtAudienceScore, null);
+  assert.equal(worker.api.publicRatings.size, 0);
+  await worker.api.flushRtCache();
+  assert.deepEqual(Object.keys(worker.localStore.publicRatingsV1.entries), []);
+});
+
+test('decimal percentages and numeric scores retain rounding and real zero', () => {
+  const { api } = loadWorker();
+  for (const [value, expected] of [[0, 0], [100, 100], [90.4, 90], ['0%', 0], [' 90% ', 90], ['90.5%', 91], ['90 %', 90], ['.5', 1]]) {
+    assert.equal(api.parseRtPercent(value), expected, JSON.stringify(value));
+  }
+});

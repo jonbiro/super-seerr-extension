@@ -124,8 +124,13 @@
     },
 
     parseRtPercent(value) {
-      if (value === null || value === undefined || String(value).trim() === '') return null;
-      const score = Number(String(value).replace(/%$/, ''));
+      if (typeof value !== 'number' && typeof value !== 'string') return null;
+      if (typeof value === 'string') {
+        const text = value.trim().replace(/%$/, '').trim();
+        if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) return null;
+        value = Number(text);
+      }
+      const score = value;
       return Number.isFinite(score) && score >= 0 && score <= 100 ? Math.round(score) : null;
     },
 

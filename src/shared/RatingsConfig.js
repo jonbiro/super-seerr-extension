@@ -25,7 +25,9 @@ const RatingsConfig = {
   //    match. Discard scores produced under those normalization rules.
   // 7: pages without a scorecard could mark a search-only score as verified.
   //    Recheck those cached verdicts instead of sharing them across sites.
-  matcherVersion: 7,
+  // 8: coercible arrays and non-decimal score strings could become verified
+  //    percentages. Recheck cached scores produced by that parser.
+  matcherVersion: 8,
 
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {

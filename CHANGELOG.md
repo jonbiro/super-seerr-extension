@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.129]
+
+- Reject malformed Rotten Tomatoes percentages such as arrays, hexadecimal and exponent strings before they can become shared scores.
+- Keep numeric scores, ordinary decimal percentages and real zero supported; handle surrounding percentage whitespace consistently.
+- Invalidate older score verdicts and add shared-cache rejection and valid-format regressions.
+
 ## [3.5.128]
 
 - Remove only the forgotten saved-match row, preserving other open match details and their keyboard focus.
