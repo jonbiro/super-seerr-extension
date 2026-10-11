@@ -169,3 +169,54 @@ test('a failed legacy fallback read cannot relabel the previous draft as another
   assert.equal(f.doc.getElementById('apiKey').value, 'unsaved-family-key');
   assert.match(f.doc.getElementById('status').textContent, /Could not load this site/);
 });
+
+for (const outcome of ['success', 'failure']) test(`site selection protects editable settings until the delayed read ${outcome}`, async t => {
+  const f = await fixture(t);
+  const localGet = f.window.chrome.storage.local.get;
+  const inputs = [...f.doc.querySelectorAll('#settingsForm input')];
+  // An independently disabled setting must remain disabled after the lock.
+  const alreadyDisabled = f.doc.getElementById('debugLogging');
+  alreadyDisabled.disabled = true;
+  let resolve, reject;
+  f.window.chrome.storage.local.get = () => new Promise((a, b) => { resolve = a; reject = b; });
+  f.doc.getElementById('savedSeerrSites').value = 'home';
+  const editing = f.manager.editConnection();
+  assert.ok(inputs.every(input => input.disabled), 'no field can accept edits that the pending read would erase');
+  assert.equal(f.doc.querySelector('button[type=submit]').disabled, true);
+  assert.equal(f.doc.getElementById('settingsForm').getAttribute('aria-busy'), 'true');
+  await f.manager.loadConnectionChoices();
+  assert.ok(inputs.every(input => input.disabled), 'metadata refresh keeps the edit lock');
+  if (outcome === 'success') resolve(await localGet());
+  else reject(new Error('Storage unavailable'));
+  await editing;
+  assert.ok(inputs.filter(input => input !== alreadyDisabled).every(input => !input.disabled));
+  assert.equal(alreadyDisabled.disabled, true);
+  assert.equal(f.doc.querySelector('button[type=submit]').disabled, false);
+  assert.equal(f.doc.getElementById('settingsForm').getAttribute('aria-busy'), 'false');
+  assert.equal(f.doc.getElementById('apiKey').value, outcome === 'success' ? 'home-key' : 'unsaved-family-key');
+});
+
+for (const action of ['useConnection', 'removeConnection']) test(`${action} locks fields through its saved-settings read`, async t => {
+  const f = await fixture(t);
+  const profiles = f.reply().data;
+  const committed = action === 'useConnection'
+    ? { ...profiles, activeId: 'family' }
+    : { ...profiles, sites: profiles.sites.filter(site => site.id !== 'family') };
+  f.window.chrome.runtime.sendMessage = async () => ({ success: true, data: committed });
+  let finishRead;
+  f.window.chrome.storage.local.get = () => new Promise(resolve => {
+    finishRead = () => {
+      f.window.chrome.storage.local.get = async () => ({ seerrConnectionsV1: committed });
+      resolve({ seerrConnectionsV1: committed });
+    };
+  });
+  const operation = f.manager[action]();
+  await settle();
+  assert.equal(typeof finishRead, 'function');
+  assert.ok([...f.doc.querySelectorAll('#settingsForm input')].every(input => input.disabled));
+  assert.equal(f.doc.querySelector('button[type=submit]').disabled, true);
+  finishRead(); await operation;
+  assert.ok([...f.doc.querySelectorAll('#settingsForm input')].every(input => !input.disabled));
+  assert.equal(f.doc.querySelector('button[type=submit]').disabled, false);
+  assert.equal(f.doc.getElementById('apiKey').value, action === 'useConnection' ? 'family-key' : 'home-key');
+});

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.164]
+
+- Disable settings inputs while a saved-site selection, activation, or removal loads replacement values, preventing delayed reads from erasing newly typed edits.
+- Restore each input's prior enabled state after success or failure, announce the busy form, and disable Save while an operation is pending.
+- Keep newer drafts editable during saves; cover delayed reads and recovery in settings and browser regressions.
+
 ## [3.5.163]
 
 - Include prior entry snapshots in cache deltas so same-millisecond public reconciliations can be distinguished from native rating updates.

@@ -393,6 +393,19 @@ class OptionsManager {
 
   updateConnectionControls() {
     const busy = !!(this._saving || this._connectionBusy);
+    // Site reads replace form values. Prevent typing into the old site's
+    // fields while they are pending, and restore any prior disabled states.
+    // Saves retain the editable draft because they never replace its values.
+    if (this._connectionBusy && !this.lockedSettingsInputs) {
+      this.lockedSettingsInputs = new Map(Array.from(this.form.querySelectorAll('input'), input => [input, input.disabled]));
+      for (const input of this.lockedSettingsInputs.keys()) input.disabled = true;
+    } else if (!this._connectionBusy && this.lockedSettingsInputs) {
+      for (const [input, disabled] of this.lockedSettingsInputs) input.disabled = disabled;
+      this.lockedSettingsInputs = null;
+    }
+    this.form.setAttribute('aria-busy', String(busy));
+    const submit = this.form.querySelector('button[type=submit]');
+    if (submit) submit.disabled = busy;
     const selected = this.connectionChoices?.sites.find(site => site.id === this.connectionId);
     for (const id of ['addSeerrSite', 'savedSeerrSites']) {
       const control = document.getElementById(id); if (control) control.disabled = busy;

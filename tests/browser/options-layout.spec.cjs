@@ -91,6 +91,11 @@ test('a site-list refresh keeps the pending selection aligned with the loaded cr
   });
   await page.locator('#savedSeerrSites').selectOption('family');
   await expect(page.locator('#savedSeerrSites')).toBeDisabled();
+  for (const id of ['serverUrl', 'apiKey', 'seerrSiteName', 'plexToken', 'debugLogging']) {
+    await expect(page.locator(`#${id}`)).toBeDisabled();
+  }
+  await expect(page.locator('button[type=submit]')).toBeDisabled();
+  await expect(page.locator('#settingsForm')).toHaveAttribute('aria-busy', 'true');
   await page.evaluate(() => optionsManager.loadConnectionChoices());
   await expect(page.locator('#savedSeerrSites')).toHaveValue('family');
   await expect(page.locator('#useSeerrSite')).toBeDisabled();
@@ -99,6 +104,13 @@ test('a site-list refresh keeps the pending selection aligned with the loaded cr
   await expect(page.locator('#savedSeerrSites')).toHaveValue('family');
   await expect(page.locator('#serverUrl')).toHaveValue('https://family.example/');
   await expect(page.locator('#apiKey')).toHaveValue('family-key');
+  for (const id of ['serverUrl', 'apiKey', 'seerrSiteName', 'plexToken', 'debugLogging']) {
+    await expect(page.locator(`#${id}`)).toBeEnabled();
+  }
+  await expect(page.locator('button[type=submit]')).toBeEnabled();
+  await expect(page.locator('#settingsForm')).toHaveAttribute('aria-busy', 'false');
+  await page.locator('#apiKey').fill('new-family-key');
+  await expect(page.locator('#apiKey')).toHaveValue('new-family-key');
   await expect(page.locator('#apiKey')).toHaveAttribute('type', 'password');
   await expect(page.locator('#useSeerrSite')).toBeEnabled();
 });
