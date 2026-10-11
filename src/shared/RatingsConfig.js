@@ -31,7 +31,9 @@ const RatingsConfig = {
   //    matches, while supplementary characters were truncated.
   // 10: delimiter collisions could reuse another title's cached score; array
   //     IDs/types could be treated as verified identities. Recheck old bundles.
-  matcherVersion: 10,
+  // 11: contradictory Seerr detail identities could contribute another
+  //     title's native scores. Recheck bundles containing those verdicts.
+  matcherVersion: 11,
 
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {

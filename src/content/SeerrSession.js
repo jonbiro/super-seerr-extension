@@ -90,6 +90,16 @@
             else if (result.status !== 404) outcome.conclusive = false;
             continue;
           }
+          const detailId = result.data?.id;
+          if (endpointKind === 'detail' && detailId !== undefined &&
+              (!['number', 'string'].includes(typeof detailId) || !/^[1-9]\d*$/.test(String(detailId)) ||
+                !Number.isSafeInteger(Number(detailId)) || Number(detailId) !== Number(tmdbId))) {
+            // A proxy or stale server response can name another title. It is
+            // not evidence for this card and must remain retryable.
+            outcome.conclusive = false;
+            log(`Ignoring Seerr detail identity mismatch for ${endpoint}`);
+            continue;
+          }
           const next = bundleFromRatingObject(result.data, endpoint.includes('ratings') ? 'seerr-ratings-api' : 'seerr-details-api');
           bundle = mergeBundles(bundle, next);
         } catch (error) {

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.150]
+
+- Reject contradictory or malformed title IDs in Seerr detail responses before using their scores; retain valid ratings from other endpoints and retry incomplete lookups.
+- Advance the cache revision so previously saved bundles are rechecked under the identity guard.
+- Add movie/TV regressions for mismatched IDs, valid numeric-string IDs, partial results and preventing wrong-title score persistence.
+
 ## [3.5.149]
 
 - Reload saved Rotten Tomatoes and shared public ratings before persistence, preventing a temporary read failure from replacing both tiers with a partial cache.

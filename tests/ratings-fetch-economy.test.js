@@ -197,3 +197,41 @@ test('resetting a failed session lookup stops its remaining endpoints', async ()
   assert.equal(await lookup, null);
   assert.equal(started, 1); assert.equal(outcome.conclusive, false);
 });
+
+for (const mediaType of ['movie', 'tv']) for (const id of [999, [550], null]) {
+  test(`${mediaType} detail identity ${JSON.stringify(id)} cannot contribute another title's scores`, async () => {
+    const overlay = loadOverlay({ fetch: async url => ({ ok: true, status: 200, json: async () =>
+      new URL(url).pathname.endsWith(`/${TMDB_ID}`) ? { id, voteAverage: 9.9 }
+        : { rtCriticsScore: 80, rtAudienceScore: 90, imdbRating: 8 } }) });
+    const outcome = {};
+    const bundle = await overlay.fetchSeerrSessionRatings(TMDB_ID, mediaType, null, outcome);
+    assert.equal(bundle.tmdbRating, null);
+    assert.equal(bundle.rtCriticsScore, 80, 'retain valid ratings from the separate endpoint');
+    assert.equal(bundle.imdbRating, 8);
+    assert.equal(outcome.conclusive, false, 'a wrong response is retryable, not an unrated verdict');
+  });
+}
+
+for (const mediaType of ['movie', 'tv']) test(`${mediaType} detail identity accepts a matching numeric-string TMDB ID`, async () => {
+  const overlay = loadOverlay({ fetch: async url => new URL(url).pathname.endsWith(`/${TMDB_ID}`)
+    ? { ok: true, status: 200, json: async () => ({ id: '550', voteAverage: 7.9 }) }
+    : { ok: false, status: 404 } });
+  const outcome = {};
+  const bundle = await overlay.fetchSeerrSessionRatings(TMDB_ID, mediaType, null, outcome);
+  assert.equal(bundle.tmdbRating, 7.9);
+  assert.notEqual(outcome.conclusive, false);
+});
+
+for (const mediaType of ['movie', 'tv']) test(`${mediaType} wrong-title detail scores cannot persist as a cached rating`, async () => {
+  const overlay = loadOverlay({ settings: { seerrUrl: 'https://seerr.example' },
+    fetch: async url => new URL(url).pathname.endsWith(`/${TMDB_ID}`)
+      ? { ok: true, status: 200, json: async () => ({ id: 999, voteAverage: 9.9 }) }
+      : { ok: false, status: 404 },
+    sendMessage: async () => ({ success: true, data: null }) });
+  const result = await overlay.getRatings(TMDB_ID, 'Example', 2020, mediaType);
+  assert.equal(overlay.Model.hasAnyScore(result), false);
+  assert.equal(overlay.ratingsCache.get(`${mediaType}:${TMDB_ID}`).provisional, true);
+  await overlay.flushPersistedRatings();
+  const persisted = overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'];
+  assert.equal(persisted?.entries?.[`${mediaType}:${TMDB_ID}`], undefined);
+});
