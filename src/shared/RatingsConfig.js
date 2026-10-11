@@ -23,7 +23,9 @@ const RatingsConfig = {
   //    rated and shared. Their cached verdicts cannot be safely distinguished.
   // 6: stripping non-Latin marks could verify a different title as an exact
   //    match. Discard scores produced under those normalization rules.
-  matcherVersion: 6,
+  // 7: pages without a scorecard could mark a search-only score as verified.
+  //    Recheck those cached verdicts instead of sharing them across sites.
+  matcherVersion: 7,
 
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {

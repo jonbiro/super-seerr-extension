@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.123]
+
+- Treat missing Rotten Tomatoes scorecards as failed detail reads, including empty, consent, truncated and unrelated-script pages.
+- Keep these attempts out of the shared ratings cache, retry them sooner and preserve complete successful fallback scores during refresh failures.
+- Invalidate ratings cached under the previous verification rules and add cross-site recovery and fallback regressions.
+
 ## [3.5.122]
 
 - Validate TMDB IDs in request history before matching them to a title, preventing arrays, booleans and non-decimal strings from attaching an unrelated status or playback link.

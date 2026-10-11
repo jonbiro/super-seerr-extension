@@ -7,11 +7,20 @@ const key = 'movie:Fight Club:1999';
 const search = critics => `<search-page-media-row release-year="1999" tomatometer-score="${critics}"><a data-qa="info-name" href="/m/fight_club">Fight Club</a></search-page-media-row>`;
 const scorecard = json => `<script id="media-scorecard-json" type="application/json">${json}</script>`;
 
-for (const json of ['{"audienceScore":', 'null', '[]', '42', '"unexpected"']) {
-  test(`malformed scorecard ${json} stays inconclusive and recovers on another site`, async () => {
+const missingScorecards = [
+  ['empty page', ''],
+  ['consent page', '<html><title>Consent required</title><main>Please accept cookies</main></html>'],
+  ['unrelated script', '<script data-id="media-scorecard-json">{"criticsScore":{"score":99}}</script>'],
+  ['truncated script', '<script id="media-scorecard-json">{"criticsScore":{"score":99}}']
+];
+for (const [label, initialDetail] of [
+  ...['{"audienceScore":', 'null', '[]', '42', '"unexpected"'].map(json => [json, scorecard(json)]),
+  ...missingScorecards
+]) {
+  test(`unreadable scorecard (${label}) stays inconclusive and recovers on another site`, async () => {
     const worker = loadWorker(); await worker.ready;
     let now = Date.now(); worker.context.Date = class extends Date { static now() { return now; } };
-    let detail = scorecard(json), calls = 0;
+    let detail = initialDetail, calls = 0;
     worker.api.fetchRtHtml = async url => { calls++; return url.includes('/search?') ? search(80) : detail; };
     const failed = await worker.api.getRottenTomatoesRatings(input);
     assert.equal(failed.rtCriticsScore, 80, 'the displayable search score can still be returned');
@@ -34,13 +43,13 @@ for (const json of ['{"audienceScore":', 'null', '[]', '42', '"unexpected"']) {
   });
 }
 
-test('a malformed detail refresh preserves the successful title and public scores and their age', async () => {
+for (const [label, failedDetail] of [['malformed JSON', scorecard('{"audienceScore":')], ...missingScorecards]) test(`a failed detail refresh (${label}) preserves successful title and public scores and their age`, async () => {
   const worker = loadWorker(); await worker.ready;
   let detail = scorecard('{"audienceScore":{"score":90}}'), critics = 80;
   worker.api.fetchRtHtml = async url => url.includes('/search?') ? search(critics) : detail;
   await worker.api.getRottenTomatoesRatings(input);
   const title = worker.api.rtCache.get(key), shared = worker.api.publicRatings.get('movie:550');
-  detail = scorecard('{"audienceScore":'); critics = 95;
+  detail = failedDetail; critics = 95;
   const attempt = await worker.api.getRottenTomatoesRatings({ ...input, refresh: true });
   assert.equal(attempt.diagnostic, 'failed');
   assert.equal(worker.api.rtCache.get(key), title);

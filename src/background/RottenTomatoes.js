@@ -108,7 +108,7 @@
 
     parseRtScorecard(html) {
       const scriptMatch = html.match(/<script\b[^>]*\sid\s*=\s*(["'])media-scorecard-json\1[^>]*>([\s\S]*?)<\/script\s*>/i);
-      if (!scriptMatch) return {};
+      if (!scriptMatch) throw new Error('Rotten Tomatoes scorecard is missing');
 
       // An unreadable scorecard is a failed detail read, not proof that the
       // title has no ratings. Let the resolver apply its short retry window
