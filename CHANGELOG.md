@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.93]
+
+- Validate playback destinations before opening them: accept absolute HTTP/HTTPS URLs and reject relative, malformed, executable or credential-bearing URLs.
+- Restore Retry status with a clear warning when server metadata contains an invalid playback URL, instead of leaving the Watch button loading or opening the wrong site.
+- Detach playback windows from the discovery page while preserving popup-blocker detection, with unit and real Chromium regression coverage.
+
 ## [3.5.92]
 
 - Make explicit ratings refreshes supersede ordinary in-flight lookups while continuing to coalesce concurrent refreshes.

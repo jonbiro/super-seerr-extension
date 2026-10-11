@@ -152,3 +152,28 @@ test('Retry status remains available while the click handler is active', async t
   await f.integration.handleRequest();
   assert.equal(reads, 1);
 });
+
+for (const watchUrl of ['javascript:alert(1)', 'data:text/html,broken', '/watch/550', 'not a URL', 'https://user:secret@media.example/watch/550']) {
+  test(`invalid playback destination cannot open a window: ${watchUrl.split(':')[0]}`, async t => {
+    const f = fixture(t);
+    const opened = [], rendered = [];
+    f.page.window.open = (...args) => { opened.push(args); return {}; };
+    f.integration.updateUIFromStatus = status => rendered.push(status);
+    f.integration.currentStatusData = { status: 'available_watch', watchUrl };
+    await f.integration.handleWatchButtonClick();
+    assert.equal(opened.length, 0);
+    assert.equal(f.integration.currentStatusData.action, 'retryStatus');
+    assert.equal(rendered.at(-1).action, 'retryStatus');
+    assert.ok(f.notices.some(note => note[0] === 'Watch URL Not Available'));
+  });
+}
+
+test('valid local playback URLs preserve their path and detach the discovery page opener', async t => {
+  const f = fixture(t), popup = { opener: f.page.window };
+  const opened = [];
+  f.page.window.open = (...args) => { opened.push(args); return popup; };
+  await f.integration.openMediaServer('http://192.168.1.5:8096/web/index.html#!/details?id=550');
+  assert.deepEqual(opened, [['http://192.168.1.5:8096/web/index.html#!/details?id=550', '_blank']]);
+  assert.equal(popup.opener, null);
+  assert.ok(f.notices.some(note => note[0] === 'Opening media server'));
+});

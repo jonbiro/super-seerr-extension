@@ -595,8 +595,26 @@ class BaseIntegration {
   async openMediaServer(watchUrl) {
     const view = this.captureActionView();
     if (!view.media || !view.isCurrent()) return;
-    // Open while the click gesture is still active, not from a timer.
-    const opened = window.open(watchUrl, '_blank');
+    // Playback destinations come from server metadata. Resolve only absolute
+    // web URLs, never relative paths against the discovery site or executable
+    // schemes. Embedded credentials must not be passed to a new window.
+    let destination;
+    try {
+      if (typeof watchUrl !== 'string') throw new Error('Missing playback URL');
+      destination = new URL(watchUrl);
+      if (!['http:', 'https:'].includes(destination.protocol) || destination.username || destination.password) {
+        throw new Error('Unsupported playback URL');
+      }
+    } catch (_) {
+      this.currentStatusData = this.getErrorStatus(new Error('Watch URL unavailable. Retry the status lookup.'));
+      this.updateUIFromStatus(this.currentStatusData);
+      this.ui.createNotification('Watch URL Not Available', this.currentStatusData.message, 'warning', 4000);
+      return;
+    }
+    // Open while the click gesture is still active, not from a timer. Keep the
+    // window handle for popup-blocker detection, then detach its opener.
+    const opened = window.open(destination.href, '_blank');
+    if (opened) opened.opener = null;
     if (!opened) {
       this.ui.createNotification('Popup Blocked',
         `Allow popups for this site to open "${view.media.title}"`, 'warning', 4000);
