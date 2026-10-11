@@ -251,3 +251,41 @@ test('the RT title tier is also byte-bounded so combined site and public caches 
   assert.ok(Buffer.byteLength(JSON.stringify(payload)) < 1_001_000);
   assert.ok(payload.entries['movie:Title0:1999']); assert.equal(payload.entries['movie:Title999:1999'], undefined);
 });
+
+for (const [heading, year, expected] of [
+  ['Fight Club (2000)', null, 10],
+  ['Fight Club (1999)', null, 80],
+  ['Fight Club (2000)', 1999, 80]
+]) test(`cache reconciliation uses a heading year before accepting shared scores: ${heading}, explicit ${year}`, async () => {
+  const worker = await seed(), checkedAt = worker.api.publicRatings.get('movie:550').checkedAt;
+  const overlay = loadOverlay({ pathname: '/discover', settings: { seerrUrl: 'https://seerr.example/' }, local: {
+    ...worker.localStore, overlayRatingsByServerV1: { 'https://seerr.example': {
+      server: 'https://seerr.example/', epoch: 0, matcher: Config.matcherVersion, index: [],
+      entries: { 'movie:550': { bundle: { rtCriticsScore: 10, rtAudienceScore: 20, imdbRating: 7.2, tmdbRating: 6.1,
+        confidence: 1, source: 'seerr-native' }, cachedAt: checkedAt - 1000, retryAt: Date.now() + 100000 } }
+    } }
+  } });
+  const bundle = await overlay.getRatings(550, heading, year, 'movie');
+  assert.equal(bundle.rtCriticsScore, expected);
+  assert.equal(bundle.imdbRating, 7.2);
+});
+
+for (const native of [true, false]) test(`a previously reconciled contradictory public score is discarded (native scores: ${native})`, async () => {
+  const worker = await seed(), publicEntry = worker.api.publicRatings.get('movie:550');
+  const overlay = loadOverlay({ pathname: '/discover', settings: { seerrUrl: 'https://seerr.example/' }, local: {
+    ...worker.localStore, overlayRatingsByServerV1: { 'https://seerr.example': {
+      server: 'https://seerr.example/', epoch: 0, matcher: Config.matcherVersion, index: [],
+      entries: { 'movie:550': { bundle: { rtCriticsScore: 80, rtAudienceScore: 90, imdbRating: native ? 7.2 : null, tmdbRating: native ? 6.1 : null,
+        confidence: 1, source: 'rotten-tomatoes' }, publicCheckedAt: publicEntry.checkedAt,
+        cachedAt: publicEntry.checkedAt - 1000, retryAt: Date.now() + 100000 } }
+    } }
+  } });
+  overlay.setResolver(async () => overlay.Model.createRatingsBundle({ rtCriticsScore: 12, confidence: 1, imdbRating: native ? 7.2 : null, tmdbRating: native ? 6.1 : null }));
+  const cached = await overlay.getRatings(550, 'Fight Club', 2000, 'movie');
+  assert.equal(cached.rtCriticsScore, native ? null : 12);
+  assert.equal(cached.rtAudienceScore, null);
+  assert.equal(cached.imdbRating, native ? 7.2 : null);
+  assert.equal(cached.tmdbRating, native ? 6.1 : null);
+  await tick();
+  assert.equal(overlay.ratingsCache.get('movie:550').bundle.rtCriticsScore, 12, 'the contradictory fields are refetched');
+});

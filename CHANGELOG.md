@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.89]
+
+- Pass known catalogue years into card rating lookups, preventing public scores with contradictory release years from overwriting a server-specific cached bundle.
+- Infer years from detail headings before shared-cache reconciliation, rather than only on provider lookup; explicit metadata years take precedence.
+- Repair previously reconciled contradictory public RT fields when their source record is identifiable, keeping native scores visible while refetching.
+- Apply the same year inference to title-only cache keys so refresh, forget and diagnostics continue to address the same entries.
+- Add movie/TV card, matching-year, contradictory-year, explicit-year and title-only refresh regressions while preserving native IMDb fields.
+
 ## [3.5.88]
 
 - Rank queued card ratings by distance from both viewport axes, fixing horizontally offscreen cards taking priority over visible titles.

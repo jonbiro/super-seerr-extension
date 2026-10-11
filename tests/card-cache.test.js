@@ -621,3 +621,28 @@ test('bulk review with nothing requestable cannot confirm an empty request', asy
     'a disabled confirm sends nothing');
   assert.ok(modal.isConnected, 'and the review stays open');
 });
+
+for (const mediaType of ['movie', 'tv']) {
+  for (const matchedYear of [1984, 2021]) {
+    test(`${mediaType} cards gate shared cache reconciliation on the catalogue year (${matchedYear})`, async t => {
+      const now = Date.now();
+      const fixture = openGrid({ local: {
+        [CACHE_KEY]: { server: SERVER, epoch: 0, matcher: Config.matcherVersion,
+          entries: { [`${mediaType}:123`]: { bundle: BUNDLE, cachedAt: now - 100000 } },
+          index: [{ ...INDEX_ENTRY, mediaType }] },
+        publicRatingsV1: { matcher: Config.matcherVersion, entries: { [`${mediaType}:123`]: {
+          source: 'rotten-tomatoes', checkedAt: now - 1000, expiresAt: now - 1000 + Config.rtCacheTtlMs,
+          value: { rtCriticsScore: 99, rtAudienceScore: 98, confidence: 1, source: 'rotten-tomatoes',
+            matchedTitle: 'Dune', matchedYear, url: `https://www.rottentomatoes.com/${mediaType === 'tv' ? 'tv' : 'm'}/dune` }
+        } } }
+      } });
+      t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
+      await flush(fixture.window);
+      const card = fixture.window.document.querySelector('[data-testid="title-card"]');
+      assert.equal(card.__seerrListMediaInfo.year, 2021);
+      assert.equal(card.__seerrRatings.rtCriticsScore, matchedYear === 2021 ? 99 : 90,
+        'a contradictory public year must not overwrite the server-specific cached score');
+      assert.equal(card.__seerrRatings.imdbRating, 7, 'native IMDb survives public RT reconciliation');
+    });
+  }
+}

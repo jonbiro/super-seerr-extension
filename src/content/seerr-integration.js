@@ -891,7 +891,8 @@
   }
 
   function ratingsCacheKey(tmdbId, title = '', year = null, mediaType = null) {
-    return `${mediaType || 'unknown'}:${tmdbId || `${title}:${year || ''}`}`;
+    const cacheYear = year ?? splitDisplayTitle(title).year;
+    return `${mediaType || 'unknown'}:${tmdbId || `${title}:${cacheYear || ''}`}`;
   }
 
   // Drop the given titles so the next lookup resolves them again. Scoped to
@@ -1050,8 +1051,33 @@
     await loadPersistedRatings();
     await loadRatingsAvailability();
 
+    // Resolve a heading's year before the cache fast path as well as before
+    // provider lookup. A cached public result must respect known identity data.
+    year = year ?? splitDisplayTitle(title).year;
     const key = ratingsCacheKey(tmdbId, title, year, mediaType);
     let previous = ratingsCache.get(key);
+    const publicRecord = previous?.publicCheckedAt && getPublicRating(key);
+    if (year && previous?.bundle && publicRecord && Number(year) !== publicRecord.value.matchedYear &&
+      previous.publicCheckedAt === publicRecord.checkedAt) {
+      // Older versions could reconcile a public score before reading the
+      // card/heading year. Remove only fields attributable to that record;
+      // keep this server's other scores and let the normal refresh repair it.
+      const bundle = { ...previous.bundle };
+      let removed = false;
+      for (const field of ['rtCriticsScore', 'rtAudienceScore']) {
+        if (publicRecord.value[field] != null && bundle[field] === publicRecord.value[field]) {
+          bundle[field] = null;
+          removed = true;
+        }
+      }
+      if (removed) {
+        previous = Model.hasAnyScore(bundle) ? { ...previous, bundle, publicCheckedAt: undefined, retryAt: 0,
+          diagnostics: { status: 'partial', checkedAt: Date.now(), source: bundle.source } } : null;
+        if (previous) ratingsCache.set(key, previous);
+        else ratingsCache.delete(key);
+        schedulePersistedRatingsFlush();
+      }
+    }
     const shared = !options.refresh && getPublicRating(key, year);
     if (shared && previous?.bundle && shared.checkedAt > (previous.publicCheckedAt ?? previous.cachedAt ?? 0)) {
       const bundle = mergeBundles(shared.bundle, previous.bundle);
@@ -1451,7 +1477,7 @@
 
       // Resolve ratings asynchronously
       if (mediaInfo.tmdbId) {
-        cardRatingQueue.add(card, signal => getRatings(mediaInfo.tmdbId, mediaInfo.title, null, mediaInfo.mediaType, { signal, queueNode: card })).then(bundle => {
+        cardRatingQueue.add(card, signal => getRatings(mediaInfo.tmdbId, mediaInfo.title, mediaInfo.year ?? null, mediaInfo.mediaType, { signal, queueNode: card })).then(bundle => {
           getCardMediaInfo(card);
           if (generation !== routeGeneration || !card.isConnected || identityEpoch !== (card.__seerrIdentityEpoch || 0)) return;
           // Re-check: a cleanup could have removed any previously-rendered

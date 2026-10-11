@@ -66,3 +66,10 @@ test('coalesced refresh callers all retain the cached score on a provider failur
   assert.deepEqual(results.map(bundle => bundle?.rtCriticsScore), [80, 80, 80]);
   assert.equal(overlay.ratingsCache.get('movie:550').bundle.rtCriticsScore, 80);
 });
+
+test('a title-only heading remains forgettable after its year is inferred for cache checks', async () => {
+  const overlay = loadOverlay();
+  overlay.setResolver(async () => overlay.Model.createRatingsBundle({ rtCriticsScore: 80, confidence: 1 }));
+  await overlay.getRatings(null, 'Example (2021)', null, 'movie');
+  assert.equal(overlay.forgetRatings([{ tmdbId: null, title: 'Example (2021)', year: null, mediaType: 'movie' }]), 1);
+});
