@@ -8,6 +8,11 @@
   let clearing = false;
   async function load() {
     const current = ++generation;
+    // Historical actions remain valid; statuses and links belong to the
+    // settings snapshot that produced them and must be checked again.
+    list.querySelectorAll('.recent-action-state, a').forEach(node => node.remove());
+    list.setAttribute('aria-busy', 'true');
+    status.textContent = 'Loading history…';
     let historyLoaded = false;
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getRecentActions' });
@@ -52,12 +57,15 @@
     } catch (_) {
       if (current !== generation) return;
       status.textContent = historyLoaded ? 'History loaded; current status is unavailable. Try Refresh statuses.' : 'Could not load history. Try Refresh statuses.';
+    } finally {
+      if (current === generation) list.removeAttribute('aria-busy');
     }
   }
   clear.addEventListener('click', async () => {
     const restoreFocus = document.activeElement === clear;
     clearing = true;
     generation++; clear.disabled = true; refresh.disabled = true;
+    list.setAttribute('aria-busy', 'true');
     try {
       const response = await chrome.runtime.sendMessage({ action: 'clearRecentActions' });
       if (!response?.success) throw new Error();
@@ -68,6 +76,7 @@
     } catch (_) { status.textContent = 'Could not clear history. Try again.'; clear.disabled = false; }
     finally {
       clearing = false; refresh.disabled = false;
+      list.removeAttribute('aria-busy');
       if (restoreFocus && (document.activeElement === clear || document.activeElement === document.body)) {
         (clear.disabled ? refresh : clear).focus();
       }

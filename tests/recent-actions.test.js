@@ -183,8 +183,10 @@ test('an obsolete refresh cannot unlock controls while history is being cleared'
   clear.click();
   finishStatus({success:true,data:[]}); await tick();
   assert.equal(refresh.disabled, true);
+  assert.equal(dom.window.document.getElementById('recentActionsList').getAttribute('aria-busy'), 'true');
   finishClear(); await tick();
   assert.equal(refresh.disabled, false);
+  assert.equal(dom.window.document.getElementById('recentActionsList').hasAttribute('aria-busy'), false);
   assert.equal(dom.window.document.querySelectorAll('#recentActionsList li').length, 0);
 });
 

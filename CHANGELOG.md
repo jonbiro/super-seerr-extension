@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.197]
+
+- Remove previous history statuses and links immediately when a refresh begins, including after switching Seerr sites; confirmed action records remain visible if the read fails.
+- Announce history loading and expose its busy state until the current refresh or clear completes.
+- Cover failed replies and rejected reads, manual and site-change refreshes, preserved historical destinations, and successful retry in Chromium.
+
 ## [3.5.196]
 
 - Restore keyboard focus after popup history refresh and clear operations when the initiating control still owns focus.
