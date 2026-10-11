@@ -31,9 +31,10 @@ class UIComponents {
       const remember = this.el('input', { type: 'checkbox' });
       const rememberLabel = this.el('label', {}, [remember, this.el('span', { textContent: ' Remember this match on this device' })]);
       const finish = value => {
+        const restoreFocus = backdrop.contains(document.activeElement) || document.activeElement === document.body;
         signal?.removeEventListener('abort', abort);
         backdrop.remove();
-        if (previousFocus?.isConnected) previousFocus.focus();
+        if (restoreFocus && previousFocus?.isConnected) previousFocus.focus();
         resolve(value);
       };
       const abort = () => finish(null);

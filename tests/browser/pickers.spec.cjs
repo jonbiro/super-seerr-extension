@@ -116,3 +116,24 @@ for (const cancel of ['button', 'Escape']) test(`TV request restores its initiat
   await expect(page.locator('#opener')).toBeFocused();
   expect(await page.evaluate(() => requestsSent)).toBe(0);
 });
+
+for (const kind of ['title', 'season']) test(`${kind} picker cleanup preserves focus moved outside it`, async ({ page }) => {
+  await page.setContent('<button id="opener">Choose</button><button id="destination">New page action</button>');
+  await page.addScriptTag({ path: path.resolve('src/shared/UIComponents.js') });
+  await page.addScriptTag({ path: path.resolve('src/shared/SeasonPicker.js') });
+  await page.locator('#opener').focus();
+  await page.evaluate(kind => {
+    window.pickerController = new AbortController();
+    const settings = { signal: window.pickerController.signal };
+    const pending = kind === 'title'
+      ? new window.UIComponents().chooseTitle([{ title: 'Film', mediaType: 'movie', tmdbId: 1 }], settings)
+      : window.chooseSeerrSeasons({ title: 'Series', seasons: [] }, settings);
+    pending.then(value => { window.pickerResult = value; });
+  }, kind);
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.locator('#destination').focus();
+  await page.evaluate(() => window.pickerController.abort());
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('#destination')).toBeFocused();
+  expect(await page.evaluate(() => window.pickerResult)).toBeNull();
+});

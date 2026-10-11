@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.120]
+
+- Preserve focus moved outside a title or season picker when navigation or a site change cancels it.
+- Continue restoring the initiating control when focus remains in the picker; add Chromium regressions for both cancellation paths.
+
 ## [3.5.119]
 
 - Preserve meaningful non-Latin marks when matching Seerr titles and public ratings, preventing distinct Japanese, Cyrillic, Indic and Arabic titles from becoming exact matches.

@@ -59,8 +59,11 @@
       }
       if (!options.seasons.some(season => season.requestable)) dialog.appendChild(el('p', { textContent: 'No seasons are currently available to request.' }));
       const finish = value => {
+        const restoreFocus = backdrop.contains(document.activeElement) || document.activeElement === document.body;
         signal?.removeEventListener('abort', cancel);
-        backdrop.remove(); if (previousFocus?.isConnected) previousFocus.focus(); resolve(value);
+        backdrop.remove();
+        if (restoreFocus && previousFocus?.isConnected) previousFocus.focus();
+        resolve(value);
       };
       const cancel = () => finish(null);
       signal?.addEventListener('abort', cancel, { once: true });
