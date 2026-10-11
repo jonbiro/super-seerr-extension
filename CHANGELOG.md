@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.118]
+
+- Keep Choose TV seasons hidden and disabled until a known title status is available, including during loading, errors, ambiguous matches and blocklisting.
+- Preserve season selection for known pending, processing, partial and available titles so users can request other eligible seasons.
+- Add state-transition regressions and a narrow Chromium flyout check; keep existing layout tests grounded in a loaded status.
+
 ## [3.5.117]
 
 - Restore focus to the initiating control when a TV season picker is cancelled after the loading state disabled the Request button.

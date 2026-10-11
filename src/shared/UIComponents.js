@@ -249,7 +249,7 @@ class UIComponents {
     panel.appendChild(statusSection);
     panel.appendChild(button);
     const seasonButton = mediaData.mediaType === 'tv'
-      ? this.el('button', { type: 'button', className: 'seerr-watchlist-button seerr-seasons-button', textContent: 'Choose TV seasons' }) : null;
+      ? this.el('button', { type: 'button', className: 'seerr-watchlist-button seerr-seasons-button', textContent: 'Choose TV seasons', style: 'display:none', disabled: 'true' }) : null;
     if (seasonButton) panel.appendChild(seasonButton);
 
     const watchlistButton = this.el('button', {
@@ -293,6 +293,14 @@ class UIComponents {
     const showWatchlist = !statusData.action && (statusData.status === 'available' || statusData.buttonClass === 'request');
     if (elements.watchlistButton) {
       elements.watchlistButton.style.display = showWatchlist ? 'flex' : 'none';
+    }
+    if (elements.seasonButton) {
+      // A known TV status can still have other requestable seasons, including
+      // while a prior season is pending or the current ones are available.
+      const showSeasons = !statusData.action && ['available', 'available_watch', 'partial',
+        'pending', 'requested', 'downloading', 'declined', 'failed'].includes(statusData.status);
+      elements.seasonButton.style.display = showSeasons ? 'flex' : 'none';
+      elements.seasonButton.disabled = !showSeasons;
     }
     this.updatePlexWatchlistStatus(elements, statusData, options);
   }

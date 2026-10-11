@@ -14,7 +14,8 @@ test('flyout and notifications fit a small window with long titles', async ({ pa
     document.body.style.backgroundColor = '#161b22';
     const ui = new UIComponents({ siteName: 'Layout' }); ui.injectStyles();
     const { flyout, panel } = ui.createFlyout();
-    ui.createFlyoutContent({ title: 'LongTitle'.repeat(30), year: 2026, mediaType: 'tv' }, panel);
+    const elements = ui.createFlyoutContent({ title: 'LongTitle'.repeat(30), year: 2026, mediaType: 'tv' }, panel);
+    ui.updateFlyoutStatus(elements, { status: 'available', buttonClass: 'request' });
     document.body.appendChild(flyout); flyout.setExpanded(true);
   });
   const panel = page.locator('.seerr-panel');
@@ -84,4 +85,28 @@ test('notifications establish an empty live region before updating its text', as
   });
   expect(initial).toEqual({ connected: true, role: 'status', text: '', atomic: 'true' });
   await expect(page.getByRole('status')).toContainText('Your changes are saved.');
+});
+
+
+test('TV season action follows status recovery and hides during writes', async ({ page }) => {
+  await page.evaluate(() => {
+    window.seasonUI = new UIComponents(); seasonUI.injectStyles();
+    const { flyout, panel } = seasonUI.createFlyout();
+    window.seasonElements = seasonUI.createFlyoutContent({ title: 'Series', mediaType: 'tv' }, panel);
+    document.body.appendChild(flyout); flyout.setExpanded(true);
+  });
+  const action = page.locator('.seerr-seasons-button');
+  await expect(action).toBeHidden(); await expect(action).toBeDisabled();
+  for (const state of [
+    { status: 'available' }, { status: 'loading', disabled: true },
+    { status: 'error', action: 'retryStatus' }, { status: 'unmatched', action: 'choose' },
+    { status: 'blocklisted', disabled: true }, { status: 'available_watch' }, { status: 'pending' }
+  ]) {
+    await page.evaluate(state => seasonUI.updateFlyoutStatus(seasonElements, state), state);
+    if (['available', 'available_watch', 'pending'].includes(state.status)) {
+      await expect(action).toBeVisible(); await expect(action).toBeEnabled();
+    } else {
+      await expect(action).toBeHidden(); await expect(action).toBeDisabled();
+    }
+  }
 });

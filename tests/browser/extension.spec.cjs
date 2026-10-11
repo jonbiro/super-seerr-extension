@@ -399,7 +399,16 @@ for (const fixture of require('./site-fixtures.cjs').SITES) {
     await expect(page.locator('.seerr-year')).toContainText(fixture.expect.mediaType === 'tv' ? 'TV Series' : 'Movie');
     if (fixture.expect.year) await expect(page.locator('.seerr-year')).toContainText(String(fixture.expect.year));
     await expect(page.locator('.seerr-action-button')).not.toContainText('Connecting');
-    if (fixture.expect.mediaType === 'tv') await expect(page.getByRole('button', { name: 'Choose TV seasons', exact: true })).toBeVisible();
+    if (fixture.expect.mediaType === 'tv') {
+      if (fixture.expect.tmdbId) await expect(page.getByRole('button', { name: 'Choose TV seasons', exact: true })).toBeVisible();
+      else {
+        // The local search fixture has no matching TV title. Choosing its
+        // identity must precede season selection.
+        await expect(page.locator('.seerr-action-button')).toContainText('Choose title');
+        await expect(page.locator('.seerr-seasons-button')).toBeHidden();
+        await expect(page.locator('.seerr-seasons-button')).toBeDisabled();
+      }
+    }
     await page.keyboard.press('Escape');
     await expect(page.locator('.seerr-tab')).toHaveAttribute('aria-expanded', 'false');
     await page.close();
