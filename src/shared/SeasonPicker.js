@@ -77,7 +77,8 @@
       updateSelection();
       dialog.append(cancelButton, confirm); backdrop.appendChild(dialog); document.body.appendChild(backdrop);
       dialog.addEventListener('keydown', event => {
-        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancel(); }
+        event.stopPropagation();
+        if (event.key === 'Escape') { event.preventDefault(); cancel(); }
         if (event.key === 'Tab') {
           const controls = [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled)')];
           const index = controls.indexOf(document.activeElement);

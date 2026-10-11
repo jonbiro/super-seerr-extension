@@ -54,7 +54,8 @@ class UIComponents {
       cancel.addEventListener('click', abort);
       dialog.append(list, rememberLabel, cancel); backdrop.appendChild(dialog); document.body.appendChild(backdrop);
       dialog.addEventListener('keydown', event => {
-        if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); abort(); }
+        event.stopPropagation();
+        if (event.key === 'Escape') { event.preventDefault(); abort(); }
         if (event.key === 'Tab') {
           const controls = [...dialog.querySelectorAll('button,input')];
           const index = controls.indexOf(document.activeElement);

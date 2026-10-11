@@ -143,7 +143,7 @@ class SeerrAPI {
       // The last answer for this server is used immediately and refreshed behind
       // it, so cosmetic metadata still never holds up messages or readiness.
       const remembered = local.mediaServerName;
-      this.mediaServerName = remembered?.url === this.baseUrl ? remembered.name ?? null : null;
+      this.mediaServerName = remembered && remembered.url === this.baseUrl ? remembered.name ?? null : null;
       this.mediaServerReady = this.loadMediaServerName();
     } catch (error) {
       console.error('Error loading Seerr settings:', error);
@@ -165,7 +165,16 @@ class SeerrAPI {
 
   // Keep the registered overlay in step with the saved server and the granted
   // permission. Safe to call repeatedly; it converges rather than toggling.
-  async syncOverlayRegistration() {
+  syncOverlayRegistration() {
+    // Settings and permission events can overlap. Serialize the read/update
+    // sequence so two callers cannot both register the same absent script.
+    const pending = (this.overlayRegistrationPending || Promise.resolve())
+      .then(() => this.syncOverlayRegistrationNow());
+    this.overlayRegistrationPending = pending.catch(() => false);
+    return pending;
+  }
+
+  async syncOverlayRegistrationNow() {
     // settingsReady gates every message, so this must never reject.
     if (!chrome.scripting?.registerContentScripts || !chrome.permissions?.contains) return false;
     const pattern = overlayOriginPattern(this.baseUrl);

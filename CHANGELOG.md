@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.131]
+
+- Serialize content-script registration updates so overlapping settings and permission changes cannot cause duplicate-ID failures; keep queued updates aligned with the latest site.
+- Avoid reading a missing remembered server name during unconfigured worker startup.
+- Keep title and season picker keydown events from reaching host-page shortcut handlers, preserving Tab navigation, checkbox selection and Enter confirmation.
+- Add Chromium checks against a host handler that cancels keyboard defaults, and confirm host shortcuts resume after the picker closes.
+
 ## [3.5.130]
 
 - Decode decimal and hexadecimal provider character references using full Unicode code points, preserving supplementary characters in matched titles.

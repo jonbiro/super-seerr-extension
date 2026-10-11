@@ -137,3 +137,44 @@ for (const kind of ['title', 'season']) test(`${kind} picker cleanup preserves f
   await expect(page.locator('#destination')).toBeFocused();
   expect(await page.evaluate(() => window.pickerResult)).toBeNull();
 });
+
+for (const kind of ['title', 'season']) test(`${kind} picker keeps host shortcuts from cancelling keyboard selection`, async ({ page }) => {
+  await page.setContent('<button id="opener">Choose</button>');
+  await page.addScriptTag({ path: path.resolve('src/shared/UIComponents.js') });
+  await page.addScriptTag({ path: path.resolve('src/shared/SeasonPicker.js') });
+  await page.locator('#opener').focus();
+  await page.evaluate(kind => {
+    window.hostKeys = [];
+    document.addEventListener('keydown', event => { window.hostKeys.push(event.key); event.preventDefault(); });
+    const pending = kind === 'title'
+      ? new window.UIComponents().chooseTitle([{ title: 'Film', mediaType: 'movie', tmdbId: 1 }])
+      : window.chooseSeerrSeasons({ title: 'Series', seasons: [{ number: 1, name: 'Season 1', episodeCount: 8, availability: 'Not available', requestable: true }] });
+    pending.then(value => { window.pickerResult = value; });
+  }, kind);
+  const dialog = page.getByRole('dialog');
+  const checkbox = dialog.getByRole('checkbox');
+  if (kind === 'title') {
+    await dialog.locator('.seerr-title-choice').focus();
+    await page.keyboard.press('Tab');
+    await expect(checkbox).toBeFocused();
+  } else await checkbox.focus();
+  await page.keyboard.press('Space');
+  await expect(checkbox).toBeChecked();
+  if (kind === 'title') {
+    await page.keyboard.press('Shift+Tab');
+    await expect(dialog.locator('.seerr-title-choice')).toBeFocused();
+  } else {
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+    await page.keyboard.press('Tab');
+    await expect(dialog.getByRole('button', { name: 'Request selected seasons' })).toBeFocused();
+  }
+  await page.keyboard.press('Enter');
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => window.hostKeys)).toEqual([]);
+  const result = await page.evaluate(() => window.pickerResult);
+  if (kind === 'title') expect(result).toMatchObject({ tmdbId: 1, rememberChoice: true });
+  else expect(result).toEqual([1]);
+  await page.keyboard.press('h');
+  expect(await page.evaluate(() => window.hostKeys)).toEqual(['h']);
+});
