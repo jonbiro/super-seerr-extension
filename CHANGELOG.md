@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.106]
+
+- Preserve Score details expansion and keyboard focus when ratings repaint after a refresh or shared public update, on cards and detail pages.
+- Restore focus only for the same title and only when the user has not moved to another control; discard saved view state on navigation, cleanup and card identity changes.
+- Add open/closed, summary/retry focus and intervening-focus DOM regressions plus installed Chromium shared-update coverage.
+
 ## [3.5.105]
 
 - Show an inline saved-sites error for failed, missing or malformed worker replies instead of silently retaining apparently current controls.

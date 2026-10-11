@@ -22,9 +22,9 @@ const CARDS = `<article data-testid="title-card"><div><img src="https://image.tm
   <article data-testid="title-card"><div><img src="https://image.tmdb.org/t/p/w300/unknown.jpg" alt=""></div></article>`;
 
 function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverUrl = 'https://seerr.example', apiConfigured = false,
-  configForPage = null, pageUrl = 'https://seerr.example/discover' } = {}) {
+  configForPage = null, pageUrl = 'https://seerr.example/discover', detail = false } = {}) {
   const { JSDOM } = require('jsdom');
-  const dom = new JSDOM(`<main><div id="grid">${CARDS}</div></main>`,
+  const dom = new JSDOM(`<main>${detail ? '<section class="media-header"><h1>Dune (2021)</h1></section>' : ''}<div id="grid">${CARDS}</div></main>`,
     { url: pageUrl, runScripts: 'outside-only' });
   const { window } = dom;
   const localStore = { ...local };
@@ -802,3 +802,47 @@ for (const status of ['uncertain', 'partial', 'unrated', 'failed']) {
       status === 'failed' ? 'failed' : complete ? 'rated' : 'partial');
   });
 }
+
+for (const placement of ['card', 'detail']) for (const focused of ['summary', 'button', 'elsewhere', 'closed']) test(`live shared updates preserve ${placement} score details and ${focused} focus`, async t => {
+  const checkedAt = Date.now() - 10000;
+  const fixture = openGrid({ detail: placement === 'detail', pageUrl: `https://seerr.example/${placement === 'detail' ? 'movie/123' : 'discover'}`, local: { overlayRatingsV1: {
+    server: SERVER, epoch: 0, matcher: Config.matcherVersion, index: [INDEX_ENTRY],
+    entries: { 'movie:123': { bundle: BUNDLE, cachedAt: checkedAt, retryAt: Date.now() + 100000 } }
+  } } });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
+  await flush(fixture.window);
+  const doc = fixture.window.document;
+  const card = doc.querySelector(placement === 'detail' ? '.media-header' : 'article');
+  const original = card.querySelector('.seerr-rating-details');
+  original.open = focused !== 'closed';
+  const control = ['elsewhere', 'closed'].includes(focused) ? 'summary' : focused;
+  original.querySelector(control).focus();
+  const send = fixture.window.chrome.runtime.sendMessage;
+  let release;
+  fixture.window.chrome.runtime.sendMessage = async message => {
+    const reply = await send(message);
+    if (message.action !== 'getOverlayCache') return reply;
+    reply.data.publicRatingsV1 = { matcher: Config.matcherVersion, entries: {
+      'movie:123': { source: 'rotten-tomatoes', checkedAt: checkedAt + 1000, expiresAt: checkedAt + Config.rtCacheTtlMs,
+        value: { rtCriticsScore: 99, rtAudienceScore: 85, confidence: 1, source: 'rotten-tomatoes',
+          matchedTitle: 'Dune', matchedYear: 2021, url: 'https://www.rottentomatoes.com/m/dune' } }
+    } };
+    return new Promise(resolve => { release = () => resolve(reply); });
+  };
+  fixture.notify({ action: 'publicRatingsChanged' });
+  await flush(fixture.window);
+  const outside = doc.createElement('button'); doc.body.append(outside);
+  if (focused === 'elsewhere') {
+    const observer = new fixture.window.MutationObserver(() => {
+      if (!original.isConnected) { outside.focus(); observer.disconnect(); }
+    });
+    observer.observe(card, { childList: true });
+    t.after(() => observer.disconnect());
+  }
+  release(); await flush(fixture.window);
+  const updated = card.querySelector('.seerr-rating-details');
+  if (placement === 'card') assert.equal(card.__seerrRatings.rtCriticsScore, 99);
+  else assert.match(card.querySelector('.seerr-ratings-row').textContent, /99%/);
+  assert.equal(updated.open, focused !== 'closed', 'repainting preserves the explanation state');
+  assert.equal(doc.activeElement, focused === 'elsewhere' ? outside : updated.querySelector(control));
+});

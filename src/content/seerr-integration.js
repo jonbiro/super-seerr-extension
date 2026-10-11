@@ -23,6 +23,7 @@
     plexWatchlist: true,
   };
 
+  let ratingDetailsState = new WeakMap();
   let activeBulkSeasonController = null;
   let bulkRun = null;
   let apiConfigured = false;
@@ -276,6 +277,7 @@
     activeBulkSeasonController?.abort();
     activeBulkSeasonController = null;
     routeGeneration++;
+    ratingDetailsState = new WeakMap();
     cardRatingQueue.clear();
     const cards = getMediaCards();
     for (const grid of new Set(cards.map(card => getCardsGrid([card])).filter(Boolean))) {
@@ -1272,6 +1274,15 @@
     return isBundleComplete(bundle) && verifiedRt ? 'rated' : 'partial';
   }
 
+  function rememberRatingDetails(container) {
+    const details = container.querySelector('.seerr-rating-details');
+    if (!details) return;
+    const active = document.activeElement;
+    ratingDetailsState.set(container, { key: details.__seerrRatingKey, open: details.open,
+      focused: details.contains(active) ? active : null,
+      control: active === details.querySelector('button') ? 'button' : 'summary' });
+  }
+
   function appendRatingDetails(container, info) {
     if (container.querySelector('.seerr-rating-details')) return;
     const entry = ratingsCache.get(ratingsCacheKey(info.tmdbId, info.title, info.year, info.mediaType));
@@ -1286,6 +1297,7 @@
     };
     const details = document.createElement('details');
     details.className = 'seerr-rating-details';
+    details.__seerrRatingKey = ratingKey(info.tmdbId, info.mediaType);
     details.setAttribute('data-seerr-overlay', 'true');
     const summary = document.createElement('summary');
     summary.textContent = 'Score details';
@@ -1315,12 +1327,22 @@
     });
     details.append(summary, text, retry);
     container.appendChild(details);
+    const previous = ratingDetailsState.get(container);
+    ratingDetailsState.delete(container);
+    if (previous?.key === details.__seerrRatingKey) {
+      details.open = previous.open;
+      // Rendering is asynchronous; never take focus back from another control.
+      if (previous.focused && !previous.focused.isConnected && document.activeElement === document.body) {
+        details.querySelector(previous.control)?.focus({ preventScroll: true });
+      }
+    }
   }
 
   function repaintRatingTitle(tmdbId, mediaType) {
     for (const card of getMediaCards()) {
       const info = getCardMediaInfo(card);
       if (!info || String(info.tmdbId) !== String(tmdbId) || info.mediaType !== mediaType) continue;
+      rememberRatingDetails(card);
       card.querySelectorAll('.seerr-card-badge, .seerr-rating-details').forEach(element => element.remove());
       delete card.__seerrRatings;
       card.__seerrBadgesResolving = false;
@@ -1328,6 +1350,7 @@
     }
     const route = detectRoute();
     if (String(route?.id) === String(tmdbId) && route?.type === `${mediaType}-detail`) {
+      document.querySelectorAll('.seerr-rating-details').forEach(details => rememberRatingDetails(details.parentElement));
       document.querySelectorAll('.seerr-ratings-row, .seerr-quality-summary, .seerr-rating-details').forEach(element => element.remove());
       injectDetailRatings();
     }
@@ -1403,6 +1426,7 @@
   }
 
   function clearCardIdentity(card) {
+    ratingDetailsState.delete(card);
     card.__seerrIdentityEpoch = (card.__seerrIdentityEpoch || 0) + 1;
     card.querySelectorAll('.seerr-card-badge, .seerr-rating-details, .seerr-select-checkbox, .seerr-plex-card-button').forEach(node => node.remove());
     delete card.__seerrRatings;
