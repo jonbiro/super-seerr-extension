@@ -62,7 +62,7 @@ These criteria describe the current product contract. They replace the historica
 
 ## Known limits
 
-- Firefox 147.0.3 passes the real-extension local-fixture smoke test for permissions, overlay injection, SPA navigation, background reload, and cache clearing. Authenticated live-site and all-seven-site Firefox coverage remain open.
+- Firefox 157.0.1 passes the real-extension local-fixture smoke test with geckodriver 0.37.1 for permissions, overlay injection, SPA navigation, background reload, cache clearing and seven supported-site synthetic fixture integrations. Authenticated live-site coverage and physical-device/browser compatibility remain open.
 - Ratings depend on RT markup, match heuristics, Seerr API responses, and the user’s session.
 - Cards are identified from the title lists Seerr fetches for itself, because Seerr's markup withholds a card's link and title until it is hovered. A card whose poster matches no observed item stays unresolved rather than being guessed at.
 - Cached ratings are bounded by entry count rather than age, and the two caches are capped independently. Both persist as a single rewritten blob, so a cap is also a write-size decision.
