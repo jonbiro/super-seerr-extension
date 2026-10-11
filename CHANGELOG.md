@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.145]
+
+- Preserve keyboard focus through saved-site recovery in the popup and Settings, moving focus to the site selector after success while respecting focus moved elsewhere during loading.
+- Keep failed retries focused and use the Settings link when popup recovery finds no saved sites.
+- Hide the empty popup site switcher when no profiles are saved; its hidden class previously had no matching CSS rule.
+- Add real-browser coverage for success and failure on both pages, including users moving focus during a pending retry.
+
 ## [3.5.144]
 
 - Compare the full saved rating snapshot before deleting it from a site's cache, protecting concurrent score, retry and diagnostic changes even when timestamps are unchanged.

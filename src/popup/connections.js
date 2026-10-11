@@ -19,6 +19,7 @@
   }
   async function load(changed = false) {
     const current = ++generation;
+    const restoreRetryFocus = document.activeElement === retry;
     loading = true; select.disabled = true; retry.disabled = true;
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getSeerrConnections' });
@@ -27,19 +28,21 @@
       render(response.data);
       select.disabled = false;
       status.textContent = changed ? 'Active site updated.' : '';
-      const restoreFocus = document.activeElement === retry;
       retry.classList.add('hidden');
-      if (restoreFocus) {
-        if (response.data.sites.length) select.focus();
-        else document.getElementById('openOptions')?.focus();
-      }
     } catch (error) {
       if (current !== generation) return;
       section.classList.remove('hidden'); select.value = ''; select.title = ''; select.disabled = true;
       status.textContent = 'Could not load saved sites. Try Retry saved sites.';
       retry.classList.remove('hidden');
     } finally {
-      if (current === generation) { loading = false; retry.disabled = false; }
+      if (current === generation) {
+        loading = false; retry.disabled = false;
+        if (restoreRetryFocus && (document.activeElement === retry || document.activeElement === document.body)) {
+          const target = !retry.classList.contains('hidden') ? retry
+            : connections?.sites.length ? select : document.getElementById('openOptions');
+          target?.focus();
+        }
+      }
     }
   }
   retry.addEventListener('click', () => { if (!switching && !loading) void load(); });

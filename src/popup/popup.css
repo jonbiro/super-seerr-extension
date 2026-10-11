@@ -83,7 +83,8 @@ body {
     display: block;
 }
 
-.state-content.hidden {
+.state-content.hidden,
+.site-switcher.hidden {
     display: none;
 }
 

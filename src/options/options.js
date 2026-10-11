@@ -323,6 +323,7 @@ class OptionsManager {
   async loadConnectionChoices() {
     const generation = this.connectionChoicesGeneration = (this.connectionChoicesGeneration || 0) + 1;
     const retry = document.getElementById('retrySeerrSites');
+    const restoreRetryFocus = document.activeElement === retry;
     this.connectionChoicesLoading = true;
     this.updateConnectionControls();
     if (retry) retry.disabled = true;
@@ -359,6 +360,10 @@ class OptionsManager {
         this.connectionChoicesLoading = false;
         if (retry) retry.disabled = false;
         this.updateConnectionControls();
+        if (restoreRetryFocus && (document.activeElement === retry || document.activeElement === document.body)) {
+          const target = this.connectionChoicesUnavailable ? retry : document.getElementById('savedSeerrSites');
+          target?.focus();
+        }
       }
     }
   }
