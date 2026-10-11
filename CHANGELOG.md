@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.138]
+
+- Require actual string title fields when validating Seerr search candidates, so arrays, numbers and booleans cannot authorize a media request through string coercion.
+- Keep valid original-title matching available when a display title is malformed, and use a valid title string in the ambiguity picker.
+- Add regressions for all four candidate title fields, numeric/boolean titles, blocked writes and valid original-title recovery.
+
 ## [3.5.137]
 
 - Preserve keyboard focus after preset saves and failed deletions; move focus to the preset selector after successful deletion without taking focus moved elsewhere.

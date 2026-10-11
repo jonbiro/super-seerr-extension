@@ -54,3 +54,37 @@ test('a valid empty search remains unmatched rather than a transport error', asy
   assert.equal(status.status, 'unmatched');
   assert.equal(status.action, 'choose');
 });
+
+for (const [field, value, title] of [
+  ['title', ['Fight Club'], 'Fight Club'],
+  ['originalTitle', ['Fight Club'], 'Fight Club'],
+  ['name', ['Fight Club'], 'Fight Club'],
+  ['originalName', ['Fight Club'], 'Fight Club'],
+  ['title', 1984, '1984'],
+  ['title', true, 'True']
+]) test(`a coerced ${field} (${JSON.stringify(value)}) cannot authorize a request`, async () => {
+  const { api, ready } = loadWorker(configured); await ready;
+  const posts = [];
+  api.makeAPIRequest = async (method, endpoint, body) => {
+    if (method === 'POST') { posts.push(body); return { id: 42 }; }
+    return { results: [{ id: 550, mediaType: 'movie', releaseDate: '1999-10-15', [field]: value }] };
+  };
+  const input = { ...media, title };
+  assert.equal((await api.getMediaCandidates(input)).length, 0);
+  await assert.rejects(api.requestMedia(input), /No unambiguous match/);
+  assert.equal(posts.length, 0);
+});
+
+test('valid original-title evidence survives a malformed display title', async () => {
+  const { api, ready } = loadWorker(configured); await ready;
+  const posts = [];
+  api.makeAPIRequest = async (method, endpoint, body) => {
+    if (method === 'POST') { posts.push(body); return { id: 42 }; }
+    return { results: [{ ...result, title: ['Wrong display'], originalTitle: media.title }] };
+  };
+  const candidates = await api.getMediaCandidates(media);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].title, media.title, 'picker must show a usable string title');
+  assert.equal((await api.requestMedia(media)).tmdbId, 550);
+  assert.equal(posts.length, 1);
+});

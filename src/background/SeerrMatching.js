@@ -69,7 +69,8 @@
       return candidates.filter(candidate => Number.isSafeInteger(Number(candidate.id)) && Number(candidate.id) > 0)
         .slice(0, 20).map(candidate => ({
           tmdbId: Number(candidate.id), mediaType: media.mediaType,
-          title: String(candidate.title || candidate.name || media.title).slice(0, 300),
+          title: ([candidate.title, candidate.name, candidate.originalTitle, candidate.originalName]
+            .find(title => typeof title === 'string' && title.trim()) || media.title).trim().slice(0, 300),
           year: this.extractYear(candidate.releaseDate || candidate.firstAirDate),
           overview: typeof candidate.overview === 'string' ? candidate.overview.slice(0, 500) : ''
         }));
@@ -86,7 +87,8 @@
       const candidates = (searchResults || []).filter(result => {
         if (!result || result.mediaType !== mediaData.mediaType) return false;
         try { root.MediaValidation.tmdbId(result.id); } catch (_) { return false; }
-        const titles = [result.title, result.originalTitle, result.name, result.originalName].filter(Boolean);
+        const titles = [result.title, result.originalTitle, result.name, result.originalName]
+          .filter(title => typeof title === 'string' && title.trim());
         if (!titles.some(title => this.areTitlesSimilar(title, mediaData.title))) return false;
         if (mediaData.year) {
           const year = this.extractYear(result.releaseDate || result.firstAirDate);
@@ -98,7 +100,8 @@
     },
 
     areTitlesSimilar(title1, title2) {
-      const normalize = title => String(title).toLowerCase().normalize('NFKD')
+      if (typeof title1 !== 'string' || typeof title2 !== 'string') return false;
+      const normalize = title => title.toLowerCase().normalize('NFKD')
         .replace(/(\p{Script=Latin})\p{M}+/gu, '$1').normalize('NFC')
         .replace(/\bse7en\b/g, 'seven')
         .replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ').trim();
