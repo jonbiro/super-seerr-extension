@@ -695,7 +695,10 @@ class SeerrAPI {
           // sequential row id, and comparing it here matched an unrelated
           // request whenever some row's id happened to equal this TMDB id —
           // which is common, since both are small integers.
-          const matchesTmdbId = Number(request.media?.tmdbId) === Number(tmdbId);
+          let requestTmdbId;
+          try { requestTmdbId = MediaValidation.tmdbId(request.media?.tmdbId); }
+          catch (_) { return false; }
+          const matchesTmdbId = requestTmdbId === Number(tmdbId);
 
           this.log(`📊 [Background] Checking request:`, {
             requestId: request.id, requestType: requestMediaType, matchesType,

@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.122]
+
+- Validate TMDB IDs in request history before matching them to a title, preventing arrays, booleans and non-decimal strings from attaching an unrelated status or playback link.
+- Keep valid numeric and decimal-string IDs supported and prevent malformed entries from masking a later valid request.
+
 ## [3.5.121]
 
 - Treat missing or malformed Seerr search results as retryable lookup failures instead of telling users there is no matching title.

@@ -159,3 +159,26 @@ for (const bad of [null, {id:1,status:1,media:{tmdbId:1396}}, {id:1,type:'unknow
     assert.equal((await worker.api.searchRequests(1396,'tv')).id, 2);
   });
 }
+
+for (const [tmdbId, malformed] of [[550, [550]], [550, '550.0'], [550, '5.5e2'], [550, '0x226'], [550, ' 550 '], [1, true]]) {
+  test(`malformed history ID ${JSON.stringify(malformed)} cannot attach another title's status or playback URL`, async () => {
+    const worker = loadWorker(CONFIGURED); await worker.ready;
+    withApi(worker, {
+      '/api/v1/request': { results: [{ id: 7, type: 'movie', status: 5,
+        media: { tmdbId: malformed, status: 5, mediaUrl: 'https://jellyfin.example/other' } }] },
+      [`/api/v1/movie/${tmdbId}`]: { mediaInfo: undefined }
+    });
+    const status = await worker.api.getMediaStatus({ tmdbId, mediaType: 'movie' });
+    assert.equal(status.status, 'available');
+    assert.equal(status.watchUrl, undefined);
+  });
+}
+
+test('a malformed matching history ID cannot mask a later valid request', async () => {
+  const worker = loadWorker(CONFIGURED); await worker.ready;
+  withApi(worker, { '/api/v1/request': { results: [
+    { id: 1, type: 'movie', status: 1, media: { tmdbId: [550] } },
+    { id: 2, type: 'movie', status: 4, media: { tmdbId: '550' } }
+  ] } });
+  assert.equal((await worker.api.searchRequests(550, 'movie')).id, 2);
+});
