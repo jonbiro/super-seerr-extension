@@ -55,3 +55,26 @@ test('long connection status keeps the popup logo and status dot intact', async 
   expect(dimensions.gap).toBeGreaterThanOrEqual(8);
   expect(dimensions.overflow).toBe(false);
 });
+
+test('saved-site retry fits a narrow popup and restores focus to the recovered selector', async ({ page }) => {
+  await page.evaluate(() => {
+    window.chrome = { runtime: { sendMessage: async () => ({ success: false }) } };
+  });
+  await page.addScriptTag({ path: path.resolve('src/popup/connections.js') });
+  const retry = page.getByRole('button', { name: 'Retry saved sites', exact: true });
+  await expect(retry).toBeVisible();
+  await expect(page.locator('#activeSeerrSite')).toBeDisabled();
+  expect(await page.locator('#seerrSiteSwitcher').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.locator('#seerrSiteSwitcher').screenshot({ path: '/tmp/super-seerr-popup-site-retry.png' });
+  await page.evaluate(() => {
+    chrome.runtime.sendMessage = async () => ({ success: true, data: {
+      revision: 1, activeId: 'home', sites: [{ id: 'home', name: 'Home', url: 'https://home.example' }]
+    } });
+  });
+  await retry.click();
+  await expect(retry).toBeHidden();
+  await expect(page.locator('#activeSeerrSite')).toBeEnabled();
+  await expect(page.locator('#activeSeerrSite')).toHaveValue('home');
+  await expect(page.locator('#activeSeerrSite')).toBeFocused();
+  await expect(page.locator('#siteSwitchStatus')).toBeEmpty();
+});

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.115]
+
+- Let a failed popup saved-site list recover through an inline Retry saved sites button, with focus restored to the selector after recovery.
+- Disable site switching during list refreshes and keep stale replies from enabling controls while a newer refresh is pending.
+- Add malformed/missing/rejected reply recovery, stale-selector guards and a narrow Chromium layout/focus check.
+
 ## [3.5.114]
 
 - Retry uncertain matches with no usable scores after their shorter deadline instead of suppressing lookups for the six-hour confirmed-unrated interval.

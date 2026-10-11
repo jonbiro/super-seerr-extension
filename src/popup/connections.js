@@ -2,10 +2,11 @@
   const section = document.getElementById('seerrSiteSwitcher');
   const select = document.getElementById('activeSeerrSite');
   const status = document.getElementById('siteSwitchStatus');
-  let connections, generation = 0, switching = false, refreshPending = false, pendingChange;
+  const retry = document.getElementById('retrySeerrSites');
+  let connections, generation = 0, switching = false, loading = false, refreshPending = false, pendingChange;
   const alreadyRendered = value => value && value.revision === connections?.revision && value.activeId === connections?.activeId;
   function render(value) {
-    if (!Array.isArray(value?.sites)) throw new Error('Could not load saved sites. Reopen the popup to retry.');
+    if (!Array.isArray(value?.sites)) throw new Error('Could not load saved sites. Try Retry saved sites.');
     connections = value;
     select.replaceChildren();
     for (const site of connections.sites) {
@@ -18,22 +19,33 @@
   }
   async function load(changed = false) {
     const current = ++generation;
+    loading = true; select.disabled = true; retry.disabled = true;
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getSeerrConnections' });
       if (current !== generation) return;
-      if (!response?.success) throw new Error('Could not load saved sites. Reopen the popup to retry.');
+      if (!response?.success) throw new Error('Could not load saved sites. Try Retry saved sites.');
       render(response.data);
       select.disabled = false;
-      if (changed) status.textContent = 'Active site updated.';
+      status.textContent = changed ? 'Active site updated.' : '';
+      const restoreFocus = document.activeElement === retry;
+      retry.classList.add('hidden');
+      if (restoreFocus) {
+        if (response.data.sites.length) select.focus();
+        else document.getElementById('openOptions')?.focus();
+      }
     } catch (error) {
       if (current !== generation) return;
       section.classList.remove('hidden'); select.value = ''; select.title = ''; select.disabled = true;
-      status.textContent = error.message;
+      status.textContent = 'Could not load saved sites. Try Retry saved sites.';
+      retry.classList.remove('hidden');
+    } finally {
+      if (current === generation) { loading = false; retry.disabled = false; }
     }
   }
+  retry.addEventListener('click', () => { if (!switching && !loading) void load(); });
   select.addEventListener('change', async () => {
     const site = connections?.sites.find(item => item.id === select.value);
-    if (!site || switching) return;
+    if (!site || switching || loading) return;
     const url = new URL(site.url);
     generation++; switching = true;
     select.disabled = true; status.textContent = 'Switching sites…';
