@@ -49,8 +49,8 @@ async function startServer() {
     }
     if (request.url.startsWith('/api/')) {
       response.setHeader('Content-Type', 'application/json');
-      response.end(JSON.stringify(request.url.includes('/settings/public') ? { mediaServerType: 2 }
-        : request.url.includes('/auth/me') ? { displayName: 'Smoke test' }
+      response.end(JSON.stringify(request.url.includes('/settings/public') ? { mediaServerType: 2, initialized: true }
+        : request.url.includes('/auth/me') ? { id: 1, displayName: 'Smoke test' }
         : request.url.includes('/ratings') ? { criticsScore: 85, audienceScore: 90, imdbRating: 8 }
         : { id: 550, title: 'Fight Club', voteAverage: 8, mediaInfo: null, results: [] }));
       return;

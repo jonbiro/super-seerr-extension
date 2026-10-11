@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.107]
+
+- Validate public settings before reporting Seerr as reachable, rejecting successful HTML/proxy responses and unrelated JSON; distinguish incomplete initial setup from a ready server.
+- Verify the account response contains a valid user ID before marking an API key accepted, while retaining authenticated fallback when the public endpoint is blocked.
+- Keep the popup check button label consistent and preserve its icon across repeated checks; add malformed-response, setup, authentication and installed-browser recovery regressions.
+
 ## [3.5.106]
 
 - Preserve Score details expansion and keyboard focus when ratings repaint after a refresh or shared public update, on cards and detail pages.

@@ -148,11 +148,12 @@ class PopupManager {
   async testConnection() {
     if (this.testConnectionButton.disabled) return;
     this.testConnectionButton.disabled = true;
-    this.testConnectionButton.textContent = 'Checking…';
+    const label = this.testConnectionButton.querySelector('span');
+    label.textContent = 'Checking…';
     try { await this.checkStatus(); }
     finally {
       this.testConnectionButton.disabled = false;
-      this.testConnectionButton.textContent = 'Check connections';
+      label.textContent = 'Check connections';
     }
   }
 

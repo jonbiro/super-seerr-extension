@@ -23,7 +23,7 @@ test('diagnostics distinguish reachable server from rejected key without exposin
   const w = await worker();
   w.context.fetch = async url => url.includes('/auth/me')
     ? { ok: false, status: 401, json: async () => ({ message: 'rejected secret' }) }
-    : { ok: true };
+    : { ok: true, json: async () => ({ initialized: true }) };
   const result = await w.api.getPopupDiagnostics();
   assert.equal(result.checks.seerr.state, 'ok');
   assert.equal(result.checks.apiKey.state, 'error');
@@ -73,4 +73,64 @@ test('a change during authentication discards the completed report', async () =>
     return { ok: true, json: async () => ({ id: 1 }) };
   };
   await assert.rejects(w.api.getPopupDiagnostics(), /Settings changed during diagnostics/);
+});
+
+for (const [label, value] of [
+  ['null JSON', null], ['array JSON', []], ['unrelated JSON', { message: 'Proxy response' }],
+  ['string setup flag', { initialized: 'true' }]
+]) test(`diagnostics reject a successful HTTP response with ${label}`, async () => {
+  const w = await worker({ key: null });
+  w.context.fetch = async () => ({ ok: true, json: async () => value });
+  const report = await w.api.getPopupDiagnostics();
+  assert.equal(report.checks.seerr.state, 'error');
+  assert.equal(report.checks.seerr.fix, 'serverUrl');
+  assert.match(report.checks.seerr.message, /expected Seerr settings/);
+});
+
+test('an HTML proxy response cannot report a healthy ratings-only connection', async () => {
+  const w = await worker({ key: null });
+  w.context.fetch = async () => ({ ok: true, json: async () => { throw new SyntaxError('private proxy HTML'); } });
+  const report = await w.api.getPopupDiagnostics();
+  assert.equal(report.checks.seerr.state, 'error');
+  assert.equal(report.checks.seerr.fix, 'serverUrl');
+  assert.doesNotMatch(JSON.stringify(report), /private proxy HTML/);
+});
+
+for (const initialized of [false, true]) test(`public settings report the actual setup state (${initialized})`, async () => {
+  const w = await worker({ key: null });
+  w.context.fetch = async (_url, options) => {
+    assert.equal(options.headers.Accept, 'application/json');
+    return { ok: true, json: async () => ({ initialized, applicationTitle: 'My server' }) };
+  };
+  const report = await w.api.getPopupDiagnostics();
+  assert.equal(report.checks.seerr.state, initialized ? 'ok' : 'warning');
+  if (!initialized) assert.match(report.checks.seerr.message, /initial setup/);
+});
+
+for (const id of [undefined, null, '1', 0, -1, 1.5]) test(`an unexpected account ID cannot verify the API key (${id})`, async () => {
+  const w = await worker();
+  w.context.fetch = async url => ({ ok: true, json: async () => url.includes('/auth/me') ? { id } : { initialized: true } });
+  const report = await w.api.getPopupDiagnostics();
+  assert.equal(report.checks.seerr.state, 'ok');
+  assert.equal(report.checks.apiKey.state, 'error');
+  assert.equal(report.checks.apiKey.fix, 'serverUrl');
+  assert.match(report.checks.apiKey.message, /unexpected account response/);
+});
+
+test('authenticated connectivity can recover a blocked public-settings check', async () => {
+  const w = await worker();
+  w.context.fetch = async url => url.includes('/auth/me')
+    ? { ok: true, json: async () => ({ id: 1 }) } : { ok: false, status: 403 };
+  const report = await w.api.getPopupDiagnostics();
+  assert.equal(report.checks.seerr.state, 'ok');
+  assert.equal(report.checks.apiKey.state, 'ok');
+});
+
+test('valid authentication does not hide a confirmed incomplete setup', async () => {
+  const w = await worker();
+  w.context.fetch = async url => ({ ok: true, json: async () => url.includes('/auth/me') ? { id: 1 } : { initialized: false } });
+  const report = await w.api.getPopupDiagnostics();
+  assert.equal(report.checks.apiKey.state, 'ok');
+  assert.equal(report.checks.seerr.state, 'warning');
+  assert.match(report.checks.seerr.message, /initial setup/);
 });

@@ -26,6 +26,7 @@
       };
       const result = { serverUrl: null, checks: {} };
       const checks = result.checks;
+      let setupIncomplete = false;
       let url;
       try {
         url = new URL(snapshot.baseUrl);
@@ -44,16 +45,33 @@
           if (!permission) return;
           try {
             const response = await fetch(`${snapshot.baseUrl.replace(/\/$/, '')}/api/v1/settings/public`, {
-              redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(root.RatingsConfig.requestTimeoutMs)
+              redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(root.RatingsConfig.requestTimeoutMs),
+              headers: { Accept: 'application/json' }
             });
-            checks.seerr = response.ok ? row('ok', 'Seerr is reachable.') : row('error', `Seerr returned HTTP ${response.status}. Check the server URL and proxy.`, 'serverUrl');
+            if (!response.ok) {
+              checks.seerr = row('error', `Seerr returned HTTP ${response.status}. Check the server URL and proxy.`, 'serverUrl');
+            } else {
+              const settings = await response.json().catch(() => null);
+              if (!settings || Array.isArray(settings) || typeof settings.initialized !== 'boolean') {
+                checks.seerr = row('error', 'The server did not return the expected Seerr settings. Check the URL and proxy.', 'serverUrl');
+              } else {
+                setupIncomplete = !settings.initialized;
+                checks.seerr = setupIncomplete
+                  ? row('warning', 'Seerr is reachable, but initial setup is incomplete. Open Seerr to finish setup.')
+                  : row('ok', 'Seerr is reachable.');
+              }
+            }
           } catch (_) { checks.seerr = row('error', 'Cannot reach Seerr. Check the URL, network, and server.', 'serverUrl'); }
           assertCurrent();
           if (!snapshot.apiKey) return;
           try {
-            await client.makeAPIRequest('GET', '/api/v1/auth/me');
-            checks.apiKey = row('ok', 'API key accepted.');
-            checks.seerr = row('ok', 'Seerr is reachable.');
+            const user = await client.makeAPIRequest('GET', '/api/v1/auth/me');
+            if (!Number.isSafeInteger(user?.id) || user.id <= 0) {
+              checks.apiKey = row('error', 'The server returned an unexpected account response. Check the URL and proxy.', 'serverUrl');
+            } else {
+              checks.apiKey = row('ok', 'API key accepted.');
+              if (!setupIncomplete) checks.seerr = row('ok', 'Seerr is reachable.');
+            }
           } catch (error) {
             checks.apiKey = [401, 403].includes(error.status)
               ? row('error', 'API key rejected or lacks access. Replace it in Settings.', 'apiKey')
