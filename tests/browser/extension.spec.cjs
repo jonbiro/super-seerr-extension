@@ -72,6 +72,30 @@ test('optional host permission controls registration, real SPA navigation and re
   await page.close();
 });
 
+test('Settings tests an unsaved Seerr key without replacing saved credentials', async () => {
+  const manager = await context.newPage();
+  await manager.goto('chrome://extensions');
+  await manager.evaluate(id => chrome.developerPrivate.addHostPermission(id, 'http://127.0.0.1/*'), extensionId);
+  await manager.close();
+  const saved = await options.evaluate(async () => ({
+    url: (await chrome.storage.sync.get('seerrUrl')).seerrUrl,
+    key: (await chrome.storage.local.get('seerrApiKey')).seerrApiKey
+  }));
+  try {
+    await options.locator('#serverUrl').fill(origin);
+    await options.locator('#apiKey').fill('unsaved-preview-key');
+    await options.getByRole('button', { name: 'Test Connection', exact: true }).click();
+    await expect(options.locator('#status')).toContainText('Connected as Smoke test');
+    expect(await options.evaluate(async () => ({
+      url: (await chrome.storage.sync.get('seerrUrl')).seerrUrl,
+      key: (await chrome.storage.local.get('seerrApiKey')).seerrApiKey
+    }))).toEqual(saved);
+  } finally {
+    await options.evaluate(() => chrome.permissions.remove({ origins: ['http://127.0.0.1/*'] }));
+    await options.reload();
+  }
+});
+
 test('worker restart preserves configuration and cache; clear removes persisted ratings', async () => {
   // Storage is real extension storage, and termination is through CDP rather
   // than a simulated new JS object.

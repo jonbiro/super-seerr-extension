@@ -261,6 +261,56 @@ test('Test Plex stops when host access is declined', async t => {
   assert.equal(ctx.window.document.getElementById('testPlexConnection').disabled, false);
 });
 
+test('Test Seerr requests host access in the click gesture before testing without saving', async t => {
+  const ctx = openOptions(); t.after(() => ctx.window.close()); await flush();
+  const events = [];
+  ctx.window.chrome.permissions.request = async ({ origins }) => {
+    events.push('permission'); assert.deepEqual([...origins], ['http://localhost/*']); return true;
+  };
+  ctx.window.chrome.runtime.sendMessage = async message => {
+    events.push(message.action); return { success: true, data: { user: 'Test account' } };
+  };
+  const doc = ctx.window.document;
+  doc.getElementById('serverUrl').value = 'http://localhost:5055/seerr';
+  doc.getElementById('apiKey').value = 'test-key';
+  doc.getElementById('testConnection').click();
+  assert.deepEqual(events, ['permission'], 'permission must be requested synchronously from the click');
+  await flush();
+  assert.deepEqual(events, ['permission', 'testConnection']);
+  assert.equal(ctx.syncWrites.length, 0); assert.equal(ctx.localWrites.length, 0);
+});
+
+test('Test Seerr stops on declined access and ignores edits made during the permission prompt', async t => {
+  for (const edited of [false, true]) {
+    const ctx = openOptions(); t.after(() => ctx.window.close()); await flush();
+    let resolvePermission, messages = 0;
+    ctx.window.chrome.permissions.request = () => new Promise(resolve => { resolvePermission = resolve; });
+    ctx.window.chrome.runtime.sendMessage = async () => { messages++; return { success: true, data: { user: 'Old account' } }; };
+    const doc = ctx.window.document;
+    doc.getElementById('serverUrl').value = 'https://original.example';
+    doc.getElementById('apiKey').value = 'test-key';
+    doc.getElementById('testConnection').click();
+    assert.equal(typeof resolvePermission, 'function');
+    if (edited) doc.getElementById('serverUrl').value = 'https://edited.example';
+    resolvePermission(edited); await flush();
+    assert.equal(messages, 0);
+    assert.match(doc.getElementById('status').textContent, edited ? /Settings changed.*Test again/ : /permission/i);
+    assert.equal(doc.getElementById('testConnection').disabled, false);
+  }
+});
+
+test('granting Seerr access during a test clears the saved server permission warning', async t => {
+  const ctx = openOptions({ granted: false, synced: { seerrUrl: 'https://saved.example' }, local: { seerrApiKey: 'key' } });
+  t.after(() => ctx.window.close()); await flush();
+  assert.equal(warningHidden(ctx.window), false);
+  ctx.window.chrome.permissions.request = async () => true;
+  ctx.window.chrome.permissions.contains = async () => true;
+  ctx.window.chrome.runtime.sendMessage = async () => ({ success: true, data: { user: 'Test account' } });
+  ctx.window.document.getElementById('testConnection').click(); await flush();
+  assert.equal(warningHidden(ctx.window), true);
+  assert.match(ctx.window.document.getElementById('status').textContent, /Connected as Test account/);
+});
+
 test('saving Seerr and Plex permissions uses one user-gesture request', async t => {
   const ctx = openOptions(); t.after(() => ctx.window.close());
   await flush();
@@ -324,6 +374,7 @@ test('an older connection failure cannot overwrite a newer test result', async t
   ctx.window.chrome.runtime.sendMessage = ({ action }) => new Promise((resolve, reject) => { pending[action] = { resolve, reject }; });
   const doc = ctx.window.document;
   doc.getElementById('testConnection').click();
+  await flush(); // Let Seerr's permission grant finish and its request start.
   doc.getElementById('testPlexConnection').click(); await flush();
   pending.plexTestConnection.resolve({ success: true, data: { user: 'New account' } }); await flush();
   pending.testConnection.reject(new Error('Old failure')); await flush();

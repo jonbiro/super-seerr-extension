@@ -318,6 +318,16 @@ class OptionsManager {
     const current = this.connectionTestGuard(() => this.serverUrlInput.value.trim() === serverUrl && this.apiKeyInput.value.trim() === apiKey);
 
     try {
+      // Testing unsaved settings needs the same user-gesture host grant as
+      // saving, while leaving the saved server and credentials unchanged.
+      const granted = await this.requestOverlayPermission(this.originPattern(serverUrl));
+      if (!current()) return;
+      if (!granted) {
+        this.showStatus('error', 'Seerr host permission is required to test the connection. Click Test Connection to grant access.');
+        return;
+      }
+      await this.refreshPermissionWarning().catch(() => {});
+      if (!current()) return;
       const response = await chrome.runtime.sendMessage({
         action: 'testConnection',
         data: { seerrUrl: serverUrl, seerrApiKey: apiKey }
@@ -343,13 +353,17 @@ class OptionsManager {
     const isPassword = this.apiKeyInput.type === 'password';
     this.apiKeyInput.type = isPassword ? 'text' : 'password';
     this.toggleButton.textContent = isPassword ? 'Hide' : 'Show';
+    this.toggleButton.setAttribute('aria-label', `${isPassword ? 'Hide' : 'Show'} Seerr API key`);
   }
 
   togglePlexTokenVisibility() {
     if (!this.plexTokenInput) return;
     const isPassword = this.plexTokenInput.type === 'password';
     this.plexTokenInput.type = isPassword ? 'text' : 'password';
-    if (this.togglePlexButton) this.togglePlexButton.textContent = isPassword ? 'Hide' : 'Show';
+    if (this.togglePlexButton) {
+      this.togglePlexButton.textContent = isPassword ? 'Hide' : 'Show';
+      this.togglePlexButton.setAttribute('aria-label', `${isPassword ? 'Hide' : 'Show'} Plex token`);
+    }
   }
 
   plexPermissionOrigins() {

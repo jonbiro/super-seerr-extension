@@ -121,8 +121,18 @@ test('embedded movie and TV ratings with the same ID remain separate', async t =
 
 test('options edits and connection tests do not save; explicit save includes feature flags', async t => {
   const dom = new JSDOM(source('src/options/options.html'), { url: 'https://extension.example/options', runScripts: 'outside-only' }); t.after(() => dom.window.close());
-  const writes = [], messages = [];
-  dom.window.chrome = { storage: { sync: { get: async () => ({ seerrUrl: 'https://original.example', seerrApiKey: '' }), set: async data => writes.push(data) } }, runtime: { sendMessage: async message => { messages.push(message); return { success: true, data: { user: 'Tester' } }; } } };
+  const writes = [], localWrites = [], messages = [];
+  const { createStorageMock } = require('./helpers/chrome-mock');
+  const sync = createStorageMock({ seerrUrl: 'https://original.example' });
+  const local = createStorageMock({ seerrApiKey: 'saved-key' });
+  dom.window.chrome = {
+    storage: {
+      sync: { ...sync, set: async data => { writes.push(data); await sync.set(data); } },
+      local: { ...local, set: async data => { localWrites.push(data); await local.set(data); } }
+    },
+    permissions: { request: async () => true, contains: async () => true },
+    runtime: { sendMessage: async message => { messages.push(message); return { success: true, data: { user: 'Tester' } }; } }
+  };
   dom.window.eval(source('src/options/options.js').split('// Initialize when DOM is loaded')[0] + '\nwindow.manager = new OptionsManager();');
   await settle();
   const doc = dom.window.document;
@@ -131,10 +141,13 @@ test('options edits and connection tests do not save; explicit save includes fea
   doc.querySelector('[data-overlay-feature="cardBadges"]').checked = false;
   await dom.window.manager.testConnection();
   assert.equal(writes.length, 0);
+  assert.equal(localWrites.length, 0);
   assert.equal(messages[0].data.seerrUrl, 'https://new.example');
   await dom.window.manager.saveSettings();
   assert.equal(writes.length, 1);
   assert.equal(writes[0].overlayFeatures.cardBadges, false);
+  assert.equal(localWrites[0].seerrApiKey, 'test-key');
+  assert.match(doc.querySelector('#status').textContent, /Settings saved successfully/);
 });
 
 test('bulk dialog supports keyboard selection and cancellation stops subsequent requests', async t => {

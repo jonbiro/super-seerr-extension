@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.66]
+
+- Request host access before testing an unsaved Seerr connection, stop on denied permission or edited inputs, and clear the permission warning after a successful grant without saving settings.
+- Keep API-key and Plex-token inputs full-sized and visibly focused when revealed, and give their Show/Hide buttons distinct accessible names.
+- Correct the ratings-cache help to describe automatic background refresh and add browser regressions for credential visibility and testing unsaved settings.
+
 ## [3.5.65]
 
 - Allow failed TV-season requests to be retried while continuing to block pending or approved requests and seasons already available.

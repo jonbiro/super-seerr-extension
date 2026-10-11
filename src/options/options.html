@@ -56,7 +56,7 @@
                     >
                     <small>
                         Get your API key from Seerr Settings → General → API Key
-                        <button type="button" id="toggleApiKey" class="toggle-password">
+                        <button type="button" id="toggleApiKey" class="toggle-password" aria-controls="apiKey" aria-label="Show Seerr API key">
                             Show
                         </button>
                     </small>
@@ -72,7 +72,7 @@
                     <small class="plex-help">
                         <span>Sign in at app.plex.tv, open DevTools Console (F12), run <code>localStorage.getItem('myPlexAccessToken')</code>, and paste the value.</span>
                         <span class="plex-help-actions">
-                            <button type="button" id="togglePlexToken" class="toggle-password">
+                            <button type="button" id="togglePlexToken" class="toggle-password" aria-controls="plexToken" aria-label="Show Plex token">
                                 Show
                             </button>
                             <button type="button" id="testPlexConnection" class="button secondary">
@@ -105,8 +105,8 @@
                         media titles and Seerr responses, so review it before sharing.
                     </small>
                     <small>
-                        Ratings you have already seen are kept so revisiting Seerr does not look them up again.
-                        They do not expire; clear them to force a fresh lookup. Clearing takes effect in open Seerr tabs.
+                        Cached ratings appear immediately and refresh in the background as they age.
+                        Clear the cache to force a fresh lookup. Clearing takes effect in open Seerr tabs.
                     </small>
                 </fieldset>
                 <div class="form-actions">
