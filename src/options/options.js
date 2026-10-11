@@ -414,6 +414,8 @@ class OptionsManager {
     this.form.setAttribute('aria-busy', String(busy));
     const submit = this.form.querySelector('button[type=submit]');
     if (submit) submit.disabled = busy;
+    if (this.testButton) this.testButton.disabled = !!(this._connectionBusy || this._testingSeerr);
+    if (this.testPlexButton) this.testPlexButton.disabled = !!(this._connectionBusy || this._testingPlex);
     const selected = this.connectionChoices?.sites.find(site => site.id === this.connectionId);
     for (const id of ['addSeerrSite', 'savedSeerrSites']) {
       const control = document.getElementById(id); if (control) control.disabled = busy;
@@ -532,7 +534,7 @@ class OptionsManager {
   }
 
   async testConnection() {
-    if (this.testButton.disabled) return;
+    if (this.testButton.disabled || this._connectionBusy) return;
     const serverUrl = this.serverUrlInput.value.trim();
     const apiKey = this.apiKeyInput.value.trim();
 
@@ -562,7 +564,8 @@ class OptionsManager {
       return;
     }
 
-    this.testButton.disabled = true;
+    this._testingSeerr = true;
+    this.updateConnectionControls();
     this.testButton.textContent = 'Testing...';
     this.showStatus('loading', 'Testing connection to Seerr server...');
     const current = this.connectionTestGuard(() => this.serverUrlInput.value.trim() === serverUrl && this.apiKeyInput.value.trim() === apiKey);
@@ -594,7 +597,8 @@ class OptionsManager {
       console.error('Connection test error:', error);
       this.showStatus('error', `Connection failed: ${error.message}`);
     } finally {
-      this.testButton.disabled = false;
+      this._testingSeerr = false;
+      this.updateConnectionControls();
       this.testButton.textContent = 'Test Connection';
     }
   }
@@ -630,14 +634,15 @@ class OptionsManager {
   }
 
   async testPlexConnection() {
-    if (this.testPlexButton?.disabled) return;
+    if (this.testPlexButton?.disabled || this._connectionBusy) return;
     const plexToken = this.plexTokenInput ? this.plexTokenInput.value.trim() : '';
     if (!plexToken) {
       this.showStatus('error', 'Enter a Plex token before testing');
       return;
     }
     if (!this.testPlexButton) return;
-    this.testPlexButton.disabled = true;
+    this._testingPlex = true;
+    this.updateConnectionControls();
     this.testPlexButton.textContent = 'Testing...';
     this.showStatus('loading', 'Testing Plex connection...');
     const current = this.connectionTestGuard(() => this.plexTokenInput.value.trim() === plexToken);
@@ -664,7 +669,8 @@ class OptionsManager {
       console.error('Plex connection test error:', error);
       this.showStatus('error', `Plex connection failed: ${error.message}`);
     } finally {
-      this.testPlexButton.disabled = false;
+      this._testingPlex = false;
+      this.updateConnectionControls();
       this.testPlexButton.textContent = 'Test Plex';
     }
   }

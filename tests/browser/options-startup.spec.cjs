@@ -79,11 +79,13 @@ for (const success of [true, false]) test(`selecting a saved site clears an obso
   await expect(page.locator('#status')).toContainText('Loading saved site');
   await page.evaluate(success => finishTest(success ? { success: true, data: { user: 'Old home account' } }
     : { success: false, error: 'Old home failure' }), success);
-  await expect(page.locator('#testConnection')).toBeEnabled();
+  await expect(page.locator('#testConnection')).toBeDisabled();
   await expect(page.locator('#status')).toContainText('Loading saved site');
   await page.evaluate(() => finishRead());
   await expect(page.locator('#apiKey')).toHaveValue('family-key');
   await expect(page.locator('#status')).toContainText('Saved site loaded');
+  await expect(page.locator('#testConnection')).toBeEnabled();
+  await expect(page.locator('#testPlexConnection')).toBeEnabled();
   await expect(page.locator('#status')).not.toContainText('Old home');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.191]
+
+- Disable Seerr and Plex connection-test buttons while a saved site's fields are loading, preventing tests against the previous draft.
+- Track pending tests separately so their completion cannot prematurely unlock buttons during a site read, and metadata refreshes cannot unlock a running test.
+- Cover successful and failed site reads, zero test messages while loading, and delayed test completion in the browser.
+
 ## [3.5.190]
 
 - Replace previous connection-test feedback as soon as a different saved site starts loading in Settings, then confirm when its fields are ready.

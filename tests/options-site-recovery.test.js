@@ -250,3 +250,57 @@ for (const outcome of ['success', 'failure']) for (const timing of ['during read
     assert.equal(f.doc.getElementById('testConnection').disabled, false);
   });
 }
+
+for (const outcome of ['success', 'failure']) test(`connection tests wait for a saved-site read (${outcome})`, async t => {
+  const f = await fixture(t);
+  f.doc.getElementById('plexToken').value = 'plex-token';
+  const get = f.window.chrome.storage.local.get;
+  let finish, fail;
+  f.window.chrome.storage.local.get = () => new Promise((resolve, reject) => { finish = resolve; fail = reject; });
+  f.doc.getElementById('savedSeerrSites').value = 'home';
+  const editing = f.manager.editConnection();
+  assert.equal(f.doc.getElementById('testConnection').disabled, true);
+  assert.equal(f.doc.getElementById('testPlexConnection').disabled, true);
+  const before = f.messages.length;
+  await f.manager.testConnection(); await f.manager.testPlexConnection();
+  assert.equal(f.messages.length, before, 'the old form values cannot start a test');
+  assert.match(f.doc.getElementById('status').textContent, /Loading saved site/);
+  if (outcome === 'success') finish(await get());
+  else fail(new Error('Read unavailable'));
+  await editing;
+  assert.equal(f.doc.getElementById('testConnection').disabled, false);
+  assert.equal(f.doc.getElementById('testPlexConnection').disabled, false);
+});
+
+for (const [method, action, buttonId] of [
+  ['testConnection', 'testConnection', 'testConnection'],
+  ['testPlexConnection', 'plexTestConnection', 'testPlexConnection']
+]) for (const timing of ['during read', 'after read']) {
+  test(`${action} retains its lock through metadata refresh and completion ${timing}`, async t => {
+    const f = await fixture(t);
+    f.doc.getElementById('plexToken').value = 'plex-token';
+    let finishTest;
+    f.window.chrome.runtime.sendMessage = message => message.action === action
+      ? new Promise(resolve => { finishTest = resolve; }) : Promise.resolve(f.reply());
+    const testing = f.manager[method]();
+    await settle();
+    await f.manager.loadConnectionChoices();
+    const button = f.doc.getElementById(buttonId);
+    assert.equal(button.disabled, true, 'a metadata refresh cannot unlock the pending test');
+    const get = f.window.chrome.storage.local.get;
+    let finishRead;
+    f.window.chrome.storage.local.get = () => new Promise(resolve => { finishRead = resolve; });
+    f.doc.getElementById('savedSeerrSites').value = 'home';
+    const editing = f.manager.editConnection();
+    if (timing === 'during read') {
+      finishTest({ success: true, data: { user: 'Old account' } }); await testing;
+      assert.equal(button.disabled, true, 'test completion cannot unlock a pending site read');
+    }
+    finishRead(await get()); await editing;
+    if (timing === 'after read') {
+      assert.equal(button.disabled, true, 'site-read completion cannot unlock a pending test');
+      finishTest({ success: true, data: { user: 'Old account' } }); await testing;
+    }
+    assert.equal(button.disabled, false);
+  });
+}
