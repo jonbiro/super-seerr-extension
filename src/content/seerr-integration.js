@@ -2033,8 +2033,10 @@
 
   function isCardHidden(card) {
     const item = getCardLayoutItem(card);
-    return (item === card ? [card] : [card, item]).some(node =>
-      node.hidden || node.style.display === 'none' || window.getComputedStyle?.(node)?.display === 'none');
+    return (item === card ? [card] : [card, item]).some(node => {
+      const rendered = window.getComputedStyle?.(node);
+      return rendered ? rendered.display === 'none' : node.hidden || node.style.display === 'none';
+    });
   }
 
   function updateSortFilterCoverage(grid = null, bar = document.getElementById('seerr-filter-bar')) {
@@ -2093,7 +2095,8 @@
       if (!filterDisplayState.has(node) || node.style.display !== 'none') {
         filterDisplayState.set(node, { value: node.style.display, priority: node.style.getPropertyPriority?.('display') || '' });
       }
-      node.style.display = 'none';
+      if (node.style.setProperty) node.style.setProperty('display', 'none', 'important');
+      else node.style.display = 'none';
     } else if (filterDisplayState.has(node)) {
       const original = filterDisplayState.get(node);
       // A host update made while hidden takes precedence over our snapshot.

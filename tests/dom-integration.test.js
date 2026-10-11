@@ -1440,3 +1440,35 @@ for (const hiding of ['inline wrapper', 'hidden attribute', 'stylesheet']) {
     assert.equal(f.window.getComputedStyle(item).display, 'none');
   });
 }
+
+test('rating filters override important host layout rules and restore them on Reset', async t => {
+  const f = createOverlay({ wrapped: true });
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const doc = f.window.document, low = doc.querySelector('[data-id="1"]');
+  const item = low.parentElement;
+  const style = doc.createElement('style');
+  style.textContent = '.host-flex { display:flex !important; } .host-grid { display:grid !important; }';
+  doc.head.append(style); low.className = 'host-flex'; item.className = 'host-grid';
+  const input = doc.querySelector('.seerr-min-critics');
+  input.value = '80'; input.dispatchEvent(new f.window.Event('input'));
+  assert.equal(f.window.getComputedStyle(low).display, 'none');
+  assert.equal(f.window.getComputedStyle(item).display, 'none');
+  doc.querySelector('.seerr-reset-sort').click();
+  assert.equal(f.window.getComputedStyle(low).display, 'flex');
+  assert.equal(f.window.getComputedStyle(item).display, 'grid');
+  assert.equal(low.style.display, ''); assert.equal(item.style.display, '');
+});
+
+test('coverage follows rendered display when host CSS overrides the hidden attribute', async t => {
+  const f = createOverlay({ wrapped: true });
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const doc = f.window.document, item = doc.querySelector('[data-id="2"]').parentElement;
+  item.hidden = true; item.style.display = 'grid';
+  assert.equal(f.window.getComputedStyle(item).display, 'grid');
+  const select = doc.querySelector('.seerr-sort-select');
+  select.value = 'rt-critics-desc'; select.dispatchEvent(new f.window.Event('change'));
+  assert.equal(doc.querySelector('.seerr-score-coverage').textContent, '2/3 scored');
+  assert.equal(doc.querySelector('#grid > li').firstElementChild.dataset.id, '2');
+});

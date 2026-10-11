@@ -286,3 +286,27 @@ test('coverage respects a host stylesheet hiding the card wrapper, including aft
   await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored · 0 visible');
   await expect(page.locator('[data-testid="title-card"]')).toBeHidden();
 });
+
+test('filters override important host layout rules and coverage follows the rendered result', async ({ page }) => {
+  await showFilter(page, 390);
+  await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored');
+  await page.addStyleTag({ content: '.host-flex { display:flex !important; } .host-grid { display:grid !important; }' });
+  await page.locator('[data-testid="title-card"]').evaluate(card => {
+    const item = document.createElement('li'); item.className = 'host-grid'; item.hidden = true;
+    card.replaceWith(item); item.append(card); card.classList.add('host-flex');
+  });
+  const card = page.locator('[data-testid="title-card"]'), item = page.locator('.grid > li');
+  await page.getByLabel('Sort titles', { exact: true }).selectOption('rt-critics-desc');
+  await expect(item).toHaveCSS('display', 'grid');
+  await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored');
+  await page.getByLabel('Critics ≥', { exact: true }).fill('90');
+  await expect(card).toBeHidden();
+  await expect(item).toHaveCSS('display', 'none');
+  await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored · 0 visible');
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(card).toHaveCSS('display', 'flex');
+  await expect(item).toHaveCSS('display', 'grid');
+  await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored');
+  expect(await card.evaluate(node => node.style.display)).toBe('');
+  expect(await item.evaluate(node => node.style.display)).toBe('');
+});

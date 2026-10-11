@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.236]
+
+- Make rating filters take precedence over important host layout rules, and calculate visibility from rendered styles when CSS overrides the hidden attribute.
+
 ## [3.5.235]
 
 - Count and sort host-hidden titles consistently, including hidden list wrappers, HTML hidden attributes, and stylesheet display rules.
