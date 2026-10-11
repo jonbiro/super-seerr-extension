@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.112]
+
+- Preserve the pending Settings site selection across background site-list refreshes, keeping the selector aligned with the credentials loaded into the form.
+- Disable Use/Remove while saved-site metadata refreshes and block corresponding actions until the newest refresh settles.
+- Add pending-selection success/failure and loading-state regressions plus a narrow Chromium form interaction check.
+
 ## [3.5.111]
 
 - Stop old-connection status lookups before starting dependent detail reads or additional title-search variants after a server, key or saved-site revision changes.

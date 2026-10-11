@@ -76,3 +76,29 @@ test('saved-site failures offer a narrow-layout retry without discarding unsaved
   await expect(page.locator('#savedSeerrSites')).toHaveValue('family');
   await expect(page.locator('#apiKey')).toHaveValue('unsaved-family-key');
 });
+
+test('a site-list refresh keeps the pending selection aligned with the loaded credentials', async ({ page }) => {
+  await page.evaluate(async () => {
+    const data = { revision: 1, activeId: 'home', sites: [
+      { id: 'home', name: 'Home', url: 'https://home.example/', apiKey: 'home-key' },
+      { id: 'family', name: 'Family', url: 'https://family.example/', apiKey: 'family-key' }
+    ] };
+    chrome.runtime.sendMessage = async () => ({ success: true, data });
+    chrome.storage.local.get = async () => ({ seerrConnectionsV1: data });
+    await optionsManager.loadSettings();
+    await optionsManager.loadConnectionChoices();
+    chrome.storage.local.get = () => new Promise(resolve => { window.releaseSiteRead = () => resolve({ seerrConnectionsV1: data }); });
+  });
+  await page.locator('#savedSeerrSites').selectOption('family');
+  await expect(page.locator('#savedSeerrSites')).toBeDisabled();
+  await page.evaluate(() => optionsManager.loadConnectionChoices());
+  await expect(page.locator('#savedSeerrSites')).toHaveValue('family');
+  await expect(page.locator('#useSeerrSite')).toBeDisabled();
+  await page.evaluate(() => releaseSiteRead());
+  await expect(page.locator('#savedSeerrSites')).toBeEnabled();
+  await expect(page.locator('#savedSeerrSites')).toHaveValue('family');
+  await expect(page.locator('#serverUrl')).toHaveValue('https://family.example/');
+  await expect(page.locator('#apiKey')).toHaveValue('family-key');
+  await expect(page.locator('#apiKey')).toHaveAttribute('type', 'password');
+  await expect(page.locator('#useSeerrSite')).toBeEnabled();
+});

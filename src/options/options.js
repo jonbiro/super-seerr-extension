@@ -312,6 +312,8 @@ class OptionsManager {
   async loadConnectionChoices() {
     const generation = this.connectionChoicesGeneration = (this.connectionChoicesGeneration || 0) + 1;
     const retry = document.getElementById('retrySeerrSites');
+    this.connectionChoicesLoading = true;
+    this.updateConnectionControls();
     if (retry) retry.disabled = true;
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getSeerrConnections' });
@@ -331,14 +333,8 @@ class OptionsManager {
         option.value = site.id; option.textContent = `${site.name} — ${site.url}`;
         select.append(option);
       }
-      if (!response.data.sites.some(site => site.id === this.connectionId)) {
-        const draft = document.createElement('option');
-        draft.value = this.connectionId || '';
-        draft.textContent = this.connectionId ? 'Removed site (unsaved edits)' : 'New site (not saved)';
-        draft.disabled = true;
-        select.append(draft);
-      }
-      select.value = this.connectionId || '';
+      const selectedId = this.editingConnectionId ?? this.connectionId;
+      this.selectConnectionChoice(selectedId);
       const active = response.data.sites.find(site => site.id === response.data.activeId);
       document.getElementById('activeSeerrSite').textContent = active ? `Active site: ${active.name} (${active.url})` : 'No site saved yet.';
       this.updateConnectionControls();
@@ -348,8 +344,24 @@ class OptionsManager {
       document.getElementById('seerrSitesError')?.classList.remove('hidden');
       this.updateConnectionControls();
     } finally {
-      if (generation === this.connectionChoicesGeneration && retry) retry.disabled = false;
+      if (generation === this.connectionChoicesGeneration) {
+        this.connectionChoicesLoading = false;
+        if (retry) retry.disabled = false;
+        this.updateConnectionControls();
+      }
     }
+  }
+
+  selectConnectionChoice(id) {
+    const select = document.getElementById('savedSeerrSites');
+    if (!Array.from(select.options).some(option => option.value === (id || ''))) {
+      const draft = document.createElement('option');
+      draft.value = id || '';
+      draft.textContent = id ? 'Removed site (unsaved edits)' : 'New site (not saved)';
+      draft.disabled = true;
+      select.append(draft);
+    }
+    select.value = id || '';
   }
 
   updateConnectionControls() {
@@ -360,7 +372,7 @@ class OptionsManager {
     }
     for (const id of ['useSeerrSite', 'removeSeerrSite']) {
       const control = document.getElementById(id);
-      if (control) control.disabled = busy || this.connectionChoicesUnavailable === true || !selected || selected.id === this.connectionChoices.activeId;
+      if (control) control.disabled = busy || this.connectionChoicesLoading === true || this.connectionChoicesUnavailable === true || !selected || selected.id === this.connectionChoices.activeId;
     }
   }
 
@@ -382,9 +394,10 @@ class OptionsManager {
   }
 
   async editConnection() {
+    this.editingConnectionId = document.getElementById('savedSeerrSites').value;
     this._connectionBusy = true; this.updateConnectionControls();
     try {
-      const id = document.getElementById('savedSeerrSites').value;
+      const id = this.editingConnectionId;
       const local = await chrome.storage.local.get('seerrConnectionsV1');
       const site = local.seerrConnectionsV1?.sites.find(item => item.id === id);
       if (local.seerrConnectionsV1 && !site) throw new Error('Site removed');
@@ -397,15 +410,19 @@ class OptionsManager {
       this.toggleButton.setAttribute('aria-label', 'Show Seerr API key');
     } catch (_) {
       // The fields still belong to the last successfully loaded site.
-      document.getElementById('savedSeerrSites').value = this.connectionId || '';
+      this.selectConnectionChoice(this.connectionId);
       this.showStatus('error', 'Could not load this site. Reload Settings.');
     }
-    finally { this._connectionBusy = false; this.updateConnectionControls(); }
+    finally {
+      this.editingConnectionId = null;
+      this._connectionBusy = false;
+      this.updateConnectionControls();
+    }
   }
 
   async useConnection() {
     const selected = this.connectionChoices?.sites.find(site => site.id === this.connectionId);
-    if (!selected || this._connectionBusy || this.connectionChoicesUnavailable) return;
+    if (!selected || this._connectionBusy || this.connectionChoicesLoading || this.connectionChoicesUnavailable) return;
     // Request access from this click, before any storage or messaging await.
     const permission = this.requestOverlayPermission(this.originPattern(selected.url));
     this._connectionBusy = true; this.updateConnectionControls();
@@ -420,7 +437,7 @@ class OptionsManager {
   }
 
   async removeConnection() {
-    if (this._connectionBusy || this.connectionChoicesUnavailable) return;
+    if (this._connectionBusy || this.connectionChoicesLoading || this.connectionChoicesUnavailable) return;
     this._connectionBusy = true; this.updateConnectionControls();
     try {
       const response = await chrome.runtime.sendMessage({ action: 'removeSeerrConnection', data: { id: this.connectionId } });

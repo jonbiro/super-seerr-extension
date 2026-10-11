@@ -77,3 +77,55 @@ for (const late of ['success', 'failure']) test(`obsolete site-list ${late} cann
   assert.equal(f.doc.getElementById('retrySeerrSites').disabled, false);
   assert.equal(f.doc.getElementById('apiKey').value, 'unsaved-family-key');
 });
+
+for (const outcome of ['success', 'failure']) test(`site-list refresh preserves a pending selection until its ${outcome}`, async t => {
+  const f = await fixture(t);
+  const localGet = f.window.chrome.storage.local.get;
+  let resolve, reject;
+  f.window.chrome.storage.local.get = () => new Promise((a, b) => { resolve = a; reject = b; });
+  f.doc.getElementById('savedSeerrSites').value = 'home';
+  const editing = f.manager.editConnection();
+  await f.manager.loadConnectionChoices();
+  assert.equal(f.doc.getElementById('savedSeerrSites').value, 'home', 'metadata refresh cannot reset the pending choice');
+  if (outcome === 'success') resolve(await localGet());
+  else reject(new Error('Storage unavailable'));
+  await editing;
+  assert.equal(f.doc.getElementById('savedSeerrSites').value, outcome === 'success' ? 'home' : 'family');
+  assert.equal(f.manager.connectionId, outcome === 'success' ? 'home' : 'family');
+  assert.equal(f.doc.getElementById('apiKey').value, outcome === 'success' ? 'home-key' : 'unsaved-family-key');
+  assert.equal(f.doc.getElementById('savedSeerrSites').disabled, false);
+});
+
+test('saved-site actions wait for the latest site-list refresh', async t => {
+  const f = await fixture(t);
+  let release;
+  f.window.chrome.runtime.sendMessage = () => new Promise(resolve => { release = resolve; });
+  const refresh = f.manager.loadConnectionChoices();
+  assert.equal(f.doc.getElementById('useSeerrSite').disabled, true);
+  assert.equal(f.doc.getElementById('removeSeerrSite').disabled, true);
+  let calls = 0;
+  f.window.chrome.runtime.sendMessage = async () => { calls++; return f.reply(); };
+  await f.manager.useConnection(); await f.manager.removeConnection();
+  assert.equal(calls, 0);
+  release(f.reply()); await refresh;
+  assert.equal(f.doc.getElementById('useSeerrSite').disabled, false);
+  assert.equal(f.doc.getElementById('removeSeerrSite').disabled, false);
+  assert.equal(f.doc.getElementById('apiKey').value, 'unsaved-family-key');
+});
+
+test('failed site selection restores a removed previous site as an unsaved draft', async t => {
+  const f = await fixture(t);
+  let reject;
+  f.window.chrome.storage.local.get = () => new Promise((_, fail) => { reject = fail; });
+  f.doc.getElementById('savedSeerrSites').value = 'home';
+  const editing = f.manager.editConnection();
+  const data = f.reply().data;
+  f.window.chrome.runtime.sendMessage = async () => ({ success: true, data: { ...data, sites: data.sites.filter(site => site.id !== 'family') } });
+  await f.manager.loadConnectionChoices();
+  reject(new Error('Storage unavailable')); await editing;
+  assert.equal(f.doc.getElementById('savedSeerrSites').value, 'family');
+  assert.equal(f.doc.getElementById('savedSeerrSites').selectedOptions[0].textContent, 'Removed site (unsaved edits)');
+  assert.equal(f.doc.getElementById('apiKey').value, 'unsaved-family-key');
+  assert.equal(f.doc.getElementById('useSeerrSite').disabled, true);
+  assert.equal(f.doc.getElementById('removeSeerrSite').disabled, true);
+});
