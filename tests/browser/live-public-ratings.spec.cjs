@@ -28,6 +28,9 @@ test('a verified provider refresh updates two already open Seerr pages without r
       await page.goto(`${server.origin}/discover`);
       await expect(page.locator('.seerr-card-badge').first()).toContainText('85%');
     }
+    await first.locator('.seerr-min-critics').fill('90');
+    await expect(first.locator('.seerr-score-coverage')).toHaveText('1/1 scored · 0 visible');
+    await expect(first.locator('[data-testid="title-card"]')).toBeHidden();
     // Deterministic provider transport; parsing, public admission, persistence,
     // notifications and the installed content scripts all run unchanged.
     await worker.evaluate(() => {
@@ -47,7 +50,9 @@ test('a verified provider refresh updates two already open Seerr pages without r
     expect(result.success).toBe(true);
     for (const page of [first, second]) {
       await expect(page.locator('.seerr-card-badge').first()).toContainText('95%');
+      await expect(page.locator('[data-testid="title-card"]')).toBeVisible();
     }
+    await expect(first.locator('.seerr-score-coverage')).toHaveText('1/1 scored');
     const nativeScores = await options.evaluate(async origin => {
       const tabs = (await chrome.tabs.query({})).filter(tab => tab.url === `${origin}/discover`);
       return Promise.all(tabs.map(async tab => (await chrome.scripting.executeScript({ target: { tabId: tab.id },

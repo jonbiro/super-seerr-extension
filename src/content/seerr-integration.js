@@ -1600,14 +1600,12 @@
             // Only a pair needs separating, and only the upper one moves.
             if (audienceBadge && upperBadge) upperBadge.classList.add('seerr-card-badge-upper');
           }
-          updateSortFilterCoverage();
           applyScoreFilters(getCardsGrid());
           injectSortFilterControls();
         }).catch(err => log('Card badge ratings failed:', err))
           .finally(() => {
             if (generation !== routeGeneration || !card.isConnected || identityEpoch !== (card.__seerrIdentityEpoch || 0)) return;
             card.__seerrBadgesResolving = false;
-            updateSortFilterCoverage();
             applyScoreFilters(getCardsGrid());
             setTimeout(injectSortFilterControls, 100);
           });
@@ -1940,13 +1938,11 @@
     return { total: cards.length, rated };
   }
 
-  function updateSortFilterCoverage() {
-    const bar = document.getElementById('seerr-filter-bar');
+  function updateSortFilterCoverage(grid = null, bar = document.getElementById('seerr-filter-bar')) {
     if (!bar) return;
     const coverageEl = bar.querySelector('.seerr-score-coverage');
     if (!coverageEl) return;
-    const grid = bar.nextElementSibling || bar.parentElement;
-    const cards = getMediaCards(grid);
+    const cards = getMediaCards(grid || bar.nextElementSibling || bar.parentElement);
     const total = cards.length;
     const scored = cards.filter(c => getCardAnyScore(c) !== null).length;
     const hidden = cards.filter(c => c.style.display === 'none').length;
@@ -2008,6 +2004,7 @@
       getCardLayoutItem(c).style.display = c.style.display;
     });
     applyScoreSort(grid);
+    updateSortFilterCoverage(grid);
   }
 
   function toggleFilterBar() {
@@ -2095,10 +2092,8 @@
     if (!grid || !insertControlsBeforeGrid(bar, grid)) return;
 
     function updateCoverage() {
-      const coverageEl = bar.querySelector('.seerr-score-coverage');
-      if (!coverageEl) return;
-      const current = countCardsWithRatings(getMediaCards(grid));
-      coverageEl.textContent = `${current.rated}/${current.total} scored`;
+      // A late refresh still belongs to this toolbar, even after navigation.
+      updateSortFilterCoverage(grid, bar);
       updateCacheAge();
     }
 

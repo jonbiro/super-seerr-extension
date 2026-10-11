@@ -2,7 +2,7 @@
 
 **Request the movies and TV shows you discover, without losing your place.** Super Seerr adds media-request controls to seven discovery sites and brings ratings, sorting, watchlists and bulk actions to your own [Seerr](https://github.com/seerr-team/seerr) server.
 
-[![Current version](https://img.shields.io/badge/version-3.5.98-blue)](CHANGELOG.md)
+[![Current version](https://img.shields.io/badge/version-3.5.99-blue)](CHANGELOG.md)
 [![CI](https://github.com/jonbiro/super-seerr-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/jonbiro/super-seerr-extension/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 

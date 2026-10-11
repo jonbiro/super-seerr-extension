@@ -1113,3 +1113,37 @@ test('Refresh scores starts fresh reads when every queue slot has an ordinary lo
   await settle();
   for (const current of doc.querySelectorAll('article')) assert.equal(current.__seerrRatings.rtCriticsScore, 80);
 });
+
+test('filter coverage follows a refresh that conclusively removes the last visible score', async t => {
+  const f = createOverlay();
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const doc = f.window.document;
+  const minimum = doc.querySelector('.seerr-min-critics');
+  minimum.value = '90'; minimum.dispatchEvent(new f.window.Event('input'));
+  assert.match(doc.querySelector('.seerr-score-coverage').textContent, /1 visible/);
+  const send = f.window.chrome.runtime.sendMessage;
+  f.window.chrome.runtime.sendMessage = message => message.action === 'getRottenTomatoesRatings'
+    ? Promise.resolve({ success: true, data: null }) : send(message);
+  doc.querySelector('.seerr-refresh-scores').click();
+  await settle();
+  assert.ok([...doc.querySelectorAll('article')].every(card => card.style.display === 'none'));
+  assert.equal(doc.querySelector('.seerr-score-coverage').textContent, '0/3 scored · 0 visible');
+});
+
+test('wrapped-card filter coverage consistently shows visible counts and clears them on Reset', async t => {
+  const f = createOverlay({ wrapped: true });
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const doc = f.window.document;
+  const coverage = () => doc.querySelector('.seerr-score-coverage').textContent;
+  const minimum = doc.querySelector('.seerr-min-critics');
+  minimum.value = '90'; minimum.dispatchEvent(new f.window.Event('input'));
+  assert.equal(coverage(), '2/3 scored · 1 visible');
+  assert.equal([...doc.querySelectorAll('#grid > li')].filter(item => item.style.display !== 'none').length, 1);
+  minimum.value = '100'; minimum.dispatchEvent(new f.window.Event('input'));
+  assert.equal(coverage(), '2/3 scored · 0 visible');
+  doc.querySelector('.seerr-reset-sort').click();
+  assert.equal(coverage(), '2/3 scored');
+  assert.ok([...doc.querySelectorAll('#grid > li')].every(item => item.style.display !== 'none'));
+});

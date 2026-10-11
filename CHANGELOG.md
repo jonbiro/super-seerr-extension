@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.99]
+
+- Use one coverage updater for filter controls and asynchronous rating updates, preserving the visible-card count instead of overwriting it with only the scored total.
+- Recalculate coverage after filtering and sorting, including refreshes that remove the last visible score and live public updates that reveal a filtered card.
+- Add wrapped-card, zero-visible, Reset, conclusive-refresh and installed Chromium live-update regressions.
+
 ## [3.5.98]
 
 - Reconcile newer verified public ratings when a pending lookup completes, preventing older provider responses from replacing scores delivered by live cache notifications.
