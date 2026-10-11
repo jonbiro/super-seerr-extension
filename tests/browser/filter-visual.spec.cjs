@@ -25,11 +25,22 @@ async function showFilter(page, width) {
   await expect(page.getByLabel('Saved filter presets')).toBeEnabled();
 }
 
-for (const width of [1280, 768, 390, 320]) test(`filter layout and controls remain usable at ${width}px`, async ({ page }) => {
+for (const width of [1440, 1280, 1024, 768, 600, 390, 320]) test(`filter layout and controls remain usable at ${width}px`, async ({ page }) => {
   await showFilter(page, width);
   if (process.env.FILTER_PREVIEW) await page.locator('#seerr-filter-bar').screenshot({ path: `/tmp/super-seerr-filter-${process.env.FILTER_PREVIEW}-${width}.png` });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const critics = page.getByLabel('Critics ≥', { exact: true });
+  if (width >= 1024) {
+    const sortBounds = await page.getByLabel('Sort titles', { exact: true }).boundingBox();
+    const scoreBounds = await critics.boundingBox();
+    expect(Math.abs(sortBounds.y + sortBounds.height - scoreBounds.y - scoreBounds.height)).toBeLessThanOrEqual(1);
+    expect((await page.getByLabel('Saved filter presets').boundingBox()).width).toBeLessThanOrEqual(280);
+  }
+  if (width <= 390) {
+    const presetBounds = await page.getByLabel('Saved filter presets').boundingBox();
+    const nameBounds = await page.getByLabel('Preset name').boundingBox();
+    expect(Math.abs(presetBounds.width - nameBounds.width)).toBeLessThanOrEqual(1);
+  }
   await critics.fill('85'); await critics.dispatchEvent('input');
   await expect(critics.locator('..')).toHaveClass(/is-active/);
   await expect(page.locator('[data-testid="title-card"]')).toBeHidden();

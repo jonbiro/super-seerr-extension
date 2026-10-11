@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.205]
+
+- Tighten filter panel spacing and align sorting and rating inputs along the same baseline.
+- Remove redundant threshold boxes and heading rows, constrain desktop preset widths, and group secondary actions away from Reset.
+- Retain responsive stacking and active-score highlights, with rendered alignment and containment checks at seven widths from 320px to 1440px.
+
 ## [3.5.204]
 
 - Redesign the filter panel with separate status, sorting, minimum-rating, action, and preset sections.

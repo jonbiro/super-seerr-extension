@@ -2152,7 +2152,6 @@
         <option value="imdb-asc">⭐ IMDb ↑</option>
       </select></span>
       <section class="seerr-rating-filters" aria-label="Minimum ratings">
-      <div class="seerr-minimum-heading"><h3>Minimum ratings</h3><p>Set to 0 for any score.</p></div>
       <div class="seerr-threshold-grid">
       <span class="seerr-filter-field" data-score="critics"><label for="seerr-min-critics">Critics ≥</label>
         <input id="seerr-min-critics" type="number" class="seerr-min-critics" min="0" max="100" step="5" value="0"><span class="seerr-score-scale" aria-hidden="true">/ 100</span></span>
@@ -2165,6 +2164,7 @@
       </div></section></div>
       <div class="seerr-filter-actions">
       <button type="button" class="seerr-reset-sort">Reset</button>
+      <span class="seerr-filter-hint">Minimum ratings · 0 means any score</span>
       <button type="button" class="seerr-refresh-scores" title="Refetch scores for the titles loaded on this page">Refresh scores</button>
       <button type="button" class="seerr-load-all" title="Load up to ${Config.bulkLoadTarget} more titles and score them, so sorting covers the whole grid. Click again to stop.">Load ${Config.bulkLoadTarget} more</button>
       ${FEATURE_FLAGS.bulkActions && apiConfigured ? '<button type="button" class="seerr-toggle-select" data-seerr-overlay="true">Select titles</button>' : ''}
