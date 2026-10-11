@@ -43,9 +43,10 @@ class PopupManager {
       else {
         this.serverUrlSpan.textContent = this.formatServerUrl(serverUrl);
         this.serverUrlSpan.title = serverUrl;
-        this.describeConfigured(checks.apiKey.state === 'ok');
+        const unverifiedKey = response.data.apiKeyConfigured === true && checks.apiKey.state !== 'ok';
+        this.describeConfigured(checks.apiKey.state === 'ok', unverifiedKey);
         this.showConfiguredState();
-        const issues = checks.seerr.state !== 'ok' || checks.permission.state !== 'ok' || Object.values(checks).some(check => check.state === 'error');
+        const issues = unverifiedKey || checks.seerr.state !== 'ok' || checks.permission.state !== 'ok' || Object.values(checks).some(check => check.state === 'error');
         if (checks.seerr.state !== 'ok' || checks.permission.state !== 'ok') {
           this.configuredHeading.textContent = 'Check your connection';
           this.configuredDetail.textContent = 'Use the checks below to restore ratings and request access.';
@@ -81,14 +82,14 @@ class PopupManager {
     }
   }
 
-  // Two meaningfully different states share this block: ratings only, and
-  // ratings plus requests. Describing both the same way told a reader who had
-  // already added a key what an API key would do for them.
-  describeConfigured(canRequest) {
+  // Missing, unverified and accepted keys need different next steps. A saved
+  // key that could not be checked must not be described as absent.
+  describeConfigured(canRequest, unverifiedKey = false) {
     if (!this.configuredHeading || !this.configuredDetail) return;
-    this.configuredHeading.textContent = canRequest ? 'Ready to request' : 'Ratings are on';
+    this.configuredHeading.textContent = canRequest ? 'Ready to request' : unverifiedKey ? 'Check your API key' : 'Ratings are on';
     this.configuredDetail.textContent = canRequest
       ? 'Ratings show on your Seerr pages, and you can request titles from IMDb, Rotten Tomatoes and five more sites.'
+      : unverifiedKey ? 'Ratings show on your Seerr pages. Your saved API key is not verified. Review the API key check below before requesting titles.'
       : 'Ratings show on your Seerr pages. Add an API key in Settings to request titles from IMDb, Rotten Tomatoes and five more sites.';
   }
 

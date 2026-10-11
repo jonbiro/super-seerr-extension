@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.158]
+
+- Distinguish missing API keys from saved keys that are rejected or could not be verified, avoiding misleading ratings-only status and instructions to add an existing key.
+- Report saved-but-unverified keys as needing attention and direct users to the API key check while preserving connection and permission warnings.
+- Add credential-presence and popup regressions; exercise authentication failure and recovery in the installed extension without exposing credentials.
+
 ## [3.5.157]
 
 - Include the Seerr installation path alongside its host and port in the popup connection summary, with the full URL available as a tooltip.

@@ -134,3 +134,13 @@ test('valid authentication does not hide a confirmed incomplete setup', async ()
   assert.equal(report.checks.seerr.state, 'warning');
   assert.match(report.checks.seerr.message, /initial setup/);
 });
+
+for (const key of [null, 'saved-secret']) test(`diagnostics expose only whether an API key is configured (${key ? 'saved' : 'missing'})`, async () => {
+  const w = await worker({ key });
+  w.context.fetch = async url => url.includes('/auth/me')
+    ? { ok: false, status: 503 } : { ok: true, json: async () => ({ initialized: true }) };
+  const report = await w.api.getPopupDiagnostics();
+  assert.equal(report.apiKeyConfigured, !!key);
+  assert.equal(report.checks.apiKey.state, 'warning');
+  assert.doesNotMatch(JSON.stringify(report), /saved-secret/);
+});

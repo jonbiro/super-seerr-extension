@@ -24,7 +24,7 @@
           throw new Error('Settings changed during diagnostics. Run the checks again.');
         }
       };
-      const result = { serverUrl: null, checks: {} };
+      const result = { serverUrl: null, apiKeyConfigured: !!snapshot.apiKey, checks: {} };
       const checks = result.checks;
       let setupIncomplete = false;
       let url;

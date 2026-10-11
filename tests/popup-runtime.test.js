@@ -92,3 +92,16 @@ test('worker configuration signals recheck the popup and ignore obsolete diagnos
     assert.equal(f.document.querySelector('.status-text').textContent, 'Ready to request');
   } finally { f.dom.window.close(); }
 });
+
+for (const state of ['warning', 'error']) test(`a saved but ${state === 'warning' ? 'unverified' : 'rejected'} API key is not described as missing`, async () => {
+  const { dom, document } = await popup({ serverUrl: 'https://seerr.example', apiKeyConfigured: true, checks: {
+    seerr: row('ok', 'Reachable'), permission: row('ok', 'Granted'),
+    apiKey: row(state, 'Saved key could not be verified', 'apiKey'), plex: row('warning', 'Optional')
+  } });
+  try {
+    assert.equal(document.querySelector('.status-text').textContent, 'Connection needs attention');
+    assert.equal(document.getElementById('configuredHeading').textContent, 'Check your API key');
+    assert.doesNotMatch(document.getElementById('configuredDetail').textContent, /add an api key/i);
+    assert.match(document.getElementById('configuredDetail').textContent, /saved API key.*not verified/i);
+  } finally { dom.window.close(); }
+});

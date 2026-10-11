@@ -17,6 +17,7 @@ test('installed popup rejects proxy success pages and recovers through setup and
       response.setHeader('Content-Type', 'application/json');
       response.end(JSON.stringify({ id: 550, mediaInfo: { status: 5 } }));
     } else {
+      if (mode === 'auth-offline' && request.url === '/api/v1/auth/me') response.statusCode = 503;
       response.setHeader('Content-Type', 'application/json');
       response.end(JSON.stringify(mode === 'bad-account' ? { message: 'Proxy fallback' } : { id: 1 }));
     }
@@ -63,11 +64,22 @@ test('installed popup rejects proxy success pages and recovers through setup and
     await expect(popup.locator('#diagnosticChecks')).toContainText('unexpected account response');
     await expect(popup.locator('.recent-action-state')).toHaveText('Available');
     await expect(popup.locator('.status-text')).toHaveText('Connection needs attention');
+    await expect(popup.locator('#configuredHeading')).toHaveText('Check your API key');
+    await expect(popup.locator('#configuredDetail')).not.toContainText('Add an API key');
     mode = 'ready';
     await popup.getByRole('button', { name: 'Check connections', exact: true }).click();
     await expect(popup.locator('.status-text')).toHaveText('Ready to request');
     await expect(popup.locator('#diagnosticChecks')).toContainText('API key: OK');
     await expect(popup.locator('#testConnection svg')).toHaveCount(1);
+    mode = 'auth-offline';
+    await popup.getByRole('button', { name: 'Check connections', exact: true }).click();
+    await expect(popup.locator('#diagnosticChecks')).toContainText('Could not verify the API key');
+    await expect(popup.locator('.status-text')).toHaveText('Connection needs attention');
+    await expect(popup.locator('#configuredHeading')).toHaveText('Check your API key');
+    await expect(popup.locator('#configuredDetail')).toContainText('saved API key is not verified');
+    mode = 'ready';
+    await popup.getByRole('button', { name: 'Check connections', exact: true }).click();
+    await expect(popup.locator('#configuredHeading')).toHaveText('Ready to request');
     await options.locator('#apiKey').fill('');
     await options.locator('button[type=submit]').click();
     await expect(popup.locator('.status-text')).toHaveText('Ratings-only mode');
