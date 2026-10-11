@@ -35,7 +35,7 @@ class SeerrClient {
   }
 
   async sendMessage(message) {
-    const scoped = ['getMediaStatus', 'requestMedia', 'addToWatchlist', 'getSeasonOptions', 'getMediaCandidates', 'saveTitleCorrection', 'getSavedTitleCorrection', 'searchMedia'].includes(message.action);
+    const scoped = ['getMediaStatus', 'requestMedia', 'addToWatchlist', 'getSeasonOptions', 'getMediaCandidates', 'saveTitleCorrection', 'getSavedTitleCorrection', 'searchMedia', 'debugSearch', 'debugAPI'].includes(message.action);
     return await chrome.runtime.sendMessage(scoped && this.connectionToken !== undefined
       ? { connectionToken: this.connectionToken, ...message } : message);
   }

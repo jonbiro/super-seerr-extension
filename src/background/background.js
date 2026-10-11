@@ -253,7 +253,7 @@ class SeerrAPI {
   async handleMessage(request, sender, sendResponse) {
     try {
       sender = await this.currentSeerrSender(sender);
-      if (['requestMedia', 'addToWatchlist', 'getMediaStatus', 'getSeasonOptions', 'getMediaCandidates', 'saveTitleCorrection', 'getSavedTitleCorrection', 'searchMedia'].includes(request.action)) {
+      if (['requestMedia', 'addToWatchlist', 'getMediaStatus', 'getSeasonOptions', 'getMediaCandidates', 'saveTitleCorrection', 'getSavedTitleCorrection', 'searchMedia', 'debugSearch', 'debugAPI'].includes(request.action)) {
         this.assertConnectionTarget(request, sender);
       }
       switch (request.action) {
@@ -525,11 +525,13 @@ class SeerrAPI {
   }
 
   async searchMedia(query, mediaType = 'movie') {
+    const assertConnection = this.seerrConnectionGuard();
     if (!this.baseUrl || !this.apiKey) {
       throw new Error('Seerr server URL and API key are required');
     }
 
     const response = await this.makeAPIRequest('GET', `/api/v1/search?query=${encodeURIComponent(query)}&page=1&language=en`);
+    assertConnection();
     if (!Array.isArray(response?.results)) {
       throw new Error('Search results unavailable. Retry the title lookup.');
     }
@@ -538,14 +540,17 @@ class SeerrAPI {
   }
 
   async debugSearch(title, mediaType = 'movie') {
+    const assertConnection = this.seerrConnectionGuard();
     this.log('🔍 [Background] Debug search for:', title, 'type:', mediaType);
 
     const searchTerms = this.generateSearchTerms(title);
     const results = [];
 
     for (const searchTerm of searchTerms) {
+      assertConnection();
       try {
         const searchResults = await this.searchMedia(searchTerm, mediaType);
+        assertConnection();
         results.push({
           searchTerm,
           resultCount: searchResults.length,
@@ -553,6 +558,7 @@ class SeerrAPI {
         });
         this.log(`🔍 [Background] Debug: "${searchTerm}" -> ${searchResults.length} results`);
       } catch (error) {
+        assertConnection();
         results.push({ searchTerm, error: error.message });
       }
     }
@@ -752,6 +758,7 @@ class SeerrAPI {
   }
 
   async debugAPI(tmdbId, mediaType) {
+    const assertConnection = this.seerrConnectionGuard();
     tmdbId = MediaValidation.tmdbId(tmdbId);
     mediaType = MediaValidation.mediaType(mediaType);
     this.log(`🛠️ [Background] Debugging API endpoints for TMDB ID ${tmdbId} (${mediaType})`);
@@ -767,9 +774,11 @@ class SeerrAPI {
       ];
 
       for (const endpoint of endpoints) {
+        assertConnection();
         try {
           this.log(`🛠️ [Background] Testing endpoint: ${endpoint}`);
           const response = await this.makeAPIRequest('GET', endpoint);
+          assertConnection();
           results[endpoint] = {
             success: true,
             dataType: Array.isArray(response) ? 'array' : typeof response,
@@ -779,6 +788,7 @@ class SeerrAPI {
           };
           this.log(`🛠️ [Background] ${endpoint} - SUCCESS:`, results[endpoint]);
         } catch (error) {
+          assertConnection();
           results[endpoint] = { success: false, error: error.message };
           this.log(`🛠️ [Background] ${endpoint} - FAILED:`, error.message);
         }
@@ -787,6 +797,7 @@ class SeerrAPI {
       return results;
 
     } catch (error) {
+      assertConnection();
       console.error('🛠️ [Background] API debug failed:', error);
       return { error: error.message };
     }
