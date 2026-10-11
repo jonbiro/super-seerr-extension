@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.113]
+
+- Refresh open-popup history statuses after the worker confirms credential and permission changes, preventing obsolete availability labels after an API key is replaced or cleared.
+- Use the worker's configuration-ready signal for history and remove the redundant site-selector event, retaining stale-response and pending-clear guards.
+- Verify notification handling, ignored ratings messages and clear ordering; extend installed Chromium coverage through key-save and key-clear history recovery.
+
 ## [3.5.112]
 
 - Preserve the pending Settings site selection across background site-list refreshes, keeping the selector aligned with the credentials loaded into the form.

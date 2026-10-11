@@ -277,8 +277,8 @@ test('a site switch refreshes history even while an earlier status refresh is pe
   t.after(() => dom.window.close());
   const tick = () => new Promise(resolve => setImmediate(resolve));
   const entry = { kind: 'request', title: 'Film', mediaType: 'movie', at: 1 };
-  let reads = 0, finishOld;
-  dom.window.chrome = { runtime: { sendMessage: async ({ action }) => {
+  let reads = 0, finishOld, onMessage;
+  dom.window.chrome = { runtime: { onMessage: { addListener: listener => { onMessage = listener; } }, sendMessage: async ({ action }) => {
     if (action === 'getRecentActions') return { success: true, data: [entry] };
     if (++reads === 2) return new Promise(resolve => { finishOld = resolve; });
     return { success: true, data: [{ ...entry, status: reads === 1 ? 'Requested' : 'Status unavailable' }] };
@@ -287,11 +287,42 @@ test('a site switch refreshes history even while an earlier status refresh is pe
   await tick();
   const refresh = [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Refresh statuses');
   refresh.click(); await tick();
-  dom.window.dispatchEvent(new dom.window.Event('seerrConnectionChanged'));
+  assert.equal(onMessage({ action: 'publicRatingsChanged' }), undefined);
+  assert.equal(reads, 2);
+  assert.equal(onMessage({ action: 'seerrConfigChanged' }), undefined);
   await tick();
   assert.equal(reads, 3);
   finishOld({ success: true, data: [{ ...entry, status: 'Old server status' }] });
   await tick();
   assert.equal(dom.window.document.querySelector('.recent-action-state').textContent, 'Status unavailable');
   assert.equal(refresh.disabled, false);
+});
+
+test('configuration notifications cannot reload history during a pending clear', async t => {
+  const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
+  t.after(() => dom.window.close());
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  const entry = { kind: 'request', title: 'Film', mediaType: 'movie', at: 1 };
+  let onMessage, finishClear, cleared = false, reads = 0;
+  dom.window.chrome = { runtime: {
+    onMessage: { addListener: listener => { onMessage = listener; } },
+    sendMessage: async ({ action }) => {
+      if (action === 'clearRecentActions') {
+        await new Promise(resolve => { finishClear = resolve; });
+        cleared = true; return { success: true };
+      }
+      reads++;
+      return { success: true, data: cleared ? [] : [{ ...entry, status: 'Requested' }] };
+    }
+  } };
+  dom.window.eval(fs.readFileSync('src/popup/recent-actions.js', 'utf8'));
+  await tick();
+  dom.window.document.getElementById('clearRecentActions').click();
+  const before = reads;
+  assert.equal(onMessage({ action: 'seerrConfigChanged' }), undefined);
+  await tick(); assert.equal(reads, before);
+  finishClear(); await tick();
+  assert.equal(dom.window.document.querySelectorAll('#recentActionsList li').length, 0);
+  assert.equal(reads, before + 1);
+  assert.equal([...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Refresh statuses').disabled, false);
 });

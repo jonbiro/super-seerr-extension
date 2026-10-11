@@ -10,6 +10,12 @@ test('installed popup rejects proxy success pages and recovers through setup and
     if (request.url === '/api/v1/settings/public') {
       response.setHeader('Content-Type', mode === 'html' ? 'text/html' : 'application/json');
       response.end(mode === 'html' ? '<html>Proxy sign-in</html>' : JSON.stringify({ initialized: mode !== 'setup' }));
+    } else if (request.url.startsWith('/api/v1/request?')) {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify({ results: [] }));
+    } else if (request.url === '/api/v1/movie/550') {
+      response.setHeader('Content-Type', 'application/json');
+      response.end(JSON.stringify({ id: 550, mediaInfo: { status: 5 } }));
     } else {
       response.setHeader('Content-Type', 'application/json');
       response.end(JSON.stringify(mode === 'bad-account' ? { message: 'Proxy fallback' } : { id: 1 }));
@@ -35,12 +41,14 @@ test('installed popup rejects proxy success pages and recovers through setup and
     await options.locator('#serverUrl').fill(origin);
     await options.locator('button[type=submit]').click();
     await expect(options.locator('#activeSeerrSite')).toContainText(origin);
+    await options.evaluate(origin => chrome.storage.local.set({ recentActionsV1: [{ kind: 'request', title: 'Fixture film', mediaType: 'movie', tmdbId: 550, at: 1, server: `${origin}/` }] }), origin);
     const popup = await context.newPage();
     await popup.setViewportSize({ width: 320, height: 400 });
     await popup.goto(`chrome-extension://${id}/src/popup/popup.html`);
     await expect(popup.locator('#diagnosticChecks')).toContainText('expected Seerr settings');
     await expect(popup.locator('.status-text')).toHaveText('Connection needs attention');
     await expect(popup.getByRole('button', { name: 'Fix seerr connection', exact: true })).toBeVisible();
+    await expect(popup.locator('.recent-action-state')).toHaveText('Status unavailable');
     mode = 'setup';
     await popup.getByRole('button', { name: 'Check connections', exact: true }).click();
     await expect(popup.locator('#diagnosticChecks')).toContainText('initial setup is incomplete');
@@ -53,6 +61,7 @@ test('installed popup rejects proxy success pages and recovers through setup and
     await options.locator('button[type=submit]').click();
     await expect(options.locator('#status')).toContainText('Settings saved successfully');
     await expect(popup.locator('#diagnosticChecks')).toContainText('unexpected account response');
+    await expect(popup.locator('.recent-action-state')).toHaveText('Available');
     await expect(popup.locator('.status-text')).toHaveText('Connection needs attention');
     mode = 'ready';
     await popup.getByRole('button', { name: 'Check connections', exact: true }).click();
@@ -62,6 +71,7 @@ test('installed popup rejects proxy success pages and recovers through setup and
     await options.locator('#apiKey').fill('');
     await options.locator('button[type=submit]').click();
     await expect(popup.locator('.status-text')).toHaveText('Ratings-only mode');
+    await expect(popup.locator('.recent-action-state')).toHaveText('Status unavailable');
     // Revoke and restore the real optional permission while the popup stays open.
     await options.evaluate(() => chrome.permissions.remove({ origins: ['http://127.0.0.1/*'] }));
     await expect(popup.locator('#diagnosticChecks')).toContainText('Seerr host access is missing');

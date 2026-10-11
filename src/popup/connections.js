@@ -16,7 +16,6 @@
     select.title = connections.sites.find(site => site.id === connections.activeId)?.url || '';
     section.classList.toggle('hidden', !connections.sites.length);
   }
-  const notify = () => window.dispatchEvent(new Event('seerrConnectionChanged'));
   async function load(changed = false) {
     const current = ++generation;
     try {
@@ -25,12 +24,11 @@
       if (!response?.success) throw new Error('Could not load saved sites. Reopen the popup to retry.');
       render(response.data);
       select.disabled = false;
-      if (changed) { status.textContent = 'Active site updated.'; notify(); }
+      if (changed) status.textContent = 'Active site updated.';
     } catch (error) {
       if (current !== generation) return;
       section.classList.remove('hidden'); select.value = ''; select.title = ''; select.disabled = true;
       status.textContent = error.message;
-      if (changed) notify();
     }
   }
   select.addEventListener('change', async () => {
@@ -49,7 +47,6 @@
       // fail and incorrectly roll the selector back after a successful switch.
       render(response.data);
       status.textContent = 'Site switched. Reload its Seerr tab if ratings are not visible yet.';
-      notify();
     } catch (error) {
       select.value = connections.activeId || '';
       status.textContent = error.message;

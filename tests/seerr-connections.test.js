@@ -223,8 +223,7 @@ test('popup uses the confirmed switch result even if subsequent history reads fa
   const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
   t.after(() => dom.window.close());
   const sites = [{ id: first, name: 'Home', url: first }, { id: second, name: 'Family', url: second }];
-  let activeId = first, notifications = 0, changed, reads = 0;
-  dom.window.addEventListener('seerrConnectionChanged', () => notifications++);
+  let activeId = first, changed, reads = 0;
   dom.window.chrome = { storage: { onChanged: { addListener: listener => { changed = listener; } } }, permissions: { request: async () => true }, runtime: { sendMessage: async ({ action }) => {
     if (action === 'activateSeerrConnection') {
       activeId = second;
@@ -244,7 +243,6 @@ test('popup uses the confirmed switch result even if subsequent history reads fa
   assert.equal(select.value, second);
   assert.equal(select.disabled, false);
   assert.match(dom.window.document.getElementById('siteSwitchStatus').textContent, /Site switched/);
-  assert.equal(notifications, 1);
   assert.equal(reads, 1, 'the matching storage notification does not reread a confirmed switch');
 });
 
@@ -254,8 +252,7 @@ test('an open popup follows site changes made in Settings', async t => {
   const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
   t.after(() => dom.window.close());
   const sites = [{ id: first, name: 'Home', url: first }, { id: second, name: 'Family', url: second }];
-  let activeId = first, changed, notifications = 0;
-  dom.window.addEventListener('seerrConnectionChanged', () => notifications++);
+  let activeId = first, changed;
   dom.window.chrome = { storage: { onChanged: { addListener: listener => { changed = listener; } } }, runtime: {
     sendMessage: async () => ({ success: true, data: { activeId, sites } })
   } };
@@ -265,7 +262,6 @@ test('an open popup follows site changes made in Settings', async t => {
   activeId = second; changed({ seerrConnectionsV1: {} }, 'local');
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(dom.window.document.getElementById('activeSeerrSite').value, second);
-  assert.equal(notifications, 1);
 });
 
 test('a delayed popup list cannot restore an older active site after a settings change', async t => {

@@ -73,7 +73,8 @@
     if (current === generation) refresh.disabled = false;
   }
   refresh.addEventListener('click', refreshHistory);
-  window.addEventListener('seerrConnectionChanged', () => {
+  chrome.runtime.onMessage?.addListener(message => {
+    if (message?.action !== 'seerrConfigChanged') return;
     // A disabled button blocks clicks while an obsolete refresh is pending.
     // Start a new generation directly; clearing already reloads after deletion.
     if (!clearing) void refreshHistory();
