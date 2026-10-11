@@ -267,3 +267,31 @@ for (const cancellationFails of [false, true]) test(`refused RT pages cancel unr
     await Promise.allSettled(responses.map(response => response.body.cancel()));
   }
 });
+
+for (const failedReads of [1, 2]) test(`cache writes preserve saved title and public ratings after ${failedReads} failed reads`, async () => {
+  const first = loadWorker(); await first.ready; stubRt(first.api);
+  await first.api.getRottenTomatoesRatings({ title: 'Example', year: 2020, tmdbId: 1, mediaType: 'movie' });
+  await first.api.flushRtCache();
+  const worker = loadWorker({ local: first.localStore }); await worker.ready;
+  const read = worker.context.chrome.storage.local.get; let failures = 0;
+  worker.context.chrome.storage.local.get = async keys => {
+    if (keys.includes('rtCacheV1') && failures < failedReads) { failures++; throw new Error('Temporary cache read failure'); }
+    return read(keys);
+  };
+  stubRt(worker.api, { critics: 95 });
+  worker.api.parseRtSearchResults = () => [{ href: '/m/example_two', title: 'Example Two', year: 2020, rtCriticsScore: 95 }];
+  await worker.api.getRottenTomatoesRatings({ title: 'Example Two', year: 2020, tmdbId: 2, mediaType: 'movie' });
+  await worker.api.flushRtCache();
+  assert.ok(worker.localStore.rtCacheV1.entries['movie:Example:2020'], 'a failed read must not erase saved title ratings');
+  assert.ok(worker.localStore.publicRatingsV1.entries['movie:1'], 'a failed read must not erase shared public ratings');
+  if (failedReads === 2) {
+    assert.equal(worker.localStore.rtCacheV1.entries['movie:Example Two:2020'], undefined, 'do not write a partial snapshot while storage remains unreadable');
+    await worker.api.flushRtCache();
+  }
+  assert.equal(worker.localStore.rtCacheV1.entries['movie:Example Two:2020'].value.rtCriticsScore, 95);
+  assert.equal(worker.localStore.publicRatingsV1.entries['movie:2'].value.rtCriticsScore, 95);
+  const restarted = loadWorker({ local: worker.localStore }); await restarted.ready;
+  const provider = stubRt(restarted.api, { critics: 12 });
+  assert.equal((await restarted.api.getRottenTomatoesRatings({ title: 'Example', year: 2020, tmdbId: 1, mediaType: 'movie' })).rtCriticsScore, 80);
+  assert.equal(provider.fetches, 0);
+});

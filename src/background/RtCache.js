@@ -109,8 +109,15 @@
         this.rtCacheFlushTimer = null;
       }
       this.rtCacheFlushing = (this.rtCacheFlushing ?? Promise.resolve()).then(async () => {
-        if (generation !== this.rtCacheGeneration) return;
+        // Clearing waits for this write chain, so never await its promise
+        // from inside the chain. The clear owns storage until it completes.
+        if (generation !== this.rtCacheGeneration || this.cacheClearPending) return;
         try {
+          // A lookup can continue after a transient storage read failure.
+          // Reload before replacing either persisted tier so that a partial
+          // in-memory cache cannot erase unrelated saved ratings.
+          await this.loadRtCache();
+          if (generation !== this.rtCacheGeneration || !this.rtCacheReady) return;
           const now = Date.now();
           const payload = {};
           // Together with ten per-site caches and the public tier, leave room

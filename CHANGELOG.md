@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.149]
+
+- Reload saved Rotten Tomatoes and shared public ratings before persistence, preventing a temporary read failure from replacing both tiers with a partial cache.
+- Skip writes while storage remains unreadable or a cache clear owns storage, preserving saved ratings and avoiding a clear/write dependency cycle.
+- Add recovery and worker-restart regressions for both persisted tiers, plus concurrent clear/flush coverage.
+
 ## [3.5.148]
 
 - Label missing or uncertain season episode counts as unavailable instead of displaying zero or undefined episodes, and use singular wording for one episode.

@@ -115,3 +115,14 @@ test('a read that starts while a clear is running does not restore it', async ()
   await worker.api.flushRtCache();
   assert.equal(Object.keys(worker.localStore.rtCacheV1?.entries || {}).length, 0, 'nor put it back on disk');
 });
+
+test('a flush requested during cache clearing cannot wait on the clear that waits for it', { timeout: 1500 }, async () => {
+  const worker = loadWorker(); await worker.ready;
+  worker.api.cacheRottenTomatoesResult('movie:Old:', { rtCriticsScore: 80 }, Config.rtCacheTtlMs);
+  const clearing = worker.api.clearRatingsCache();
+  const flushing = worker.api.flushRtCache();
+  await Promise.all([clearing, flushing]);
+  assert.equal(worker.localStore.rtCacheV1, undefined);
+  assert.equal(worker.localStore.publicRatingsV1, undefined);
+  assert.equal(worker.api.rtCache.size, 0);
+});
