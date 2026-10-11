@@ -770,12 +770,22 @@ class SeerrAPI {
       throw new Error('Server URL and API key are required');
     }
 
+    const snapshot = {
+      baseUrl: this.baseUrl, apiKey: this.apiKey,
+      settingsLoadGeneration: this.settingsLoadGeneration
+    };
+    const client = Object.assign(Object.create(this), snapshot);
     try {
-      const response = await this.makeAPIRequest('GET', '/api/v1/auth/me');
+      const response = await client.getSeerrAccount();
+      if (Object.keys(snapshot).some(key => this[key] !== snapshot[key])) {
+        throw new Error('Settings changed during the connection test. Test again.');
+      }
+      const user = [response.displayName, response.username, response.email]
+        .find(value => typeof value === 'string' && value.trim());
       return {
         connected: true,
-        user: response.displayName || response.email,
-        server: this.baseUrl
+        user: user?.trim() || `Seerr user ${response.id}`,
+        server: snapshot.baseUrl
       };
     } catch (error) {
       throw new Error(`Connection failed: ${error.message}`);

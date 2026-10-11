@@ -65,17 +65,15 @@
           assertCurrent();
           if (!snapshot.apiKey) return;
           try {
-            const user = await client.makeAPIRequest('GET', '/api/v1/auth/me');
-            if (!Number.isSafeInteger(user?.id) || user.id <= 0) {
-              checks.apiKey = row('error', 'The server returned an unexpected account response. Check the URL and proxy.', 'serverUrl');
-            } else {
-              checks.apiKey = row('ok', 'API key accepted.');
-              if (!setupIncomplete) checks.seerr = row('ok', 'Seerr is reachable.');
-            }
+            await client.getSeerrAccount();
+            checks.apiKey = row('ok', 'API key accepted.');
+            if (!setupIncomplete) checks.seerr = row('ok', 'Seerr is reachable.');
           } catch (error) {
-            checks.apiKey = [401, 403].includes(error.status)
-              ? row('error', 'API key rejected or lacks access. Replace it in Settings.', 'apiKey')
-              : row('warning', 'Could not verify the API key. Check the Seerr connection and retry.', 'apiKey');
+            checks.apiKey = error.code === 'INVALID_ACCOUNT_RESPONSE'
+              ? row('error', 'The server returned an unexpected account response. Check the URL and proxy.', 'serverUrl')
+              : [401, 403].includes(error.status)
+                ? row('error', 'API key rejected or lacks access. Replace it in Settings.', 'apiKey')
+                : row('warning', 'Could not verify the API key. Check the Seerr connection and retry.', 'apiKey');
           }
         })(),
         (async () => {

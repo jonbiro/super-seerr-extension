@@ -2,6 +2,16 @@
 (function (root) {
   const RatingsConfig = root.RatingsConfig;
   root.SeerrTransport = {
+    async getSeerrAccount() {
+      const account = await this.makeAPIRequest('GET', '/api/v1/auth/me');
+      if (!Number.isSafeInteger(account?.id) || account.id <= 0) {
+        const error = new Error('The server returned an unexpected account response. Check the URL and proxy.');
+        error.code = 'INVALID_ACCOUNT_RESPONSE';
+        throw error;
+      }
+      return account;
+    },
+
     async makeAPIRequest(method, endpoint, data = null) {
       if (method === 'GET') {
         // Request pages are identical across title lookups. Details can also be

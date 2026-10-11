@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.109]
+
+- Validate account replies consistently in Settings connection tests and popup diagnostics, rejecting malformed successful responses.
+- Discard saved-site connection test results when the server, credentials or settings generation changes during authentication.
+- Show a readable account fallback when Seerr omits a display name; add malformed-account and connection-change regressions.
+
 ## [3.5.108]
 
 - Refresh open popup diagnostics after credential reloads and host-permission changes instead of retaining obsolete key, Plex or permission results.

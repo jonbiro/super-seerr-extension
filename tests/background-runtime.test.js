@@ -91,7 +91,7 @@ test('temporary connection tests do not replace saved worker settings', async ()
   const requests = [];
   const { api, ready } = loadWorker({
     get: async () => ({ seerrUrl: 'https://saved.example', seerrApiKey: 'saved-key' }),
-    fetch: async (url, options) => { requests.push({ url, options }); return { ok: true, json: async () => ({ displayName: 'Tester' }) }; }
+    fetch: async (url, options) => { requests.push({ url, options }); return { ok: true, json: async () => ({ id: 1, displayName: 'Tester' }) }; }
   });
   await ready;
   const result = await new Promise(resolve => api.handleMessage({ action: 'testConnection', data: { seerrUrl: 'https://test.example', seerrApiKey: 'temporary' } }, {}, resolve));
@@ -115,4 +115,39 @@ test('RT cache remains bounded when distinct lookups finish concurrently', async
   await Promise.all(Array.from({ length: Config.rtCacheMaxEntries + 20 }, (_, i) => api.getRottenTomatoesRatings({ title: `Title ${i}` })));
   assert.equal(api.rtCache.size, Config.rtCacheMaxEntries);
   assert.equal(api.rtPending.size, 0);
+});
+
+for (const account of [null, {}, [], { id: '1' }, { id: 0 }, { id: -1 }, { id: 1.5 }]) {
+  test(`connection test rejects invalid account ${JSON.stringify(account)}`, async () => {
+    const w = loadWorker({ get: async () => ({ seerrUrl: 'https://saved.example', seerrApiKey: 'key' }) });
+    await w.ready;
+    w.api.makeAPIRequest = async () => account;
+    await assert.rejects(w.api.testConnection(), /unexpected account response/);
+  });
+}
+
+for (const field of ['baseUrl', 'apiKey', 'settingsLoadGeneration']) {
+  test(`connection test rejects a saved ${field} change while authentication is pending`, async () => {
+    const w = loadWorker({ get: async () => ({ seerrUrl: 'https://saved.example', seerrApiKey: 'key' }) });
+    await w.ready;
+    let release;
+    w.api.makeAPIRequest = () => new Promise(resolve => { release = resolve; });
+    const result = w.api.testConnection();
+    w.api[field] = field === 'settingsLoadGeneration' ? w.api[field] + 1 : 'changed';
+    release({ id: 1, displayName: 'Tester' });
+    await assert.rejects(result, /Settings changed/);
+  });
+}
+
+test('connection tests use a readable identity even without an account display name', async () => {
+  const w = loadWorker({ get: async () => ({ seerrUrl: 'https://saved.example', seerrApiKey: 'key' }) });
+  await w.ready;
+  for (const [account, name] of [
+    [{ id: 1 }, 'Seerr user 1'],
+    [{ id: 2, displayName: {}, username: '  tester  ' }, 'tester'],
+    [{ id: 3, displayName: '  ', username: false, email: 'tester@example.com' }, 'tester@example.com']
+  ]) {
+    w.api.makeAPIRequest = async () => account;
+    assert.equal((await w.api.testConnection()).user, name);
+  }
 });
