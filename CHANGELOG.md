@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.180]
+
+- Keep Seerr notifications within narrow viewports, including padding, and wrap long titles and error text.
+- Bound the error stack to the screen so every dismiss control remains reachable with keyboard focus and users can scroll through longer results.
+- Add real-browser checks for 320/375-pixel layouts, focus restoration, and stacked errors on a short screen; the narrow overflow and off-screen dismissal cases failed before the fix.
+
 ## [3.5.179]
 
 - Apply known catalogue years before the ratings cache fast path, preventing callers without a visible year from reconciling a shared public score for a contradictory remake.
