@@ -197,7 +197,8 @@
       if (!title) return null;
       const refresh = data?.refresh === true;
       const originalTitle = typeof data?.originalTitle === 'string' ? data.originalTitle.trim() : null;
-      const normalized = { ...data, title, originalTitle, mediaType: data.mediaType || 'movie', refresh,
+      const year = root.MediaValidation.releaseYear(data.year);
+      const normalized = { ...data, title, originalTitle, year, mediaType: data.mediaType || 'movie', refresh,
         // A default lookup type is not verified identity for cross-site reuse.
         tmdbId: this.publicRatingKey(data) ? data.tmdbId : null };
       // A refresh coalesces with other refreshes but must not join an ordinary

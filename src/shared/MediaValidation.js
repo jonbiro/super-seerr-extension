@@ -13,17 +13,21 @@
       if (value !== 'movie' && value !== 'tv') throw new Error('Media type must be movie or tv');
       return value;
     },
+    releaseYear(value) {
+      if (value == null) return null;
+      if ((typeof value !== 'number' && typeof value !== 'string') ||
+          !/^\d{4}$/.test(String(value)) || Number(value) < 1800) {
+        throw new Error('A valid release year is required');
+      }
+      return Number(value);
+    },
     media(data, { requireId = false } = {}) {
       if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('Media data is required');
       const mediaType = this.mediaType(data.mediaType);
       const title = typeof data.title === 'string' ? data.title.trim() : '';
       const tmdbId = data.tmdbId == null && !requireId ? undefined : this.tmdbId(data.tmdbId);
       if (tmdbId === undefined && !title) throw new Error('A title or TMDB id is required');
-      if (data.year != null && ((typeof data.year !== 'number' && typeof data.year !== 'string') ||
-          !/^\d{4}$/.test(String(data.year)) || Number(data.year) < 1800)) {
-        throw new Error('A valid release year is required');
-      }
-      return { ...data, title, mediaType, tmdbId, year: data.year == null ? null : Number(data.year) };
+      return { ...data, title, mediaType, tmdbId, year: this.releaseYear(data.year) };
     }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = MediaValidation;

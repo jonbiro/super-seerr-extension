@@ -490,3 +490,24 @@ test('equally strong approximate matches with different titles are not decided b
   assert.equal(await worker.api.getRottenTomatoesRatings({ title: 'Example', year: 2020, mediaType: 'movie', tmdbId: 42 }), null);
   assert.equal(worker.api.rtCache.get('movie:Example:2020').diagnostic, 'uncertain');
 });
+
+for (const warm of [false, true]) {
+  for (const year of [[1999], ['1999'], [[1999]]]) {
+    test(`malformed array year ${JSON.stringify(year)} cannot ${warm ? 'reuse' : 'publish'} a shared score`, async () => {
+      const worker = warm ? await seed() : loadWorker(); await worker.ready;
+      const calls = provider(worker);
+      await assert.rejects(worker.api.getRottenTomatoesRatings({ ...input, year }), /valid release year/);
+      assert.equal(calls.length, 0, 'invalid year must not start a provider lookup');
+      assert.equal(worker.api.publicRatings.size, warm ? 1 : 0);
+      assert.equal(worker.api.rtPending.size, 0);
+    });
+  }
+}
+
+test('a string release year uses the same verified public score as a numeric year', async () => {
+  const worker = await seed();
+  const calls = provider(worker);
+  const result = await worker.api.getRottenTomatoesRatings({ ...input, year: '1999' });
+  assert.equal(result.rtCriticsScore, 80);
+  assert.equal(calls.length, 0);
+});

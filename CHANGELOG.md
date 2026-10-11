@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.233]
+
+- Apply strict release-year validation to provider ratings too, preventing malformed array years from publishing or reusing shared scores.
+
 ## [3.5.232]
 
 - Reject array and object release years at the media boundary instead of coercing malformed identity data into request evidence.
