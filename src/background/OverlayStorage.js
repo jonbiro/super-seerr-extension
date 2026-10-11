@@ -179,13 +179,17 @@
       // the tab's snapshot can omit null fields added during sanitization.
       const expected = this.sanitizeOverlayCache({ ...incoming, index: [], entries: Object.fromEntries(
         removals.filter(item => item?.expected).map(item => [item.key, item.expected])) }, incoming.server, incoming.epoch).entries;
+      // Removal clocks are worker bookkeeping added after the tab's write.
+      // They must not prevent that tab from forgetting otherwise unchanged
+      // ratings. Compare all score, retry and diagnostic data as before.
+      const comparable = entry => JSON.stringify({ ...entry, nativeRemovedAt: undefined });
       for (const item of removals) {
         if (item && entries[item.key] && entries[item.key].cachedAt === item.cachedAt &&
             (entries[item.key].publicCheckedAt ?? null) === (item.publicCheckedAt ?? null) &&
             // Older clients send timestamps only. New clients also protect
             // same-time score changes and retry/diagnostic updates.
             (!Object.hasOwn(item, 'expected') || (expected[item.key] &&
-              JSON.stringify(entries[item.key]) === JSON.stringify(expected[item.key])))) delete entries[item.key];
+              comparable(entries[item.key]) === comparable(expected[item.key])))) delete entries[item.key];
       }
       const bases = this.sanitizeOverlayCache({ ...incoming, index: [], entries: expectedEntries }, incoming.server, incoming.epoch).entries;
       for (const [key, entry] of Object.entries(incoming.entries)) {

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.167]
+
+- Exclude worker-owned native removal clocks from cache-deletion snapshot comparisons, allowing the originating tab to forget an otherwise unchanged entry without reloading.
+- Keep score, timestamp, retry and diagnostic comparisons intact so stale tabs still cannot delete changed ratings.
+- Add IMDb/TMDB deletion regressions for original and reloaded tabs.
+
 ## [3.5.166]
 
 - Merge complementary IMDb/TMDB discoveries from overlapping tabs instead of letting an unchanged missing field erase the other tab's score.

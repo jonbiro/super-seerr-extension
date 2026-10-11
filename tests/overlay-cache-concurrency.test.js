@@ -370,3 +370,21 @@ for (const field of ['imdbRating', 'tmdbRating']) test(`a delayed ${field} disco
   assert.equal(stored(restarted).entries['movie:1'].bundle[field], 9, 'a genuinely newer discovery still applies');
   assert.equal(stored(restarted).entries['movie:1'].nativeRemovedAt, undefined, 'a new discovery retires the removal marker');
 });
+
+for (const field of ['imdbRating', 'tmdbRating']) for (const reload of [false, true]) {
+  test(`forgetting an unchanged ${field} removal works ${reload ? 'after reload' : 'in its original tab'}`, async () => {
+    const worker = await setup();
+    const at = Date.now();
+    const seed = tab(worker); await seed.loadPersistedRatings();
+    const original = { ...entry(90, at - 1000), bundle: Model.createRatingsBundle({ rtCriticsScore: 90, [field]: 7, confidence: 1 }) };
+    seed.ratingsCache.set('movie:1', original); await seed.flushPersistedRatings();
+    const writer = tab(worker); await writer.loadPersistedRatings();
+    writer.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, [field]: null }, cachedAt: at });
+    await writer.flushPersistedRatings();
+    assert.equal(stored(worker).entries['movie:1'].nativeRemovedAt[field], at);
+    const forgetting = reload ? tab(worker) : writer;
+    if (reload) await forgetting.loadPersistedRatings();
+    forgetting.ratingsCache.delete('movie:1'); await forgetting.flushPersistedRatings();
+    assert.equal(stored(worker).entries['movie:1'], undefined, 'worker removal metadata must not make an unchanged snapshot impossible to forget');
+  });
+}
