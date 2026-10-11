@@ -44,6 +44,10 @@ for (const [name, request, options] of [
   ['null type', { mediaType: null }, {}], ['invalid ID', { tmdbId: '1e3' }, {}],
   ['unsafe ID', { tmdbId: Number.MAX_SAFE_INTEGER + 1 }, {}], ['missing year', { year: null }, {}],
   ['approximate match', {}, { year: 1998 }], ['failed detail lookup', {}, { failDetail: true }],
+  ['different Japanese voicing', { title: 'ハ' }, { title: 'バ' }],
+  ['different Cyrillic letter', { title: 'и' }, { title: 'й' }],
+  ['different Indic vowel', { title: 'कल' }, { title: 'काल' }],
+  ['different Arabic marks', { title: 'علم' }, { title: 'عَلَم' }],
   ['wrong provider', {}, { href: 'https://other.example/m/fight_club' }],
   ['TV season instead of series', { mediaType: 'tv' }, { href: '/tv/fight_club/s01' }],
   ['no scores', {}, { critics: null, audience: null }]

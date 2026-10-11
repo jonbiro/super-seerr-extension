@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.119]
+
+- Preserve meaningful non-Latin marks when matching Seerr titles and public ratings, preventing distinct Japanese, Cyrillic, Indic and Arabic titles from becoming exact matches.
+- Retain Latin accent folding and canonical Unicode equivalence; reject mark-only text as a title identity.
+- Invalidate scores cached under the previous matching rules and add request-safety and shared-rating regressions.
+
 ## [3.5.118]
 
 - Keep Choose TV seasons hidden and disabled until a known title status is available, including during loading, errors, ambiguous matches and blocklisting.

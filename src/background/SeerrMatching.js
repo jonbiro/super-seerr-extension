@@ -99,10 +99,11 @@
 
     areTitlesSimilar(title1, title2) {
       const normalize = title => String(title).toLowerCase().normalize('NFKD')
-        .replace(/\p{M}/gu, '').replace(/\bse7en\b/g, 'seven')
-        .replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+        .replace(/(\p{Script=Latin})\p{M}+/gu, '$1').normalize('NFC')
+        .replace(/\bse7en\b/g, 'seven')
+        .replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ').trim();
       const left = normalize(title1), right = normalize(title2);
-      return !!left && left === right;
+      return /[\p{L}\p{N}]/u.test(left) && left === right;
     },
 
     extractYear(dateString) {

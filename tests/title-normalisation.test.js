@@ -67,3 +67,22 @@ test('an accented title now matches its unaccented spelling', () => {
   assert.equal(worker.api.scoreRtSearchResult(
     { title: 'Amélie', year: 2001 }, { title: 'Amelie', year: 2001 }), 1);
 });
+
+for (const [left, right] of [['ハ', 'バ'], ['и', 'й'], ['कल', 'काल'], ['علم', 'عَلَم']]) {
+  test(`meaningful marks distinguish ${left} from ${right} in Seerr and public ratings`, () => {
+    const { api } = loadWorker();
+    assert.equal(api.areTitlesSimilar(left, right), false);
+    assert.notEqual(api.normalizeTitleForMatch(left), api.normalizeTitleForMatch(right));
+    assert.ok(api.scoreRtSearchResult({ title: left, year: 2020 }, { title: right, year: 2020 }) < 0.7);
+  });
+}
+
+test('canonical Unicode spellings match while mark-only text cannot establish identity', () => {
+  const { api } = loadWorker();
+  for (const [left, right] of [['バ', 'ハ\u3099'], ['й', 'и\u0306'], ['Amélie', 'Ame\u0301lie']]) {
+    assert.equal(api.areTitlesSimilar(left, right), true);
+    assert.equal(api.scoreRtSearchResult({ title: left, year: 2020 }, { title: right, year: 2020 }), 1);
+  }
+  assert.equal(api.areTitlesSimilar('\u3099', '\u3099'), false);
+  assert.equal(api.normalizeTitleForMatch('\u3099'), '');
+});

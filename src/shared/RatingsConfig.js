@@ -21,7 +21,9 @@ const RatingsConfig = {
   //    an old title-cache verdict must not seed the shared public ID cache.
   // 5: malformed scorecards and unrelated data-id scripts could be marked
   //    rated and shared. Their cached verdicts cannot be safely distinguished.
-  matcherVersion: 5,
+  // 6: stripping non-Latin marks could verify a different title as an exact
+  //    match. Discard scores produced under those normalization rules.
+  matcherVersion: 6,
 
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {

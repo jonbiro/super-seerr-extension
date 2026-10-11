@@ -7,19 +7,19 @@
     // into a space, splitting the word it sat in, and reduced a title in any
     // non-Latin script to an empty string that could never match anything.
     normalizeTitleForMatch(title = '') {
-      return String(title)
+      const normalized = String(title)
         .toLowerCase()
         .replace(/&amp;/g, '&')
         // Latin letters carrying no combining mark, so NFD leaves them alone.
         .replace(/ß/g, 'ss').replace(/æ/g, 'ae').replace(/œ/g, 'oe')
         .replace(/ł/g, 'l').replace(/ø/g, 'o').replace(/đ/g, 'd').replace(/ð/g, 'd').replace(/þ/g, 'th')
-        // Split the rest into base letter plus mark, then drop the marks.
-        .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        // Keep letters of any script rather than only a-z.
-        .replace(/[^\p{L}\p{N}]+/gu, ' ')
+        // Fold Latin accents while preserving marks that distinguish other scripts.
+        .normalize('NFD').replace(/(\p{Script=Latin})\p{M}+/gu, '$1').normalize('NFC')
+        .replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ')
         .replace(/\b(the|a|an)\b/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();
+      return /[\p{L}\p{N}]/u.test(normalized) ? normalized : '';
     },
 
     decodeHtml(text = '') {

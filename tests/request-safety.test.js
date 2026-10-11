@@ -189,3 +189,12 @@ test('status for a contradicted page id resolves by search', async () => {
   const status = await api.getMediaStatus({ title: 'Dune', year: 2021, mediaType: 'movie', tmdbId: 999 });
   assert.equal(status.buttonClass, 'request', 'must describe the searched title, not the contradicted id');
 });
+
+test('a different non-Latin title cannot authorize a request after its marks are removed', async () => {
+  const { api, ready } = loadWorker(CONFIGURED); await ready;
+  api.searchMedia = async () => [film(1, 'バ', 2020)];
+  let posts = 0;
+  api.makeAPIRequest = async () => { posts++; return {}; };
+  await assert.rejects(api.requestMedia({ title: 'ハ', year: 2020, mediaType: 'movie' }), /No unambiguous match/);
+  assert.equal(posts, 0);
+});
