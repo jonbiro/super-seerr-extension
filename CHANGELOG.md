@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.168]
+
+- Skip redundant ratings/catalogue storage writes when the bounded merged cache already matches the persisted record.
+- Keep server and clear-epoch validation for unchanged flushes, and still retire legacy cache payloads when migration is needed.
+- Add write-count, actual-update, legacy-retirement and missed-clear regressions.
+
 ## [3.5.167]
 
 - Exclude worker-owned native removal clocks from cache-deletion snapshot comparisons, allowing the originating tab to forget an otherwise unchanged entry without reloading.

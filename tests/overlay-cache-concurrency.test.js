@@ -388,3 +388,39 @@ for (const field of ['imdbRating', 'tmdbRating']) for (const reload of [false, t
     assert.equal(stored(worker).entries['movie:1'], undefined, 'worker removal metadata must not make an unchanged snapshot impossible to forget');
   });
 }
+
+test('unchanged cache flushes do not rewrite persisted ratings or catalogue data', async () => {
+  const worker = await setup();
+  const cache = tab(worker, { index: [{ tmdbId: '1', mediaType: 'movie', title: 'First' }] });
+  await cache.loadPersistedRatings();
+  cache.ratingsCache.set('movie:1', entry(80, Date.now()));
+  await cache.flushPersistedRatings();
+  const writes = () => worker.localWrites.filter(value => Object.hasOwn(value, 'overlayRatingsByServerV1')).length;
+  const before = writes();
+  assert.ok(before > 0);
+  await cache.flushPersistedRatings();
+  await cache.flushPersistedRatings();
+  assert.equal(writes(), before, 'unchanged snapshots must not call storage.set');
+  cache.ratingsCache.set('movie:2', entry(90, Date.now()));
+  await cache.flushPersistedRatings();
+  assert.equal(writes(), before + 1);
+  assert.equal(stored(worker).entries['movie:2'].bundle.rtCriticsScore, 90);
+  worker.localStore.overlayRatingsV1 = stored(worker);
+  await cache.flushPersistedRatings();
+  assert.equal(writes(), before + 2, 'an unchanged delta must still retire a legacy payload');
+  assert.equal(worker.localStore.overlayRatingsV1, null);
+  await cache.flushPersistedRatings();
+  assert.equal(writes(), before + 2, 'writes stop again after migration');
+});
+
+test('an unchanged stale flush still detects a missed cache clear', async () => {
+  const worker = await setup();
+  const cache = tab(worker); await cache.loadPersistedRatings();
+  cache.ratingsCache.set('movie:1', entry(80, Date.now()));
+  await cache.flushPersistedRatings();
+  await worker.api.clearRatingsCache();
+  assert.equal(cache.ratingsCache.size, 1, 'the fixture tab missed the clear notification');
+  await cache.flushPersistedRatings();
+  assert.equal(cache.ratingsCache.size, 0, 'even an empty delta must validate the worker epoch');
+  assert.equal(worker.localStore.overlayRatingsByServerV1, undefined);
+});

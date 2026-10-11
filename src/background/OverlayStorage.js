@@ -233,8 +233,13 @@
         const caches = this.overlayCachesFromStorage(local, local.ratingsCacheEpoch ?? 0);
         const key = serverKey(server);
         const merged = value.delta === true ? this.mergeOverlayCache(caches[key], clean, value.removed, value.expectedEntries) : clean;
+        const bounded = this.boundedOverlayCache(merged);
+        // Validate the server and clear epoch above even for empty deltas.
+        // Identical results need no write, but legacy payloads still need
+        // retirement so they cannot reappear after a later cache eviction.
+        if (!local[KEY] && JSON.stringify(local[SITES_KEY]?.[key]) === JSON.stringify(bounded)) return { stored: true };
         delete caches[key];
-        caches[key] = this.boundedOverlayCache(merged);
+        caches[key] = bounded;
         await chrome.storage.local.set({ [SITES_KEY]: Object.fromEntries(Object.entries(caches).slice(-10)), [KEY]: null });
         return { stored: true };
       });
