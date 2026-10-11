@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.81]
+
+- Treat malformed or non-object Rotten Tomatoes scorecard JSON as a failed detail read, preserving successful fallback scores and using the short retry window instead of promoting the attempt into the shared public cache.
+- Accept single-quoted scorecard IDs and whitespace around attribute assignment; require the actual `id` attribute so an unrelated `data-id` script cannot supply the scores.
+- Retire older rating verdicts that could have been created by these parser bugs while preserving the per-site catalogue indexes.
+- Add real-parser failure, recovery, public-cache admission and zero-score regressions, plus Chromium coverage for malformed HTTP 200 responses and alternate valid scorecard markup.
+
 ## [3.5.80]
 
 - Retry failed Rotten Tomatoes detail reads after two minutes instead of retaining failed or partial responses for an hour; apply the shorter retry window to persisted failures from earlier versions.

@@ -41,9 +41,12 @@ test('persisted RT failures recover and failed refreshes preserve the last succe
         if (rtProbe.mode === 'offline' || (rtProbe.mode === 'detail-failure' && !search)) {
           return Promise.reject(new Error('Provider temporarily unavailable'));
         }
+        if (!search && rtProbe.mode === 'malformed-scorecard') {
+          return Promise.resolve(new Response('<script id="media-scorecard-json">{"audienceScore":</script>', { status: 200 }));
+        }
         return Promise.resolve(new Response(search
           ? '<search-page-media-row release-year="1999" tomatometer-score="95"><a data-qa="info-name" href="/m/fight_club">Fight Club</a></search-page-media-row>'
-          : '<script id="media-scorecard-json" type="application/json">{"audienceScore":{"score":90}}</script>', { status: 200 }));
+          : "<script id = 'media-scorecard-json' type='application/json'>{\"audienceScore\":{\"score\":90}}</script>", { status: 200 }));
       };
     });
     const lookup = refresh => options.evaluate(refresh => chrome.runtime.sendMessage({ action: 'getRottenTomatoesRatings',
@@ -64,6 +67,11 @@ test('persisted RT failures recover and failed refreshes preserve the last succe
     expect((await lookup(false)).data).toEqual(recovered.data);
     expect(await worker.evaluate(() => rtProbe.calls)).toBe(5);
     expect(await persisted()).toEqual(original);
+    await worker.evaluate(() => { rtProbe.mode = 'malformed-scorecard'; });
+    expect((await lookup(true)).data).toMatchObject({ diagnostic: 'failed', rtAudienceScore: null });
+    expect((await lookup(false)).data).toEqual(recovered.data);
+    expect(await worker.evaluate(() => rtProbe.calls)).toBe(7);
+    expect(await persisted()).toEqual(original);
     // A second client sees the same successful title cache. ID-bound public
     // admission is exercised separately from configured Seerr pages.
     const sibling = await context.newPage();
@@ -71,7 +79,7 @@ test('persisted RT failures recover and failed refreshes preserve the last succe
     const shared = await sibling.evaluate(() => chrome.runtime.sendMessage({ action: 'getRottenTomatoesRatings',
       data: { title: 'Fight Club', year: 1999, mediaType: 'movie' } }));
     expect(shared.data).toEqual(recovered.data);
-    expect(await worker.evaluate(() => rtProbe.calls)).toBe(5);
+    expect(await worker.evaluate(() => rtProbe.calls)).toBe(7);
   } finally {
     await context?.close();
     await fs.rm(build.temporary, { recursive: true, force: true });

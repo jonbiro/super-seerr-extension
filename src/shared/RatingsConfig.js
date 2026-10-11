@@ -19,7 +19,9 @@ const RatingsConfig = {
   //    is no way to tell them apart after the fact, so they are all discarded.
   // 4: reject equally strong RT candidates even when a release year is known;
   //    an old title-cache verdict must not seed the shared public ID cache.
-  matcherVersion: 4,
+  // 5: malformed scorecards and unrelated data-id scripts could be marked
+  //    rated and shared. Their cached verdicts cannot be safely distinguished.
+  matcherVersion: 5,
 
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {

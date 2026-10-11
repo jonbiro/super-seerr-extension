@@ -107,19 +107,20 @@
     },
 
     parseRtScorecard(html) {
-      const scriptMatch = html.match(/<script[^>]+id="media-scorecard-json"[^>]*>([\s\S]*?)<\/script>/i);
+      const scriptMatch = html.match(/<script\b[^>]*\sid\s*=\s*(["'])media-scorecard-json\1[^>]*>([\s\S]*?)<\/script\s*>/i);
       if (!scriptMatch) return {};
 
-      try {
-        const data = JSON.parse(scriptMatch[1].trim());
-        return {
-          rtCriticsScore: this.parseRtPercent(data.criticsScore?.score),
-          rtAudienceScore: this.parseRtPercent(data.audienceScore?.score)
-        };
-      } catch (error) {
-        this.warn('Could not parse Rotten Tomatoes scorecard:', error);
-        return {};
+      // An unreadable scorecard is a failed detail read, not proof that the
+      // title has no ratings. Let the resolver apply its short retry window
+      // and retain any successful fallback instead of sharing this attempt.
+      const data = JSON.parse(scriptMatch[2].trim());
+      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+        throw new Error('Rotten Tomatoes scorecard is not an object');
       }
+      return {
+        rtCriticsScore: this.parseRtPercent(data.criticsScore?.score),
+        rtAudienceScore: this.parseRtPercent(data.audienceScore?.score)
+      };
     },
 
     parseRtPercent(value) {
@@ -293,7 +294,7 @@
         detailScores = this.parseRtScorecard(await this.fetchRtHtml(best.href));
       } catch (error) {
         outcome.failed = true;
-        this.warn('Could not fetch Rotten Tomatoes detail page:', error);
+        this.warn('Could not read Rotten Tomatoes detail page:', error);
       }
 
       const result = {
