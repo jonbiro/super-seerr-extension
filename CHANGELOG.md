@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.146]
+
+- Return the title's TMDB ID and nested media title when formatting request-history status, instead of labeling Seerr request or media row IDs as title IDs.
+- Preserve the resolved TMDB identity in status responses for both known-ID and title-search lookups, including titles not yet requested.
+- Add movie/TV history, unrequested-title and formatter regressions for identity preservation.
+
 ## [3.5.145]
 
 - Preserve keyboard focus through saved-site recovery in the popup and Settings, moving focus to the site selector after success while respecting focus moved elsewhere during loading.

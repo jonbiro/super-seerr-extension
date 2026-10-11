@@ -44,6 +44,14 @@
       // MediaStatus (unknown/pending/processing/partial/available/
       // blocklisted/deleted). The same number means different things.
       let statusKind = 'media';
+      const requestRecord = mediaDetails.status !== undefined && mediaDetails.media;
+      // Request.id and request.media.id are Seerr database row IDs. Only the
+      // nested tmdbId identifies the title in a request-history response.
+      const titleRecord = requestRecord ? mediaDetails.media : mediaDetails;
+      let tmdbId;
+      try { tmdbId = root.MediaValidation.tmdbId(requestRecord ? titleRecord.tmdbId : titleRecord.id ?? titleRecord.tmdbId); }
+      catch (_) { /* Callers can supply their already resolved identity. */ }
+      const identity = { tmdbId, title: titleRecord.name || titleRecord.title || 'Unknown Title' };
 
       // Embedded requests are separate quality/type records, just like the
       // paged history. A 4K request must not block the standard-quality action.
@@ -89,6 +97,7 @@
       if (status === undefined) {
         this.log('📊 [Background] No status found, returning available for request');
         return {
+          ...(tmdbId ? identity : {}),
           status: 'available',
           message: 'Not requested',
           buttonText: 'Request on Seerr',
@@ -97,8 +106,7 @@
       }
 
       let result = {
-        tmdbId: mediaDetails.id || mediaDetails.tmdbId,
-        title: mediaDetails.name || mediaDetails.title || 'Unknown Title',
+        ...identity,
         status: 'unknown',
         message: 'Status unknown',
         buttonText: 'Request on Seerr',

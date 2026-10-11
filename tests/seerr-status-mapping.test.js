@@ -82,3 +82,16 @@ test('every reported state maps to a button class the UI styles', () => {
     }
   }
 });
+
+test('request status exposes its nested TMDB identity and title, never database row IDs', () => {
+  const result = api().formatMediaStatus({ id: 7, type: 'movie', status: 2,
+    media: { id: 42, tmdbId: '550', title: 'Fight Club' } }, 'movie');
+  assert.equal(result.tmdbId, 550);
+  assert.equal(result.title, 'Fight Club');
+});
+
+test('a request without a valid nested TMDB ID does not substitute its row ID', () => {
+  const result = api().formatMediaStatus({ id: 7, type: 'movie', status: 2,
+    media: { id: 42, tmdbId: null } }, 'movie');
+  assert.equal(result.tmdbId, undefined);
+});

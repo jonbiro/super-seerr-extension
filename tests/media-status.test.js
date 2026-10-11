@@ -182,3 +182,33 @@ test('a malformed matching history ID cannot mask a later valid request', async 
   ] } });
   assert.equal((await worker.api.searchRequests(550, 'movie')).id, 2);
 });
+
+for (const mediaType of ['movie', 'tv']) for (const knownId of [false, true]) {
+  test(`${mediaType} status from request history returns the title identity (known ID: ${knownId})`, async () => {
+    const worker = loadWorker(CONFIGURED); await worker.ready;
+    const title = mediaType === 'movie' ? 'Fight Club' : 'Example Series';
+    withApi(worker, {
+      '/api/v1/search': { results: [{ id: 550, mediaType, title, name: title }] },
+      '/api/v1/request': { results: [{ id: 7, type: mediaType, status: 2,
+        media: { id: 42, tmdbId: '550', title } }] }
+    });
+    const result = await worker.api.getMediaStatus({ title, mediaType, ...(knownId ? { tmdbId: 550 } : {}) });
+    assert.equal(result.status, 'pending');
+    assert.equal(result.tmdbId, 550, 'request and media database row IDs are not TMDB IDs');
+    assert.equal(result.title, title);
+  });
+}
+
+for (const knownId of [false, true]) {
+  test(`an unrequested title keeps its resolved identity (known ID: ${knownId})`, async () => {
+    const worker = loadWorker(CONFIGURED); await worker.ready;
+    withApi(worker, {
+      '/api/v1/search': { results: [{ id: 550, mediaType: 'movie', title: 'Fight Club' }] },
+      '/api/v1/request': { results: [] },
+      '/api/v1/movie/550': { id: 550, title: 'Fight Club', mediaInfo: undefined }
+    });
+    const result = await worker.api.getMediaStatus({ title: 'Fight Club', mediaType: 'movie', ...(knownId ? { tmdbId: 550 } : {}) });
+    assert.equal(result.status, 'available');
+    assert.equal(result.tmdbId, 550);
+  });
+}

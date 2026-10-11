@@ -598,7 +598,7 @@ class SeerrAPI {
         this.log('📊 [Background] Using provided TMDB ID, skipping search:', knownTmdbId);
         const details = await this.getMediaDetails(knownTmdbId, mediaData.mediaType);
         assertConnection();
-        return this.formatMediaStatus(details, mediaData.mediaType);
+        return { ...this.formatMediaStatus(details, mediaData.mediaType), tmdbId: knownTmdbId };
       }
 
       const bestMatch = await this.resolveMediaMatch(mediaData);
@@ -625,7 +625,7 @@ class SeerrAPI {
       const formattedStatus = this.formatMediaStatus(mediaDetails, mediaData.mediaType);
       this.log('📊 [Background] Final formatted status:', formattedStatus);
 
-      return formattedStatus;
+      return { ...formattedStatus, tmdbId };
 
     } catch (error) {
       console.error('📊 [Background] ❌ Error getting media status:', error);
