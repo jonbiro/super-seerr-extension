@@ -170,7 +170,14 @@
         return { stored: true };
       });
     },
+    async notifyPopupState() {
+      // Extension pages do not receive tabs.sendMessage. Broadcast only after
+      // settings have loaded; a raw storage event can precede that reload.
+      try { await chrome.runtime.sendMessage?.({ action: 'seerrConfigChanged' }); }
+      catch (_) { /* No popup or Settings page may be open. */ }
+    },
     async notifyContentState(cacheCleared = false, publicRatingsChanged = false) {
+      if (!cacheCleared && !publicRatingsChanged) void this.notifyPopupState();
       if (!chrome.tabs?.query || !chrome.tabs?.sendMessage) return;
       const tabs = await chrome.tabs.query({});
       await Promise.allSettled(tabs.filter(tab => Number.isInteger(tab.id)).map(tab =>

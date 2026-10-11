@@ -842,8 +842,12 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 });
 
 // A revoked host permission must tear the overlay registration back down.
-chrome.permissions?.onRemoved?.addListener(() => { seerrAPI.syncOverlayRegistration(); });
-chrome.permissions?.onAdded?.addListener(() => { seerrAPI.syncOverlayRegistration(); });
+const refreshPermissionState = () => {
+  void seerrAPI.syncOverlayRegistration().then(() => seerrAPI.notifyPopupState())
+    .catch(error => console.error('Could not refresh permission state:', error));
+};
+chrome.permissions?.onRemoved?.addListener(refreshPermissionState);
+chrome.permissions?.onAdded?.addListener(refreshPermissionState);
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   settingsReady.then(() => seerrAPI.connectionChangePending).then(() => seerrAPI.handleMessage(request, sender, sendResponse))

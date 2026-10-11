@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.108]
+
+- Refresh open popup diagnostics after credential reloads and host-permission changes instead of retaining obsolete key, Plex or permission results.
+- Send a credential-free worker notification after settings and registration are ready; keep public-rating and cache-clear notifications separate from connection checks.
+- Retain diagnostic generation guards and add reload-ordering, permission, absent-popup and installed-browser automatic recovery regressions.
+
 ## [3.5.107]
 
 - Validate public settings before reporting Seerr as reachable, rejecting successful HTML/proxy responses and unrelated JSON; distinguish incomplete initial setup from a ready server.

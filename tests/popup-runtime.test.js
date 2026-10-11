@@ -6,10 +6,11 @@ const { JSDOM } = require('jsdom');
 async function popup(data) {
   const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
   const links = [];
-  dom.window.chrome = { runtime: { sendMessage: async () => ({ success: true, data }), getURL: path => `chrome-extension://test/${path}` }, tabs: { create: value => links.push(value) } };
+  const listeners = [];
+  dom.window.chrome = { runtime: { onMessage: { addListener: listener => listeners.push(listener) }, sendMessage: async () => ({ success: true, data }), getURL: path => `chrome-extension://test/${path}` }, tabs: { create: value => links.push(value) } };
   dom.window.eval(fs.readFileSync('src/popup/popup.js', 'utf8') + '\nwindow.PopupManager = PopupManager;');
   await new Promise(resolve => setImmediate(resolve));
-  return { dom, document: dom.window.document, links };
+  return { dom, document: dom.window.document, links, notify: message => listeners.forEach(listener => listener(message)) };
 }
 const row = (state, message, fix) => ({ state, message, fix });
 
@@ -68,4 +69,26 @@ test('popup ignores stale checks and clears obsolete diagnostic details on failu
   assert.equal(document.querySelectorAll('.diagnostic-row').length, 0);
   assert.equal(document.getElementById('errorMessage').textContent, 'Offline');
   dom.window.close();
+});
+
+test('worker configuration signals recheck the popup and ignore obsolete diagnostic replies', async () => {
+  const f = await popup({ serverUrl: 'https://seerr.example', checks: {
+    seerr: row('ok', 'Reachable'), permission: row('ok', 'Granted'), apiKey: row('warning', 'No key'), plex: row('warning', 'Optional')
+  } });
+  try {
+    const pending = [];
+    f.dom.window.chrome.runtime.sendMessage = () => new Promise(resolve => pending.push(resolve));
+    f.notify({ action: 'publicRatingsChanged' });
+    assert.equal(pending.length, 0, 'ratings persistence does not trigger connection checks');
+    f.notify({ action: 'seerrConfigChanged' });
+    f.notify({ action: 'seerrConfigChanged' });
+    assert.equal(pending.length, 2);
+    const checks = state => ({ seerr: row('ok', 'Reachable'), permission: row('ok', 'Granted'),
+      apiKey: row(state, 'Key state'), plex: row('warning', 'Optional') });
+    pending[1]({ success: true, data: { serverUrl: 'https://seerr.example', checks: checks('ok') } });
+    await new Promise(resolve => setImmediate(resolve));
+    pending[0]({ success: true, data: { serverUrl: 'https://seerr.example', checks: checks('warning') } });
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(f.document.querySelector('.status-text').textContent, 'Ready to request');
+  } finally { f.dom.window.close(); }
 });
