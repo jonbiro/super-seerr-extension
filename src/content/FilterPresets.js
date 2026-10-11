@@ -111,24 +111,26 @@
       if (!preset) { status.textContent = 'Enter a name for this preset.'; name.focus(); return; }
       const initiatingControl = document.activeElement === name ? name : save;
       const restoreFocus = document.activeElement === initiatingControl;
+      const current = revision + 1;
       setBusy(true);
       try {
         const next = await request('saveFilterPreset', preset);
-        if (disposed) return;
+        if (disposed || next.revision !== revision) return;
         selection = preset.name; adopt(next); render();
         status.textContent = `Saved ${preset.name}`;
-      } catch (error) { if (!disposed) status.textContent = error.message || 'Could not save preset.'; }
+      } catch (error) { if (!disposed && current === revision) status.textContent = error.message || 'Could not save preset.'; }
       finally { finishAction(initiatingControl, restoreFocus); }
     });
     remove.addEventListener('click', async () => {
       const selected = select.value; if (busy || !selected) return;
       const restoreFocus = document.activeElement === remove;
+      const current = revision + 1;
       setBusy(true);
       try {
         const next = await request('deleteFilterPreset', { name: selected });
-        if (disposed) return;
+        if (disposed || next.revision !== revision) return;
         selection = ''; adopt(next); render(); name.value = ''; status.textContent = `Deleted ${selected}`;
-      } catch (_) { if (!disposed) status.textContent = 'Could not delete preset.'; }
+      } catch (_) { if (!disposed && current === revision) status.textContent = 'Could not delete preset.'; }
       finally { finishAction(remove, restoreFocus); }
     });
     retry.addEventListener('click', async () => {

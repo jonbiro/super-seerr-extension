@@ -96,3 +96,30 @@ test('preset reload recovery follows newer cross-tab reads without losing the dr
   assert.doesNotMatch(f.bar.querySelector('[role="status"]').textContent, /Could not/);
   assert.equal(f.dom.window.document.activeElement, f.bar.querySelector('.seerr-filter-presets select'));
 });
+
+for (const action of ['save', 'delete']) for (const writeSuccess of [true, false]) for (const readSuccess of [true, false]) {
+  test(`obsolete ${action} reply preserves newer cross-tab state (write: ${writeSuccess}, read: ${readSuccess})`, async t => {
+    const f = delayedFixture(); t.after(() => f.dom.window.close());
+    f.finish(0, 'Night'); await tick();
+    const select = f.bar.querySelector('.seerr-filter-presets select');
+    const name = f.bar.querySelector('input');
+    select.value = 'Night'; select.dispatchEvent(new f.dom.window.Event('change'));
+    if (action === 'save') name.value = 'Draft';
+    f.bar.querySelectorAll('button')[action === 'save' ? 0 : 1].click();
+    f.change();
+    if (readSuccess) f.finish(2, 'Latest');
+    else f.pending[2].reject(new Error('Newer read failed'));
+    await tick();
+    const status = f.bar.querySelector('[role="status"]').textContent;
+    const draft = name.value;
+    const options = [...select.options].map(option => option.value);
+    if (writeSuccess) f.pending[1].resolve({ success: true, data: action === 'save'
+      ? [{ name: 'Draft', sort: 'default', filters: {} }] : [] });
+    else f.pending[1].reject(new Error('Obsolete write failed'));
+    await tick();
+    assert.equal(f.bar.querySelector('[role="status"]').textContent, status);
+    assert.equal(name.value, draft);
+    assert.deepEqual([...select.options].map(option => option.value), options);
+    assert.equal(f.bar.querySelector('.seerr-filter-presets').getAttribute('aria-busy'), 'false');
+  });
+}
