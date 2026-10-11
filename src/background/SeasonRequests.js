@@ -29,6 +29,11 @@
       // Always refresh before presenting availability or approving a write.
       const details = await this.sendAPIRequest('GET', `/api/v1/tv/${tmdbId}`);
       assertCurrent();
+      // Availability is evidence for this title only. Never approve a request
+      // using another detail response, even if its season numbers look valid.
+      let detailsId;
+      try { detailsId = root.MediaValidation.tmdbId(details?.id); } catch (_) { /* Invalid identity is unavailable. */ }
+      if (detailsId !== tmdbId) throw new Error('Season information is unavailable for this title. Try again before requesting.');
       if (!Array.isArray(details?.seasons)) throw new Error('Season information is unavailable. Try again before requesting.');
       const unavailable = () => { throw new Error('Season availability is unavailable. Try again before requesting.'); };
       const list = value => value == null ? [] : Array.isArray(value) ? value : unavailable();

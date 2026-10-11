@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.140]
+
+- Verify that freshly fetched season details identify the intended TV title before presenting availability or approving a season request.
+- Reject missing, malformed and contradictory IDs with an actionable retry message; retain support for valid numeric-string IDs.
+- Add regressions proving invalid detail identities cannot authorize writes, plus valid identity and settings-race coverage.
+
 ## [3.5.139]
 
 - Reset and repaint the full overlay when a cache write reveals a missed clear, instead of clearing memory while leaving old scores visible.

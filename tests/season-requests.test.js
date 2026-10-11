@@ -143,3 +143,24 @@ test('cancelling season review or navigating away never sends a request', async 
   integration.cleanupUI(); await pending;
   assert.equal(page.window.document.querySelector('.seerr-season-picker'), null);
 });
+
+for (const id of [undefined, null, 99, [42], ['42'], true, '4.2e1', Number.MAX_SAFE_INTEGER + 1]) {
+  test(`season availability for an invalid or different title ID (${JSON.stringify(id)}) cannot authorize a request`, async () => {
+    const { api, state } = await setup();
+    state.details.id = id;
+    await assert.rejects(api.requestMedia({ ...media, seasons: [6] }), /Season information is unavailable.*title.*Try again/);
+    assert.equal(state.posts.length, 0);
+    await assert.rejects(api.getSeasonOptions(media), /Season information is unavailable.*title.*Try again/);
+  });
+}
+
+test('a numeric string identity in fresh season details validates the intended TV title', async () => {
+  const { api, state } = await setup();
+  state.details.id = '42';
+  const review = await api.getSeasonOptions(media);
+  assert.equal(review.tmdbId, 42);
+  assert.equal(review.seasons.find(season => season.number === 6).requestable, true);
+  await api.requestMedia({ ...media, seasons: [6] });
+  assert.equal(state.posts.length, 1);
+  assert.equal(state.posts[0].mediaId, 42);
+});
