@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.116]
+
+- Save credentials, feature switches and debug logging from one form snapshot, avoiding mixed values when permissions or site persistence are pending.
+- Preserve later edits and explain that they remain unsaved instead of displaying an unconditional save-success message.
+- Add legacy/profile permission-delay regressions and a Chromium interaction check for edits during a pending site write.
+
 ## [3.5.115]
 
 - Let a failed popup saved-site list recover through an inline Retry saved sites button, with focus restored to the selector after recovery.

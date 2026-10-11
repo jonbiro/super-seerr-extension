@@ -226,12 +226,21 @@ class OptionsManager {
     }
   }
 
+  settingsDraft() {
+    return {
+      serverUrl: this.serverUrlInput.value.trim(),
+      apiKey: this.apiKeyInput.value.trim(),
+      plexToken: this.plexTokenInput ? this.plexTokenInput.value.trim() : '',
+      connectionName: document.getElementById('seerrSiteName')?.value.trim(),
+      overlayFeatures: Object.fromEntries(Array.from(document.querySelectorAll('[data-overlay-feature]'), input => [input.dataset.overlayFeature, input.checked])),
+      debugLogging: this.debugLoggingInput?.checked === true
+    };
+  }
+
   async saveSettingsInner(showSuccess = true) {
-    const serverUrl = this.serverUrlInput.value.trim();
-    const apiKey = this.apiKeyInput.value.trim();
-    const plexToken = this.plexTokenInput ? this.plexTokenInput.value.trim() : '';
+    const draft = this.settingsDraft();
+    const { serverUrl, apiKey, plexToken, connectionName, overlayFeatures, debugLogging } = draft;
     const connectionId = this.connectionId;
-    const connectionName = document.getElementById('seerrSiteName')?.value.trim();
 
     // URL is required; API key is optional (ratings-only mode)
     if (!serverUrl) {
@@ -280,14 +289,14 @@ class OptionsManager {
         // Keep the identity confirmed by this save even if another window
         // activates a different site before the following metadata refresh.
         this.connectionId = response.data.activeId;
-        await chrome.storage.sync.set({ overlayFeatures: Object.fromEntries(Array.from(document.querySelectorAll('[data-overlay-feature]'), input => [input.dataset.overlayFeature, input.checked])) });
-        await chrome.storage.local.set({ plexToken, debugLogging: this.debugLoggingInput?.checked === true });
+        await chrome.storage.sync.set({ overlayFeatures });
+        await chrome.storage.local.set({ plexToken, debugLogging });
       } else await Promise.all([
         chrome.storage.sync.set({
           seerrUrl: serverUrl,
-          overlayFeatures: Object.fromEntries(Array.from(document.querySelectorAll('[data-overlay-feature]'), input => [input.dataset.overlayFeature, input.checked]))
+          overlayFeatures
         }),
-        chrome.storage.local.set({ seerrApiKey: apiKey, plexToken, debugLogging: this.debugLoggingInput?.checked === true })
+        chrome.storage.local.set({ seerrApiKey: apiKey, plexToken, debugLogging })
       ]);
 
       if (!this.connectionMode) this.connectionId = new URL(serverUrl).href.replace(/\/+$/, '');
@@ -296,7 +305,9 @@ class OptionsManager {
       // The worker re-registers off this storage change, so no nudge here.
       await this.refreshPermissionWarning();
 
-      if (showSuccess) {
+      if (showSuccess && JSON.stringify(this.settingsDraft()) !== JSON.stringify(draft)) {
+        this.showStatus('info', 'Earlier settings saved. Your newer edits are not saved yet. Click Save Settings to apply them.');
+      } else if (showSuccess) {
         this.showStatus('success', !granted
           ? 'Settings saved. Grant access to your Seerr server to enable the ratings overlay.'
           : plexToken && !plexGranted

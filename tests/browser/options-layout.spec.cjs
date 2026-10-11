@@ -102,3 +102,34 @@ test('a site-list refresh keeps the pending selection aligned with the loaded cr
   await expect(page.locator('#apiKey')).toHaveAttribute('type', 'password');
   await expect(page.locator('#useSeerrSite')).toBeEnabled();
 });
+
+test('edits made during a pending site save remain visibly unsaved', async ({ page }) => {
+  await page.evaluate(() => {
+    window.savedDraftWrites = [];
+    chrome.permissions.request = async () => true;
+    chrome.storage.sync.set = async value => { savedDraftWrites.push(value); };
+    chrome.storage.local.set = async value => { savedDraftWrites.push(value); };
+    chrome.runtime.sendMessage = async message => {
+      if (message.action === 'saveSeerrConnection') return new Promise(resolve => {
+        window.finishDraftSave = () => resolve({ success: true, data: { activeId: message.data.url } });
+      });
+      return { success: true, data: { revision: 1, activeId: 'https://home.example', sites: [{ id: 'https://home.example', name: 'Home', url: 'https://home.example' }] } };
+    };
+  });
+  await page.locator('#serverUrl').fill('https://home.example');
+  await page.locator('#seerrSiteName').fill('Home');
+  const feature = page.locator('[data-overlay-feature]').first();
+  await feature.check();
+  await page.locator('button[type=submit]').click();
+  await page.waitForFunction(() => typeof window.finishDraftSave === 'function');
+  await page.locator('#apiKey').fill('newer-unsaved-key');
+  await feature.uncheck();
+  await page.locator('#debugLogging').check();
+  await page.evaluate(() => finishDraftSave());
+  await expect(page.locator('#status')).toContainText('Your newer edits are not saved yet');
+  await expect(page.locator('#apiKey')).toHaveValue('newer-unsaved-key');
+  await expect(feature).not.toBeChecked();
+  const key = await feature.getAttribute('data-overlay-feature');
+  expect(await page.evaluate(key => savedDraftWrites.find(write => write.overlayFeatures).overlayFeatures[key], key)).toBe(true);
+  expect(await page.evaluate(() => savedDraftWrites.find(write => 'debugLogging' in write).debugLogging)).toBe(false);
+});

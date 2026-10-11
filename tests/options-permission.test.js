@@ -543,3 +543,35 @@ test('an open legacy Settings window saves to profiles after another window adds
   assert.equal(saved?.apiKey, 'edited-home-key');
   assert.ok(ctx.localWrites.every(write => !Object.hasOwn(write, 'seerrApiKey')), 'retired legacy keys must not receive edits');
 });
+
+for (const mode of ['legacy', 'profile']) test(`a pending ${mode} save keeps one form snapshot and identifies newer edits`, async t => {
+  const home = { id: 'https://home.example', url: 'https://home.example', name: 'Home', apiKey: 'home-key' };
+  const ctx = openOptions({ synced: { seerrUrl: home.url }, local: mode === 'profile' ? {
+    seerrConnectionsV1: { revision: 1, activeId: home.id, sites: [home] }
+  } : { seerrApiKey: home.apiKey } });
+  t.after(() => ctx.window.close());
+  const saved = [];
+  ctx.window.chrome.runtime.sendMessage = async ({ action, data }) => {
+    if (action === 'saveSeerrConnection') saved.push(data);
+    return { success: true, data: { revision: mode === 'profile' ? 1 : 0, activeId: home.id, sites: [home] } };
+  };
+  await flush();
+  let release;
+  ctx.window.chrome.permissions.request = () => new Promise(resolve => { release = resolve; });
+  const doc = ctx.window.document, feature = doc.querySelector('[data-overlay-feature]');
+  feature.checked = true; doc.getElementById('debugLogging').checked = false;
+  doc.getElementById('settingsForm').dispatchEvent(new ctx.window.Event('submit'));
+  doc.getElementById('serverUrl').value = 'https://new-draft.example';
+  doc.getElementById('apiKey').value = 'new-draft-key';
+  feature.checked = false; doc.getElementById('debugLogging').checked = true;
+  release(true); await flush();
+  assert.equal(ctx.syncWrites[0].overlayFeatures[feature.dataset.overlayFeature], true);
+  assert.equal(ctx.localWrites[0].debugLogging, false);
+  if (mode === 'profile') { assert.equal(saved[0].url, home.url); assert.equal(saved[0].apiKey, home.apiKey); }
+  else { assert.equal(ctx.syncWrites[0].seerrUrl, home.url); assert.equal(ctx.localWrites[0].seerrApiKey, home.apiKey); }
+  assert.equal(doc.getElementById('serverUrl').value, 'https://new-draft.example');
+  assert.equal(doc.getElementById('apiKey').value, 'new-draft-key');
+  assert.equal(feature.checked, false);
+  assert.equal(doc.getElementById('debugLogging').checked, true);
+  assert.match(doc.getElementById('status').textContent, /newer edits.*not saved/i);
+});
