@@ -12,8 +12,9 @@
     name.setAttribute('aria-label', 'Preset name');
     const save = document.createElement('button'); save.type = 'button'; save.textContent = 'Save preset';
     const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Delete preset'; remove.disabled = true;
+    const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Retry loading presets'; retry.hidden = true;
     const status = document.createElement('span'); status.setAttribute('role', 'status');
-    wrapper.append(select, name, save, remove, status); bar.appendChild(wrapper);
+    wrapper.append(select, name, save, remove, retry, status); bar.appendChild(wrapper);
     const sorts = new Set([...bar.querySelector('.seerr-sort-select').options].map(option => option.value));
     const limits = { minCritics: 100, minAudience: 100, minTmdb: 10, minImdb: 10 };
     let presets = [];
@@ -22,7 +23,7 @@
     function setBusy(value) {
       busy = value;
       wrapper.setAttribute('aria-busy', String(value));
-      select.disabled = value; name.disabled = value; save.disabled = value;
+      select.disabled = value; name.disabled = value; save.disabled = value; retry.disabled = value;
       remove.disabled = value || !select.value;
     }
     function finishAction(control, restoreFocus) {
@@ -32,7 +33,7 @@
       // layout. A deleted preset leaves Delete disabled, so use the selector.
       if (restoreFocus && wrapper.isConnected &&
           (document.activeElement === document.body || document.activeElement === control)) {
-        (control.disabled ? select : control).focus({ preventScroll: true });
+        (control.disabled || control.hidden ? select : control).focus({ preventScroll: true });
       }
     }
     function validate(value) {
@@ -54,7 +55,11 @@
     const load = () => request('getFilterPresets');
     function adopt(result) {
       if (disposed || result.revision < appliedRevision) return;
+      const restoreRetryFocus = document.activeElement === retry;
+      if (!retry.hidden) status.textContent = '';
+      retry.hidden = true;
       appliedRevision = result.revision; presets = result.value; render();
+      if (restoreRetryFocus && wrapper.isConnected) select.focus({ preventScroll: true });
     }
     function render(selected = selection) {
       selection = selected;
@@ -104,11 +109,31 @@
       } catch (_) { if (!disposed) status.textContent = 'Could not delete preset.'; }
       finally { finishAction(remove, restoreFocus); }
     });
+    retry.addEventListener('click', async () => {
+      if (busy) return;
+      const restoreFocus = document.activeElement === retry;
+      const current = revision + 1;
+      setBusy(true); status.textContent = 'Loading presets…';
+      try {
+        const next = await load();
+        if (disposed) return;
+        adopt(next);
+        if (current === revision) status.textContent = 'Presets reloaded.';
+      } catch (_) {
+        if (!disposed && current === revision) {
+          retry.hidden = false;
+          status.textContent = 'Could not load presets. Try again.';
+        }
+      } finally { finishAction(retry, restoreFocus); }
+    });
     function changed(changes, area) {
       if (area !== 'sync' || !changes[KEY]) return;
       const current = revision + 1;
       void load().then(adopt).catch(() => {
-        if (!disposed && current === revision) status.textContent = 'Could not refresh presets. Try again.';
+        if (!disposed && current === revision) {
+          retry.hidden = false;
+          status.textContent = 'Could not refresh presets. Try again.';
+        }
       });
     }
     chrome.storage.onChanged?.addListener(changed);
@@ -122,7 +147,10 @@
     render(); setBusy(true);
     const initialRevision = revision + 1;
     void load().then(adopt)
-      .catch(() => { if (!disposed && initialRevision === revision) status.textContent = 'Could not load presets. Save retries loading before making changes.'; })
+      .catch(() => { if (!disposed && initialRevision === revision) {
+        retry.hidden = false;
+        status.textContent = 'Could not load presets. Try again.';
+      } })
       .finally(() => { if (!disposed) setBusy(false); });
   };
 })(typeof window !== 'undefined' ? window : globalThis);

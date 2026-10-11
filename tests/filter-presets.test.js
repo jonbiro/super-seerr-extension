@@ -79,3 +79,20 @@ test('late refresh errors and responses after cleanup do not alter current contr
   assert.doesNotMatch(f.bar.textContent, /Detached/);
   assert.equal(f.listeners.size, 0);
 });
+
+test('preset reload recovery follows newer cross-tab reads without losing the draft', async t => {
+  const f = delayedFixture(); t.after(() => f.dom.window.close());
+  f.finish(0, 'Initial'); await tick();
+  const name = f.bar.querySelector('input'); name.value = 'Unsaved draft';
+  f.change(); f.pending[1].reject(new Error('Read failed')); await tick();
+  const retry = [...f.bar.querySelectorAll('button')].find(button => button.textContent === 'Retry loading presets');
+  assert.equal(retry.hidden, false);
+  retry.focus(); retry.click(); await tick();
+  f.change(); f.finish(3, 'Latest'); await tick();
+  f.pending[2].reject(new Error('Obsolete retry failure')); await tick();
+  assert.equal(retry.hidden, true);
+  assert.equal(name.value, 'Unsaved draft');
+  assert.match(f.bar.textContent, /Latest/);
+  assert.doesNotMatch(f.bar.querySelector('[role="status"]').textContent, /Could not/);
+  assert.equal(f.dom.window.document.activeElement, f.bar.querySelector('.seerr-filter-presets select'));
+});

@@ -101,3 +101,39 @@ for (const inForm of [false, true]) for (const success of [true, false]) test(`E
   await expect(page.getByLabel('Saved filter presets')).toHaveValue(success ? 'Weekend' : 'Night');
   await expect(name).toBeFocused();
 });
+
+for (const success of [true, false]) for (const moved of [false, true]) test(`preset loading can retry without writing or losing a draft (success: ${success}, moved: ${moved})`, async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.setContent('<button id="outside">Other action</button><div class="seerr-sort-filter-bar"><select class="seerr-sort-select"><option value="default">Default</option></select></div>');
+  await page.addStyleTag({ path: path.resolve('src/content/seerr-overlay.css') });
+  await page.addScriptTag({ path: path.resolve('src/content/FilterPresets.js') });
+  await page.evaluate(() => {
+    window.presetMessages = [];
+    window.chrome = { storage: {}, runtime: { sendMessage: async message => {
+      window.presetMessages.push(message);
+      if (window.presetMessages.length === 1) throw new Error('Storage unavailable');
+      return new Promise(resolve => { window.finishReload = resolve; });
+    } } };
+    window.installFilterPresets({ bar: document.querySelector('.seerr-sort-filter-bar'), readCurrent: () => ({ sort: 'default', filters: {} }), apply: () => {} });
+  });
+  const retry = page.getByRole('button', { name: 'Retry loading presets', exact: true });
+  await expect(retry).toBeVisible();
+  const name = page.getByLabel('Preset name');
+  await name.fill('My unsaved draft');
+  await retry.focus(); await page.keyboard.press('Enter');
+  await expect(retry).toBeDisabled();
+  await expect(name).toBeDisabled();
+  if (moved) await page.locator('#outside').focus();
+  await page.evaluate(success => window.finishReload(success
+    ? { success: true, data: [{ name: 'Night', sort: 'default', filters: {} }] }
+    : { success: false, error: 'Still unavailable' }), success);
+  await expect(name).toBeEnabled();
+  await expect(name).toHaveValue('My unsaved draft');
+  await expect(moved ? page.locator('#outside') : success ? page.getByLabel('Saved filter presets') : retry).toBeFocused();
+  if (success) {
+    await expect(retry).toBeHidden();
+    await expect(page.getByLabel('Saved filter presets').locator('option')).toHaveText(['Saved presets', 'Night']);
+  } else await expect(retry).toBeEnabled();
+  expect(await page.evaluate(() => window.presetMessages.map(message => message.action))).toEqual(['getFilterPresets', 'getFilterPresets']);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});

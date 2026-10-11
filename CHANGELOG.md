@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.185]
+
+- Offer a read-only Retry loading presets action after initial or cross-tab load failures, without requiring users to save a preset to recover existing choices.
+- Preserve typed preset names and focus ownership across reloads, and hide recovery controls when newer data arrives successfully.
+- Cover successful and failed retries, no storage writes, narrow layout, and obsolete retry failures after a newer cross-tab refresh.
+
 ## [3.5.184]
 
 - Save a named filter preset with Enter and prevent the key from submitting an enclosing host-page form.
