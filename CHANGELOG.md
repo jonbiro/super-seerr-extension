@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.227]
+
+- Keep pending Seerr watchlist controls visible when an earlier or concurrent status refresh completes.
+
 ## [3.5.226]
 
 - Stop ratings work waiting for cache initialization when its page is retired by navigation, site changes, or a cache clear.

@@ -311,3 +311,40 @@ for (const focus of ['opener', 'elsewhere', 'removed']) test(`season cancellatio
   assert.equal(f.integration._seasonPickerController, null);
   assert.equal(doc.activeElement, focus === 'opener' ? opener : focus === 'elsewhere' ? other : doc.body);
 });
+
+for (const timing of ['before', 'during']) {
+  for (const outcome of ['success', 'failure']) {
+    test(`Seerr watchlist stays visible while a status read started ${timing} the write (${outcome})`, async t => {
+      const f = fixture(t), status = deferred(), write = deferred();
+      const integration = f.integration;
+      integration.uiTheme = 'flyout';
+      const panel = f.page.window.document.createElement('div');
+      integration.uiElements = integration.ui.createFlyoutContent(integration.mediaData, panel);
+      integration.currentStatusData = { status: 'available', buttonClass: 'request', message: 'Ready' };
+      integration.updateUIFromStatus(integration.currentStatusData);
+      integration.ui.updateTabIcon = () => {};
+      integration.client.sendMessage = async () => ({ success: true, data: { plexConfigured: false } });
+      integration.client.getMediaStatus = () => status.promise;
+      integration.client.addToWatchlist = () => write.promise;
+      let checking;
+      if (timing === 'before') {
+        checking = integration.updateStatus();
+        await new Promise(resolve => setImmediate(resolve));
+      }
+      const sending = integration.handleWatchlistClick();
+      if (timing === 'during') checking = integration.updateStatus();
+      status.resolve({ status: 'error', action: 'retryStatus', message: 'Disconnected' });
+      await checking;
+      assert.equal(integration.uiElements.watchlistButton.style.display, 'flex');
+      assert.equal(integration.uiElements.watchlistButton.disabled, true);
+      assert.equal(integration.currentStatusData.status, 'available');
+      if (outcome === 'success') write.resolve({});
+      else write.reject(new Error('Write failed'));
+      await sending;
+      assert.equal(integration.uiElements.watchlistButton.disabled, false);
+      await integration.updateStatus();
+      assert.equal(integration.currentStatusData.status, 'error', 'status refresh resumes after the write');
+      assert.equal(integration.uiElements.watchlistButton.style.display, 'none');
+    });
+  }
+}

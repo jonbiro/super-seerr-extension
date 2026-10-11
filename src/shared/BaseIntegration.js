@@ -361,7 +361,7 @@ class BaseIntegration {
 
   async updateStatus() {
     // Active writes own their pending UI until they settle.
-    if (this._plexWatchlistAttempt || this._requestAttempt?.mediaRequest) return;
+    if (this._watchlistAttempt || this._plexWatchlistAttempt || this._requestAttempt?.mediaRequest) return;
     const generation = this._statusGeneration = (this._statusGeneration || 0) + 1;
     const media = this.mediaData;
     const elements = this.uiElements;
@@ -735,6 +735,8 @@ class BaseIntegration {
     if (this._watchlistAttempt) return;
     const view = this.captureActionView();
     if (!view.media) return;
+    // Retire status reads that started before this write took ownership of the UI.
+    this._statusGeneration = (this._statusGeneration || 0) + 1;
     const attempt = this._watchlistAttempt = {};
     const button = view.elements.watchlistButton;
     if (button) button.disabled = true;
