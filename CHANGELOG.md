@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.117]
+
+- Restore focus to the initiating control when a TV season picker is cancelled after the loading state disabled the Request button.
+- Restore only when focus was left on the page and the opener remains connected and enabled; preserve focus moved elsewhere.
+- Add no-write and focus-ownership regressions, including full Chromium request flows cancelled with Cancel and Escape.
+
 ## [3.5.116]
 
 - Save credentials, feature switches and debug logging from one form snapshot, avoiding mixed values when permissions or site persistence are pending.

@@ -86,3 +86,33 @@ test('season selection controls stay disabled when every season is unavailable t
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0);
 });
+
+for (const cancel of ['button', 'Escape']) test(`TV request restores its initiating button after season cancellation (${cancel})`, async ({ page }) => {
+  await page.setContent('<button id="opener"><span>Request</span></button>');
+  for (const file of ['UIComponents', 'SeasonPicker', 'BaseIntegration']) {
+    await page.addScriptTag({ path: path.resolve(`src/shared/${file}.js`) });
+  }
+  await page.locator('#opener').focus();
+  await page.evaluate(() => {
+    const integration = Object.create(window.BaseIntegration.prototype);
+    Object.assign(integration, {
+      mediaData: { title: 'Example Series', mediaType: 'tv', tmdbId: 1 },
+      uiElements: { button: document.getElementById('opener') }, ui: new window.UIComponents(),
+      currentStatusData: { status: 'available', buttonClass: 'request', buttonText: 'Request', disabled: false },
+      client: { sendMessage: async () => ({ success: true, data: { title: 'Example Series', seasons: [
+        { number: 1, name: 'Season 1', episodeCount: 10, availability: 'Not requested', requestable: true }
+      ] } }), requestMedia: async () => { window.requestsSent++; } },
+      error() {}, log() {}
+    });
+    window.requestsSent = 0;
+    void integration.handleRequestButtonClick().then(() => { window.requestFlowFinished = true; });
+  });
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await expect(page.locator('#opener')).toBeDisabled();
+  if (cancel === 'button') await page.getByRole('button', { name: 'Cancel', exact: true }).click();
+  else await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('#opener')).toBeEnabled();
+  await expect(page.locator('#opener')).toBeFocused();
+  expect(await page.evaluate(() => requestsSent)).toBe(0);
+});

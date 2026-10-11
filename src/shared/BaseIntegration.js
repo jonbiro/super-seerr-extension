@@ -652,6 +652,7 @@ class BaseIntegration {
    * Handle regular request button click
    */
   async handleRequestButtonClick() {
+    const returnFocus = document.activeElement;
     // Reads begun before this action cannot replace its pending UI.
     this._statusGeneration = (this._statusGeneration || 0) + 1;
     const view = this.captureActionView();
@@ -666,7 +667,13 @@ class BaseIntegration {
         const seasons = await this.ui.chooseSeasons(response.data, { signal: controller.signal });
         if (this._seasonPickerController === controller) this._seasonPickerController = null;
         if (!view.isCurrent()) return;
-        if (!seasons) { this.updateUIFromStatus(this.currentStatusData); return; }
+        if (!seasons) {
+          this.updateUIFromStatus(this.currentStatusData);
+          // Loading disabled the opener before the picker could capture it.
+          // Restore it only when closing the dialog left focus on the page.
+          if (document.activeElement === document.body && returnFocus?.isConnected && !returnFocus.disabled) returnFocus.focus();
+          return;
+        }
         requestMedia = { ...view.media, tmdbId: response.data.tmdbId, seasons, seasonServer: response.data.server };
       }
       this.setUILoading(`Requesting "${this.mediaData.title}"...`, 'Requesting...');

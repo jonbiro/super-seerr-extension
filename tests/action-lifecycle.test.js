@@ -287,3 +287,27 @@ test('a playback error after a view change cannot alter the new title controls',
   assert.equal(f.notices.length, 0);
   assert.equal(f.integration.mediaData.title, 'New');
 });
+
+for (const focus of ['opener', 'elsewhere', 'removed']) test(`season cancellation restores focus safely (${focus})`, async t => {
+  const f = fixture(t), gate = deferred();
+  const doc = f.page.window.document;
+  const opener = doc.createElement('button'), other = doc.createElement('button');
+  doc.body.append(opener, other); opener.focus();
+  f.integration.mediaData = { title: 'Series', mediaType: 'tv', tmdbId: 1 };
+  f.integration.uiElements = { button: opener };
+  f.integration.currentStatusData = { status: 'available' };
+  f.integration.setUILoading = () => { opener.disabled = true; opener.blur(); };
+  f.integration.updateUIFromStatus = () => { opener.disabled = false; };
+  f.integration.client.sendMessage = async () => ({ success: true, data: {} });
+  f.integration.ui.chooseSeasons = () => gate.promise;
+  let writes = 0;
+  f.integration.client.requestMedia = async () => { writes++; };
+  const pending = f.integration.handleRequestButtonClick();
+  await new Promise(resolve => setImmediate(resolve));
+  if (focus === 'elsewhere') other.focus();
+  if (focus === 'removed') opener.remove();
+  gate.resolve(null); await pending;
+  assert.equal(writes, 0);
+  assert.equal(f.integration._seasonPickerController, null);
+  assert.equal(doc.activeElement, focus === 'opener' ? opener : focus === 'elsewhere' ? other : doc.body);
+});
