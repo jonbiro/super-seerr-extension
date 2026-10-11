@@ -39,8 +39,12 @@
                 <fieldset class="connection-options">
                     <legend>Seerr sites</legend>
                     <label for="savedSeerrSites">Saved sites</label>
-                    <select id="savedSeerrSites" aria-describedby="activeSeerrSite"></select>
+                    <select id="savedSeerrSites" aria-describedby="activeSeerrSite seerrSitesError"></select>
                     <p id="activeSeerrSite" role="status"></p>
+                    <div id="seerrSitesError" class="status error hidden" role="status" aria-live="polite">
+                        <span>Could not refresh saved sites. Switching and removal are paused. Your edits are preserved.</span>
+                        <button type="button" id="retrySeerrSites" class="button secondary">Retry saved sites</button>
+                    </div>
                     <div class="connection-controls">
                         <button type="button" id="addSeerrSite" class="button secondary">Add another site</button>
                         <button type="button" id="useSeerrSite" class="button secondary">Use selected site</button>

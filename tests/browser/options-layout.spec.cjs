@@ -11,10 +11,10 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate(() => {
     window.chrome = {
       storage: { sync: { get: async () => ({}) }, local: { get: async () => ({}) } },
-      permissions: { contains: async () => false }, runtime: { sendMessage: async () => ({ success: true }) }
+      permissions: { contains: async () => false }, runtime: { sendMessage: async () => ({ success: true, data: { sites: [], activeId: null } }) }
     };
   });
-  await page.addScriptTag({ path: path.resolve('src/options/options.js') });
+  await page.addScriptTag({ content: fs.readFileSync('src/options/options.js', 'utf8').split('// Initialize when DOM is loaded')[0] + '\nwindow.optionsManager = new OptionsManager();' });
   await expect(page.locator('#ratingsCacheCount')).toHaveText('No ratings cached');
 });
 
@@ -45,4 +45,34 @@ test('settings hints and controls fit a narrow viewport without being clipped', 
     .filter(node => { const r = node.getBoundingClientRect(); return r.width && (r.left < 0 || r.right > innerWidth); })
     .map(node => node.id || node.tagName));
   expect(overflow).toEqual([]);
+});
+
+test('saved-site failures offer a narrow-layout retry without discarding unsaved fields', async ({ page }) => {
+  await page.evaluate(async () => {
+    const data = { revision: 1, activeId: 'home', sites: [
+      { id: 'home', name: 'Home', url: 'https://home.example/' },
+      { id: 'family', name: 'Family', url: 'https://family.example/' }
+    ] };
+    chrome.runtime.sendMessage = async () => ({ success: true, data });
+    window.optionsManager.connectionId = 'family';
+    await window.optionsManager.loadConnectionChoices();
+    chrome.runtime.sendMessage = async () => ({ success: false, error: 'Temporary failure' });
+    await window.optionsManager.loadConnectionChoices();
+    window.siteRecoveryReply = data;
+  });
+  await page.locator('#apiKey').fill('unsaved-family-key');
+  await expect(page.locator('#seerrSitesError')).toBeVisible();
+  await expect(page.locator('#useSeerrSite')).toBeDisabled();
+  await expect(page.locator('#removeSeerrSite')).toBeDisabled();
+  const retry = page.getByRole('button', { name: 'Retry saved sites', exact: true });
+  await expect(retry).toBeEnabled();
+  expect(await page.locator('.connection-options').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.locator('.connection-options').screenshot({ path: '/tmp/super-seerr-site-refresh-recovery.png' });
+  await page.evaluate(() => { chrome.runtime.sendMessage = async () => ({ success: true, data: window.siteRecoveryReply }); });
+  await retry.click();
+  await expect(page.locator('#seerrSitesError')).toBeHidden();
+  await expect(page.locator('#useSeerrSite')).toBeEnabled();
+  await expect(page.locator('#removeSeerrSite')).toBeEnabled();
+  await expect(page.locator('#savedSeerrSites')).toHaveValue('family');
+  await expect(page.locator('#apiKey')).toHaveValue('unsaved-family-key');
 });

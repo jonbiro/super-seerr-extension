@@ -373,3 +373,6 @@ footer a:hover {
 .connection-controls { display: flex; flex-wrap: wrap; gap: 8px; }
 .connection-controls .button { font-size: 13px; }
 .connection-options select:focus-visible { outline: 3px solid #7c3aed; outline-offset: 2px; }
+
+#seerrSitesError { flex-wrap: wrap; gap: 12px; }
+#seerrSitesError span { flex: 1 1 220px; min-width: 0; overflow-wrap: anywhere; }

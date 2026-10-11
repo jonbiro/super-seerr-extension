@@ -47,6 +47,7 @@ class OptionsManager {
     await this.loadConnectionChoices();
     
     // Bind event listeners
+    document.getElementById('retrySeerrSites')?.addEventListener('click', () => this.loadConnectionChoices());
     document.getElementById('addSeerrSite')?.addEventListener('click', () => this.newConnection());
     document.getElementById('savedSeerrSites')?.addEventListener('change', () => this.editConnection());
     document.getElementById('useSeerrSite')?.addEventListener('click', () => this.useConnection());
@@ -310,10 +311,14 @@ class OptionsManager {
 
   async loadConnectionChoices() {
     const generation = this.connectionChoicesGeneration = (this.connectionChoicesGeneration || 0) + 1;
+    const retry = document.getElementById('retrySeerrSites');
+    if (retry) retry.disabled = true;
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getSeerrConnections' });
       if (generation !== this.connectionChoicesGeneration) return;
-      if (!response?.success || !Array.isArray(response.data?.sites)) return;
+      if (!response?.success || !Array.isArray(response.data?.sites)) throw new Error('Saved sites unavailable');
+      this.connectionChoicesUnavailable = false;
+      document.getElementById('seerrSitesError')?.classList.add('hidden');
       this.connectionChoices = response.data;
       // Another window may have migrated the legacy URL/key into profiles.
       // Future saves must update that authoritative record, preserving this draft.
@@ -338,7 +343,12 @@ class OptionsManager {
       document.getElementById('activeSeerrSite').textContent = active ? `Active site: ${active.name} (${active.url})` : 'No site saved yet.';
       this.updateConnectionControls();
     } catch (_) {
-      if (generation === this.connectionChoicesGeneration) this.showStatus('error', 'Could not load saved sites. Reload Settings.');
+      if (generation !== this.connectionChoicesGeneration) return;
+      this.connectionChoicesUnavailable = true;
+      document.getElementById('seerrSitesError')?.classList.remove('hidden');
+      this.updateConnectionControls();
+    } finally {
+      if (generation === this.connectionChoicesGeneration && retry) retry.disabled = false;
     }
   }
 
@@ -350,7 +360,7 @@ class OptionsManager {
     }
     for (const id of ['useSeerrSite', 'removeSeerrSite']) {
       const control = document.getElementById(id);
-      if (control) control.disabled = busy || !selected || selected.id === this.connectionChoices.activeId;
+      if (control) control.disabled = busy || this.connectionChoicesUnavailable === true || !selected || selected.id === this.connectionChoices.activeId;
     }
   }
 
@@ -395,7 +405,7 @@ class OptionsManager {
 
   async useConnection() {
     const selected = this.connectionChoices?.sites.find(site => site.id === this.connectionId);
-    if (!selected || this._connectionBusy) return;
+    if (!selected || this._connectionBusy || this.connectionChoicesUnavailable) return;
     // Request access from this click, before any storage or messaging await.
     const permission = this.requestOverlayPermission(this.originPattern(selected.url));
     this._connectionBusy = true; this.updateConnectionControls();
@@ -410,7 +420,7 @@ class OptionsManager {
   }
 
   async removeConnection() {
-    if (this._connectionBusy) return;
+    if (this._connectionBusy || this.connectionChoicesUnavailable) return;
     this._connectionBusy = true; this.updateConnectionControls();
     try {
       const response = await chrome.runtime.sendMessage({ action: 'removeSeerrConnection', data: { id: this.connectionId } });

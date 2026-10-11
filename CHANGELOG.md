@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.105]
+
+- Show an inline saved-sites error for failed, missing or malformed worker replies instead of silently retaining apparently current controls.
+- Pause switching and removal until the site list refreshes successfully, with an in-place Retry saved sites action that preserves the selected profile and unsaved fields.
+- Keep obsolete replies from overriding newer recovery state; add failure/recovery, ordering and narrow-layout browser regressions.
+
 ## [3.5.104]
 
 - Cap adopted public ratings at their original provider expiry instead of retaining a later server-cache retry deadline.
