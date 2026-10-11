@@ -9,11 +9,12 @@ async function showFilter(page, width) {
     : route.fulfill({ contentType: 'application/json', body: '{}' }));
   await page.goto('https://seerr.example/discover');
   await page.evaluate(() => {
-    window.chrome = { storage: { sync: { get: async () => ({ seerrUrl: 'https://seerr.example' }) }, onChanged: { addListener() {}, removeListener() {} } },
+    window.filterStorageListeners = [];
+    window.chrome = { storage: { sync: { get: async () => ({ seerrUrl: 'https://seerr.example' }) }, onChanged: { addListener(listener) { filterStorageListeners.push(listener); }, removeListener() {} } },
       runtime: { onMessage: { addListener() {} }, sendMessage: async message => {
         if (message.action === 'getConfigState') return { success: true, data: { serverUrl: 'https://seerr.example', apiConfigured: true } };
         if (message.action === 'saveFilterPreset') { window.savedPreset = message.data; return { success: true, data: [message.data] }; }
-        if (message.action === 'getFilterPresets') return { success: true, data: [{ name: 'Movie night', sort: 'default', filters: {} }] };
+        if (message.action === 'getFilterPresets') return { success: true, data: window.presetEntries || [{ name: 'Movie night', sort: 'default', filters: { minCritics: 85 } }] };
         return { success: true, data: {} };
       } } };
   });
@@ -141,4 +142,50 @@ test('keyboard filter actions and toggle work despite host shortcuts', async ({ 
   await expect(page.locator('#seerr-filter-bar')).toBeHidden();
   await page.keyboard.press('Space');
   await expect(page.locator('#seerr-filter-bar')).toBeVisible();
+});
+
+for (const change of ['critics', 'audience', 'tmdb', 'imdb', 'sort', 'reset']) {
+  test(`editing ${change} clears an obsolete applied preset and permits reapplication`, async ({ page }) => {
+    await showFilter(page, 1280);
+    const presets = page.getByLabel('Saved filter presets');
+    await presets.selectOption('Movie night');
+    await expect(page.getByLabel('Critics ≥', { exact: true })).toHaveValue('85');
+    if (change === 'reset') await page.getByRole('button', { name: 'Reset', exact: true }).click();
+    else if (change === 'sort') await page.getByLabel('Sort titles', { exact: true }).selectOption('score-desc');
+    else {
+      await page.locator(`.seerr-min-${change}`).fill(change === 'critics' ? '70' : change === 'audience' ? '95' : '9');
+    }
+    await expect(presets).toHaveValue('');
+    await expect(page.locator('.seerr-filter-presets [role="status"]')).toHaveText('');
+    await expect(page.getByLabel('Preset name')).toHaveValue('Movie night');
+    await expect(page.getByRole('button', { name: 'Delete preset', exact: true })).toBeDisabled();
+    await presets.selectOption('Movie night');
+    await expect(page.getByLabel('Critics ≥', { exact: true })).toHaveValue('85');
+    for (const label of ['Audience ≥', 'TMDB ≥', 'IMDb ≥']) await expect(page.getByLabel(label, { exact: true })).toHaveValue('0');
+    await expect(page.getByLabel('Sort titles', { exact: true })).toHaveValue('default');
+    await expect(page.locator('[data-testid="title-card"]')).toBeHidden();
+    await expect(presets).toHaveValue('Movie night');
+  });
+}
+
+for (const changed of [true, false]) test(`cross-tab preset refresh reconciles the applied definition (changed: ${changed})`, async ({ page }) => {
+  await showFilter(page, 1280);
+  const presets = page.getByLabel('Saved filter presets');
+  await presets.selectOption('Movie night');
+  await page.evaluate(changed => {
+    window.presetEntries = [{ name: 'Movie night', sort: 'default', filters: { minCritics: changed ? 70 : 85 } },
+      { name: 'Other preset', sort: 'default', filters: {} }];
+    filterStorageListeners.forEach(listener => listener({ seerrFilterPresetsV1: {} }, 'sync'));
+  }, changed);
+  await expect(presets.locator('option')).toHaveCount(3);
+  await expect(presets).toHaveValue(changed ? '' : 'Movie night');
+  await expect(page.getByLabel('Critics ≥', { exact: true })).toHaveValue('85');
+  await expect(page.getByLabel('Preset name')).toHaveValue('Movie night');
+  await expect(page.locator('[data-testid="title-card"]')).toBeHidden();
+  if (changed) {
+    await expect(page.locator('.seerr-filter-presets [role="status"]')).toHaveText('');
+    await presets.selectOption('Movie night');
+    await expect(page.getByLabel('Critics ≥', { exact: true })).toHaveValue('70');
+    await expect(page.locator('[data-testid="title-card"]')).toBeVisible();
+  } else await expect(page.getByRole('status')).toHaveText('Applied Movie night');
 });

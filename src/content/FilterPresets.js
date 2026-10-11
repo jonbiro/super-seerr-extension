@@ -70,7 +70,7 @@
       const restoreRetryFocus = document.activeElement === retry;
       if (!retry.hidden) status.textContent = '';
       retry.hidden = true;
-      presets = result.value; render();
+      presets = result.value; render(); currentChanged();
       if (restoreRetryFocus && wrapper.isConnected) select.focus({ preventScroll: true });
     }
     function render(selected = selection) {
@@ -82,6 +82,14 @@
       }
       select.value = presets.some(preset => preset.name === selected) ? selected : '';
       remove.disabled = busy || !select.value;
+    }
+    function currentChanged() {
+      if (disposed || !selection) return;
+      const preset = presets.find(item => item.name === selection);
+      const current = preset && validate({ name: preset.name, ...readCurrent() });
+      if (current && current.sort === preset.sort && JSON.stringify(current.filters) === JSON.stringify(preset.filters)) return;
+      if (status.textContent === `Applied ${selection}`) status.textContent = '';
+      selection = ''; render();
     }
     select.addEventListener('change', () => {
       if (busy) return;
@@ -166,5 +174,6 @@
         status.textContent = 'Could not load presets. Try again.';
       } })
       .finally(() => finishRead(initialRevision));
+    return { currentChanged };
   };
 })(typeof window !== 'undefined' ? window : globalThis);

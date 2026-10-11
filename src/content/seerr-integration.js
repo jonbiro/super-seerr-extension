@@ -2203,11 +2203,12 @@
     const sortSelect = bar.querySelector('.seerr-sort-select');
     sortSelect.addEventListener('change', () => {
       currentSort = sortSelect.value;
+      presetControls?.currentChanged();
       applyScoreSort(grid);
       updateCoverage();
     });
 
-    window.installFilterPresets({
+    const presetControls = window.installFilterPresets({
       bar,
       readCurrent: () => ({ sort: currentSort, filters: { ...currentFilters } }),
       apply: preset => {
@@ -2249,6 +2250,7 @@
       currentFilters.minAudience = 0;
       currentFilters.minTmdb = 0;
       currentFilters.minImdb = 0;
+      presetControls?.currentChanged();
       markActiveFilters(bar);
       updateCoverage();
     });
@@ -2310,6 +2312,7 @@
         currentFilters[key] = bounded;
         if (Number.isFinite(value) && bounded !== value) input.value = String(bounded);
       }
+      presetControls?.currentChanged();
       markActiveFilters(bar);
       applyScoreFilters(grid);
       updateCoverage();

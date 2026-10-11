@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.208]
+
+- Clear an applied preset's selection when manual sorting, thresholds, or Reset diverge from it, allowing that preset to be selected again directly.
+- Keep the preset-name draft available for saving and reconcile applied state when refreshed preset definitions change.
+- Cover all four threshold edits, sorting, resetting, and complete preset reapplication in Chromium.
+
 ## [3.5.207]
 
 - Isolate filter and toggle keyboard events from host-page shortcuts so typing, Tab navigation, and button activation continue working.
