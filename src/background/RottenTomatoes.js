@@ -23,14 +23,16 @@
     },
 
     decodeHtml(text = '') {
-      return String(text)
-        .replace(/&amp;/g, '&')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/&apos;/g, "'")
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code, 10)));
+      const named = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>' };
+      // Decode the source once: an escaped ampersand must not introduce a
+      // second entity to decode. Numeric references can span all of Unicode.
+      return String(text).replace(/&(amp|quot|apos|lt|gt|#(?:[xX][\da-fA-F]+|\d+));/g, (_, reference) => {
+        if (reference[0] !== '#') return named[reference];
+        const hex = /^#x/i.test(reference);
+        const code = parseInt(reference.slice(hex ? 2 : 1), hex ? 16 : 10);
+        return code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff)
+          ? String.fromCodePoint(code) : '\uFFFD';
+      });
     },
 
     parseRtSearchResults(html, mediaType) {

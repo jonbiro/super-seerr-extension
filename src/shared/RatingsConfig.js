@@ -27,7 +27,9 @@ const RatingsConfig = {
   //    Recheck those cached verdicts instead of sharing them across sites.
   // 8: coercible arrays and non-decimal score strings could become verified
   //    percentages. Recheck cached scores produced by that parser.
-  matcherVersion: 8,
+  // 9: chained HTML decoding could turn escaped references into exact title
+  //    matches, while supplementary characters were truncated.
+  matcherVersion: 9,
 
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {

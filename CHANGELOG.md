@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.130]
+
+- Decode decimal and hexadecimal provider character references using full Unicode code points, preserving supplementary characters in matched titles.
+- Decode references once so escaped entity text cannot become a false exact match; replace invalid Unicode scalar values safely.
+- Invalidate older matching verdicts and add verified-sharing and false-match regressions.
+
 ## [3.5.129]
 
 - Reject malformed Rotten Tomatoes percentages such as arrays, hexadecimal and exponent strings before they can become shared scores.
