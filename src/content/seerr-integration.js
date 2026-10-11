@@ -1145,11 +1145,20 @@
       resolveTimer = setTimeout(() => { outcome.conclusive = false; resolve(null); }, Config.resolveTimeoutMs);
     });
 
+    // A worker message cannot be canceled once sent. Stop waiting locally so
+    // navigation releases the queue immediately; late replies have no cache slot.
+    let onAbort = null;
+    const canceled = options.signal ? new Promise(resolve => {
+      onAbort = () => resolve(null);
+      if (options.signal.aborted) onAbort();
+      else options.signal.addEventListener('abort', onAbort, { once: true });
+    }) : null;
+
     // Coalesce the complete operation, including its deadline, fallback and
     // cleanup. Sharing the raw provider promise left later callers unbounded.
     const pending = (async () => {
       try {
-        const bundle = await Promise.race([resolution, deadline]);
+        const bundle = await Promise.race(canceled ? [resolution, deadline, canceled] : [resolution, deadline]);
         if (options.signal?.aborted) return null;
         // Storing the absence is the point: without it every visit asks again.
         let storable = bundle && Model.hasAnyScore(bundle) ? bundle : null;
@@ -1195,6 +1204,7 @@
         throw error;
       } finally {
         if (resolveTimer !== null) clearTimeout(resolveTimer);
+        if (onAbort) options.signal.removeEventListener('abort', onAbort);
         if (ratingsCache.get(pendingKey) === pending) ratingsCache.delete(pendingKey);
       }
     })();

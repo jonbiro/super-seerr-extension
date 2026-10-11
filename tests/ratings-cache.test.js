@@ -73,3 +73,49 @@ test('a title-only heading remains forgettable after its year is inferred for ca
   await overlay.getRatings(null, 'Example (2021)', null, 'movie');
   assert.equal(overlay.forgetRatings([{ tmdbId: null, title: 'Example (2021)', year: null, mediaType: 'movie' }]), 1);
 });
+
+test('aborting a shared lookup settles every caller immediately and late replies cannot overwrite its retry', async () => {
+  const overlay = loadOverlay(), controller = new AbortController();
+  let release;
+  overlay.setResolver(() => new Promise(resolve => { release = resolve; }));
+  const results = [];
+  const first = overlay.getRatings(550, 'Fight Club', 1999, 'movie', { signal: controller.signal }).then(value => results.push(value));
+  const second = overlay.getRatings(550, 'Fight Club', 1999, 'movie').then(value => results.push(value));
+  await settle();
+  controller.abort();
+  await settle();
+  try {
+    assert.equal(results.length, 2, 'abort must not wait for the provider or the 30-second deadline');
+    assert.ok(results.every(value => value === null));
+    assert.equal(overlay.ratingsCache.has('pending:movie:550'), false);
+    overlay.setResolver(async () => overlay.Model.createRatingsBundle({ rtCriticsScore: 80, confidence: 1 }));
+    assert.equal((await overlay.getRatings(550, 'Fight Club', 1999, 'movie')).rtCriticsScore, 80);
+    release(overlay.Model.createRatingsBundle({ rtCriticsScore: 99, confidence: 1 }));
+    await settle();
+    assert.equal(overlay.ratingsCache.get('movie:550').bundle.rtCriticsScore, 80);
+  } finally { release(null); await Promise.all([first, second]); }
+});
+
+test('clearing the card queue releases a running provider wait so the new page can score', async () => {
+  const overlay = loadOverlay();
+  overlay.context.window.innerWidth = 800; overlay.context.window.innerHeight = 600;
+  const queue = overlay.context.window.createRatingQueue(1);
+  const node = { isConnected: true, getBoundingClientRect: () => ({ left: 0, right: 20, top: 0, bottom: 20 }) };
+  const starts = [];
+  let release;
+  overlay.setResolver(id => {
+    starts.push(id);
+    return id === 550 ? new Promise(resolve => { release = resolve; })
+      : Promise.resolve(overlay.Model.createRatingsBundle({ rtCriticsScore: 70, confidence: 1 }));
+  });
+  const old = queue.add(node, signal => overlay.getRatings(550, 'Old page', 1999, 'movie', { signal }));
+  await settle();
+  queue.clear();
+  const current = queue.add(node, signal => overlay.getRatings(551, 'New page', 2020, 'movie', { signal }));
+  await settle();
+  try {
+    assert.deepEqual(starts, [550, 551], 'new page starts without waiting for the abandoned provider');
+    assert.equal((await current).rtCriticsScore, 70);
+    assert.equal(await old, null);
+  } finally { release(null); await Promise.all([old, current]); }
+});

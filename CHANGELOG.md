@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.91]
+
+- Settle canceled content-side ratings lookups immediately instead of waiting for a provider reply or the 30-second resolver deadline.
+- Release abandoned card queue work promptly so a newly navigated page can start scoring; remove abort listeners and deadline timers when the bounded operation finishes.
+- Preserve cache ownership checks so late replies cannot overwrite a fresh lookup after cancellation, and add shared-caller, retry and queue-release regressions.
+
 ## [3.5.90]
 
 - Enrich anchored cards using catalogue metadata keyed by exact media type and TMDB ID, so known years reach rating lookups even when a card already has a link.
