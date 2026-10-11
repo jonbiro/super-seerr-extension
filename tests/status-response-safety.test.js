@@ -98,3 +98,49 @@ for (const [mediaType, media, expected] of [
   assert.equal(status.monitoring.message, expected);
   assert.doesNotMatch(status.monitoring.message, /monitor/i);
 });
+
+for (const progress of [null, {}, [], [50], true, Infinity, NaN, -1, 101, '42junk', '']) {
+  test(`invalid progress ${JSON.stringify(progress)} leaves processing status readable`, () => {
+    const { api } = loadWorker();
+    const status = api.formatMediaStatus({ mediaInfo: { status: 3 }, progress }, 'movie');
+    assert.equal(status.status, 'downloading');
+    assert.equal(status.message, 'Processing download');
+    assert.equal(status.buttonText, 'Processing...');
+    assert.equal(status.progress, undefined);
+  });
+}
+
+for (const [progress, expected] of [[0, 0], [100, 100], [42.5, 42.5], ['42.5', 42.5], [' 42.5% ', 42.5]]) {
+  test(`valid progress ${JSON.stringify(progress)} renders one percentage suffix`, () => {
+    const { api } = loadWorker();
+    const status = api.formatMediaStatus({ mediaInfo: { status: 3 }, progress }, 'movie');
+    assert.equal(status.progress, expected);
+    assert.equal(status.buttonText, `Downloading ${expected}%`);
+  });
+}
+
+test('invalid progress aliases cannot erase a valid percentage', () => {
+  const { api } = loadWorker();
+  const status = api.formatMediaStatus({ mediaInfo: { status: 3 }, progress: 42, percent: null }, 'movie');
+  assert.equal(status.buttonText, 'Downloading 42%');
+});
+
+for (const container of ['mediaInfo', 'media']) test(`processing progress is read from the ${container} record`, () => {
+  const { api } = loadWorker();
+  const status = api.formatMediaStatus({ [container]: { status: 3, percentage: '42%' } }, 'movie');
+  assert.equal(status.buttonText, 'Downloading 42%');
+});
+
+for (const status of ['5', undefined, null, {}, [3], '3junk', 0, 1, 8]) test(`season status ${JSON.stringify(status)} cannot imply incomplete availability`, () => {
+  const { api } = loadWorker();
+  const result = api.formatMediaStatus({ mediaInfo: { status: 5, seasons: [{ status }] } }, 'tv');
+  assert.equal(result.monitoring, undefined);
+});
+
+test('season availability counts corroborated numeric and string enum records', () => {
+  const { api } = loadWorker();
+  const result = api.formatMediaStatus({ mediaInfo: { status: 3, seasons: [
+    { status: 5 }, { status: '5' }, {}, { status: 3 }, { status: '4' }
+  ] } }, 'tv');
+  assert.equal(result.monitoring.message, '2 seasons not fully available');
+});

@@ -133,3 +133,26 @@ for (const [name, details, primary, context] of [
   expect(await page.locator('.seerr-panel').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
   if (name === 'declined') await page.locator('.seerr-panel').screenshot({ path: '/tmp/super-seerr-3.5.159-status-context.png' });
 });
+
+test('processing status stays readable across malformed and nested progress updates', async ({ page }) => {
+  const { loadWorker } = require('../helpers/worker');
+  const { api } = loadWorker();
+  await page.evaluate(() => {
+    window.progressUI = new UIComponents(); progressUI.injectStyles();
+    const { flyout, panel } = progressUI.createFlyout();
+    window.progressElements = progressUI.createFlyoutContent({ title: 'Example movie', mediaType: 'movie' }, panel);
+    document.body.append(flyout); flyout.setExpanded(true);
+  });
+  for (const [details, label] of [
+    [{ mediaInfo: { status: 3 }, progress: {} }, 'Processing...'],
+    [{ mediaInfo: { status: 3, percentage: '42%' } }, 'Downloading 42%'],
+    [{ mediaInfo: { status: 3, percentage: 101 } }, 'Processing...']
+  ]) {
+    const status = api.formatMediaStatus(details, 'movie');
+    await page.evaluate(status => progressUI.updateFlyoutStatus(progressElements, status), status);
+    await expect(page.locator('.seerr-action-button span')).toHaveText(label);
+    await expect(page.locator('.seerr-status-text')).not.toContainText('[object Object]');
+    await expect(page.locator('.seerr-status-text')).not.toContainText('%%');
+    expect(await page.locator('.seerr-panel').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  }
+});

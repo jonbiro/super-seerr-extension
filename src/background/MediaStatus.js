@@ -292,8 +292,23 @@
     extractDownloadProgress(mediaDetails) {
       const found = {};
       if (!mediaDetails) return found;
+      // These fields are optional provider hints, not trusted percentages.
+      // Keep the first valid value so a null alias cannot erase useful data.
+      progress: for (const source of [mediaDetails, mediaDetails.mediaInfo, mediaDetails.media]) {
+        if (!source || typeof source !== 'object' || Array.isArray(source)) continue;
+        for (const field of ['progress', 'percentage', 'downloadProgress', 'completion', 'percent']) {
+          let value = source[field];
+          if (typeof value === 'string') {
+            const text = value.trim().replace(/%$/, '').trim();
+            if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(text)) continue;
+            value = Number(text);
+          }
+          if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 100) continue;
+          found.progress = value;
+          break progress;
+        }
+      }
       const groups = {
-        progress: ['progress', 'percentage', 'downloadProgress', 'completion', 'percent'],
         downloadSpeed: ['speed', 'downloadSpeed', 'rate', 'transferRate'],
         eta: ['eta', 'timeRemaining', 'estimatedCompletion', 'remainingTime'],
         downloadClient: ['downloadClient', 'downloader', 'client']
@@ -319,7 +334,13 @@
         }
 
         if (media.seasons && Array.isArray(media.seasons)) {
-          const incompleteSeasons = media.seasons.filter(season => season && typeof season === 'object' && !Array.isArray(season) && season.status !== 5);
+          const incompleteSeasons = media.seasons.filter(season => {
+            if (!season || typeof season !== 'object' || Array.isArray(season)) return false;
+            const status = typeof season.status === 'number' ||
+              (typeof season.status === 'string' && /^\d+$/.test(season.status)) ? Number(season.status) : NaN;
+            // Unknown/malformed availability is not proof of an incomplete season.
+            return [2, 3, 4, 6, 7].includes(status);
+          });
           if (incompleteSeasons.length > 0) {
             return { type: 'future_seasons', message: `${incompleteSeasons.length} season${incompleteSeasons.length === 1 ? '' : 's'} not fully available`, indicator: 'ℹ️' };
           }

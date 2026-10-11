@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.160]
+
+- Validate download progress before rendering it, accepting bounded numeric percentages and avoiding object text, duplicate percent suffixes and impossible values.
+- Read valid progress from nested media records and prevent invalid aliases from erasing an existing percentage.
+- Normalize season availability enums and exclude unknown/malformed records from incomplete-season hints; add worker and browser regressions.
+
 ## [3.5.159]
 
 - Preserve the primary flyout status when supplementary title information is present, so declined, failed and processing messages remain visible.
