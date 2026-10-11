@@ -53,8 +53,8 @@ const SITES = [
   {
     site: 'metacritic',
     url: 'https://www.metacritic.com/movie/fight-club',
-    html: '<h1 data-testid="product-title">Fight Club</h1>',
-    expect: { title: 'Fight Club', mediaType: 'movie' }
+    html: '<h1 data-testid="product-title">Fight Club</h1><div class="c-product-details__section"><span class="c-product-details__section__label">Release Date:</span><span class="c-product-details__section__value">Oct 15, 1999</span></div>',
+    expect: { title: 'Fight Club', mediaType: 'movie', year: 1999 }
   },
   {
     site: 'trakt',

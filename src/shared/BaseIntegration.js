@@ -34,7 +34,7 @@ class BaseIntegration {
     // State
     this.mediaData = null;
     this.uiElements = {};
-    this.currentUrl = window.location.href;
+    this.currentUrl = this.getNavigationKey();
     this.navigationListener = null;
     this.currentStatusData = null; // Cache current status data for performance
     this.plexConfigured = false;
@@ -158,6 +158,14 @@ class BaseIntegration {
     }
   }
 
+  /**
+   * Identify a page for navigation handling. Sites may override this when
+   * query or hash changes only select view state for the same media title.
+   */
+  getNavigationKey() {
+    return window.location.href;
+  }
+
   resumeNavigationPolling() {
     if (this.navigationListener) return;
     this.navigationListener = setInterval(() => this.pollForNavigation(), 1000);
@@ -165,7 +173,7 @@ class BaseIntegration {
 
   pollForNavigation() {
     if (this.destroyed) return;
-    const newUrl = window.location.href;
+    const newUrl = this.getNavigationKey();
     if (newUrl !== this.currentUrl) {
       this.log('Navigation detected via polling:', this.currentUrl, '->', newUrl);
       this.currentUrl = newUrl;
@@ -179,8 +187,8 @@ class BaseIntegration {
    */
   async extractAndSetup() {
     const generation = this._extractionGeneration = (this._extractionGeneration || 0) + 1;
-    const pageUrl = window.location.href;
-    const isCurrent = () => !this.destroyed && generation === this._extractionGeneration && window.location.href === pageUrl;
+    const pageUrl = this.getNavigationKey();
+    const isCurrent = () => !this.destroyed && generation === this._extractionGeneration && this.getNavigationKey() === pageUrl;
     try {
       this.log('Starting media data extraction...');
       let mediaData = await this.extractMediaData();
@@ -211,6 +219,13 @@ class BaseIntegration {
         const sameIdentity = this.mediaData && this._mediaConnectionToken === connectionToken
           && ['title', 'mediaType', 'tmdbId', 'imdbId', 'year'].every(key => this.mediaData[key] === mediaData[key]);
         if (this.isFlyoutExpanded() && sameIdentity) return;
+        if (sameIdentity && this.hasFlyout()) {
+          // A retry for the same title should refresh its status in place.
+          // Rebuilding a collapsed flyout made it blink and could discard an
+          // expansion that happened while the extraction was finishing.
+          await this.updateStatus();
+          return;
+        }
         if (this.isFlyoutExpanded()) this.cleanupUI();
         if (!sameIdentity) this.plexOnWatchlist = false;
         this.mediaData = mediaData;
@@ -477,9 +492,9 @@ class BaseIntegration {
   captureActionView() {
     const media = this.mediaData;
     const elements = this.uiElements;
-    const url = window.location.href;
+    const url = this.getNavigationKey();
     return { media, elements, isCurrent: () => !this.destroyed && this.mediaData === media
-      && this.uiElements === elements && window.location.href === url };
+      && this.uiElements === elements && this.getNavigationKey() === url };
   }
 
   deferViewAction(view, callback, delay) {
@@ -914,7 +929,7 @@ class BaseIntegration {
     this.log('Setting up SPA navigation detection');
 
     const handleNavigation = () => {
-      const newUrl = window.location.href;
+      const newUrl = this.getNavigationKey();
       if (newUrl !== this.currentUrl) {
         this.log('SPA navigation detected:', this.currentUrl, '->', newUrl);
         this.currentUrl = newUrl;
@@ -968,11 +983,11 @@ class BaseIntegration {
     // Navigation always retires the old title, even if its panel is open.
     this.cleanupUI();
     const generation = this._extractionGeneration;
-    const pageUrl = window.location.href;
+    const pageUrl = this.getNavigationKey();
 
     // Wait a bit for the new page content to load
     await new Promise(resolve => setTimeout(resolve, 500));
-    if (this.destroyed || generation !== this._extractionGeneration || window.location.href !== pageUrl) return;
+    if (this.destroyed || generation !== this._extractionGeneration || this.getNavigationKey() !== pageUrl) return;
 
     // Re-extract and setup for the new page
     await this.extractAndSetup();

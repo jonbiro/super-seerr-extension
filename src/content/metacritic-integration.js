@@ -79,6 +79,7 @@ class MetacriticIntegration extends BaseIntegration {
     const yearSelectors = [
       '.product_data .release_date span', // Release date in product data
       '.c-productDetails_section .release-date', // Modern release date
+      '.c-product-details__section__value', // Current release-date detail value
       '.summary_detail .release_date span', // Summary release date
       '.product_details .release_date', // Product details
       '[data-testid="release-date"]', // Test ID for release date

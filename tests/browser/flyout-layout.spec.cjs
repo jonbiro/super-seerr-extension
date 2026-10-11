@@ -42,6 +42,36 @@ test('flyout and notifications fit a small window with long titles', async ({ pa
   expect(await note.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
 });
 
+test('a replacement TV flyout stays on-screen after closing a movie flyout', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 600 });
+  await page.evaluate(() => {
+    const ui = new UIComponents({ siteName: 'Trakt' }); ui.injectStyles();
+    const { flyout, panel } = ui.createFlyout();
+    ui.createFlyoutContent({ title: 'Fight Club', year: 1999, mediaType: 'movie' }, panel);
+    document.body.appendChild(flyout);
+  });
+  await page.getByRole('button', { name: 'Open Super Seerr' }).click();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name: 'Open Super Seerr' })).toHaveAttribute('aria-expanded', 'false');
+
+  // Trakt uses same-tab route changes. Recreate the flyout just as its
+  // integration does after navigation from a movie to a TV detail page.
+  await page.evaluate(() => {
+    document.querySelector('#seerr-flyout-trakt')?.remove();
+    const ui = new UIComponents({ siteName: 'Trakt' }); ui.injectStyles();
+    const { flyout, panel } = ui.createFlyout();
+    ui.createFlyoutContent({ title: 'Breaking Bad', mediaType: 'tv' }, panel);
+    document.body.appendChild(flyout);
+  });
+  await page.getByRole('button', { name: 'Open Super Seerr' }).click();
+  await expect(page.locator('.seerr-title')).toHaveText('Breaking Bad');
+  const bounds = await page.locator('.seerr-panel').boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.y).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(390);
+  expect(bounds.y + bounds.height).toBeLessThanOrEqual(600);
+});
+
 test('injected request buttons never submit a host page form', async ({ page }) => {
   await page.evaluate(() => {
     window.submitted = 0;

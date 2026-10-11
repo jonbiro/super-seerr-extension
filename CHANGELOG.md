@@ -6,6 +6,23 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.223]
+
+- Align narrow-screen filter actions in one two-column grid, with a full-width final action when title selection is unavailable.
+
+## [3.5.222]
+
+- Refresh same-title flyout status in place so routine retries do not flash or replace the title panel.
+
+## [3.5.221]
+
+- Keep Trakt's title flyout and pending actions intact when changing only the selected TV season.
+
+## [3.5.220]
+
+- Align the sort and rating headings in the filter so wide layouts no longer leave an unexplained gap above sorting.
+- Read Metacritic's current labeled release-date value so known release years remain available for title matching.
+
 ## [3.5.218]
 
 - Keep the score explanation beside its rating filters and make the narrow-screen action row use its full width cleanly.

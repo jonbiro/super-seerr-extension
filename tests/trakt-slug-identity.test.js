@@ -54,3 +54,28 @@ test('Trakt visible titles retain literal year-like suffixes without inventing a
   assert.equal(media.title, 'Space: 1999');
   assert.equal(media.year, null);
 });
+
+test('Trakt season query changes preserve the current show flyout and actions', async t => {
+  const f = loadIntegration({ site: 'trakt', url: 'https://app.trakt.tv/shows/breaking-bad' });
+  t.after(() => f.window.close());
+  const integration = f.integration();
+  integration.mediaData = { title: 'Breaking Bad', mediaType: 'tv' };
+  let navigations = 0;
+  integration.handleNavigationChange = () => { navigations++; };
+  integration.currentUrl = integration.getNavigationKey();
+  const action = integration.captureActionView();
+
+  f.window.history.pushState({}, '', '/shows/breaking-bad?season=1');
+  integration.pollForNavigation();
+  f.window.history.pushState({}, '', '/shows/breaking-bad/?season=2');
+  integration.pollForNavigation();
+
+  assert.equal(integration.getNavigationKey(), 'https://app.trakt.tv/shows/breaking-bad');
+  assert.equal(navigations, 0, 'season selection is not a different media page');
+  assert.equal(action.isCurrent(), true, 'season selection does not stale an action for this show');
+
+  f.window.history.pushState({}, '', '/shows/better-call-saul');
+  integration.pollForNavigation();
+  assert.equal(navigations, 1, 'a different show path still retires the old panel');
+  assert.equal(action.isCurrent(), false);
+});

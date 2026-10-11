@@ -107,6 +107,20 @@ test('an unchanged extraction preserves an expanded panel and its connection', a
   assert.equal(p.integration.client.connectionToken, 'Home');
 });
 
+test('an unchanged extraction refreshes a collapsed flyout without replacing it', async t => {
+  const p = probe(t);
+  await p.integration.extractAndSetup();
+  const flyout = p.integration.uiElements.flyout;
+  const statusReads = p.messages.filter(message => message.action === 'getMediaStatus').length;
+
+  await p.integration.extractAndSetup();
+
+  assert.equal(p.integration.uiElements.flyout, flyout);
+  assert.equal(flyout.isConnected, true);
+  assert.equal(flyout.classList.contains('expanded'), false);
+  assert.equal(p.messages.filter(message => message.action === 'getMediaStatus').length, statusReads + 1);
+});
+
 test('configuration failure keeps the old token scoped and Retry status recovers the new site identity', async t => {
   const p = probe(t);
   p.integration.error = () => {};

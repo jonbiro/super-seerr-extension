@@ -6,6 +6,87 @@ const { SITES } = require('./site-fixtures.cjs');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 
+async function verifySmallViewportFlyout(page, result) {
+  await page.setViewportSize({ width: 390, height: 600 });
+  // A host consent layer can intercept the pointer. Keep the check read-only
+  // and classify that block promptly instead of waiting for Playwright's
+  // much longer default click timeout.
+  await page.locator('.seerr-tab').click({ timeout: 3000 });
+  await expect(page.locator('.seerr-tab')).toHaveAttribute('aria-expanded', 'true');
+  const panel = page.locator('.seerr-panel');
+  await expect.poll(async () => {
+    if (await page.locator('.seerr-tab').getAttribute('aria-expanded') !== 'true') return false;
+    const bounds = await panel.boundingBox();
+    result.panelBounds = bounds;
+    return !!bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 391 && bounds.y + bounds.height <= 601;
+  }, { timeout: 3000, message: 'Flyout extends outside the viewport after opening' }).toBe(true);
+  result.layout = '390x600';
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.seerr-tab')).toHaveAttribute('aria-expanded', 'false');
+}
+
+async function waitForStableFlyout(page, expectedTitle, result) {
+  const deadline = Date.now() + 12000;
+  let replacedPanels = 0;
+  let previousPanelId = null;
+  const urls = new Set([page.url()]);
+  await page.evaluate(() => {
+    window.__seerrFlyoutEvents = [];
+    window.__seerrFlyoutIds = new WeakMap();
+    window.__seerrNextFlyoutId = 0;
+    const findFlyouts = root => {
+      if (root.nodeType !== Node.ELEMENT_NODE) return [];
+      return [...(root.matches('.seerr-flyout') ? [root] : []), ...root.querySelectorAll('.seerr-flyout')];
+    };
+    window.__seerrFlyoutObserver = new MutationObserver(records => {
+      for (const record of records) {
+        for (const [action, nodes] of [['removed', record.removedNodes], ['added', record.addedNodes]]) {
+          for (const root of nodes) for (const flyout of findFlyouts(root)) {
+            window.__seerrFlyoutEvents.push({ action, url: location.href,
+              title: flyout.querySelector('.seerr-title')?.textContent || null,
+              className: flyout.className });
+          }
+        }
+      }
+    });
+    window.__seerrFlyoutObserver.observe(document, { childList: true, subtree: true });
+  });
+  while (Date.now() < deadline) {
+    const candidate = await page.locator('.seerr-flyout').elementHandle().catch(() => null);
+    if (!candidate) { await page.waitForTimeout(100); continue; }
+    const candidateId = await candidate.evaluate(node => {
+      let id = window.__seerrFlyoutIds.get(node);
+      if (!id) { id = ++window.__seerrNextFlyoutId; window.__seerrFlyoutIds.set(node, id); }
+      return id;
+    }).catch(() => null);
+    if (previousPanelId !== null && candidateId !== null && candidateId !== previousPanelId) replacedPanels++;
+    if (candidateId !== null) previousPanelId = candidateId;
+    // BaseIntegration retries dynamic title extraction after two seconds.
+    // Wait past that window and ensure the same panel still owns this title.
+    const settleUntil = Date.now() + 2200;
+    while (Date.now() < settleUntil) { urls.add(page.url()); await page.waitForTimeout(100); }
+    const state = await candidate.evaluate(node => ({ connected: node.isConnected,
+      title: node.querySelector('.seerr-title')?.textContent?.trim() || null })).catch(() => null);
+    if (state?.connected && state.title === expectedTitle) {
+      result.urlsWhileSettling = [...urls];
+      result.flyoutReplacementsWhileSettling = await page.evaluate(() => {
+        window.__seerrFlyoutObserver?.disconnect();
+        return window.__seerrFlyoutEvents || [];
+      });
+      result.replacedPanelsWhileSettling = replacedPanels;
+      return;
+    }
+    replacedPanels++;
+  }
+  result.urlsWhileSettling = [...urls];
+  result.flyoutReplacementsWhileSettling = await page.evaluate(() => {
+    window.__seerrFlyoutObserver?.disconnect();
+    return window.__seerrFlyoutEvents || [];
+  });
+  result.replacedPanelsWhileSettling = replacedPanels;
+  throw new Error(`Flyout for ${expectedTitle} did not stabilize after ${replacedPanels} panel replacements`);
+}
+
 (async () => {
   const build = await createExtension('chrome');
   let context;
@@ -46,21 +127,13 @@ const path = require('node:path');
           await expect(page.locator('.seerr-flyout')).toHaveCount(1);
           await expect(page.locator('.seerr-year')).toContainText(site.expect.mediaType === 'tv' ? 'TV Series' : 'Movie');
           if (site.expect.year) await expect(page.locator('.seerr-year')).toContainText(String(site.expect.year));
-          // A short viewport catches layout changes without issuing any action.
-          await page.setViewportSize({ width: 390, height: 600 });
-          // A host consent layer can intercept the pointer. Keep the check
-          // read-only and classify that block promptly instead of waiting for
-          // Playwright's much longer default click timeout.
-          await page.locator('.seerr-tab').click({ timeout: 3000 });
-          await expect(page.locator('.seerr-tab')).toHaveAttribute('aria-expanded', 'true');
-          const panel = page.locator('.seerr-panel');
-          await expect.poll(async () => {
-            const bounds = await panel.boundingBox();
-            result.panelBounds = bounds;
-            return !!bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 391 && bounds.y + bounds.height <= 601;
-          }, { timeout: 3000, message: 'Flyout extends outside the viewport after opening' }).toBe(true);
-          result.layout = '390x600';
-          await page.keyboard.press('Escape');
+          result.extractedTitle = await page.locator('.seerr-title').textContent();
+          result.extractedYear = await page.locator('.seerr-year').textContent();
+          if (site.site === 'trakt') {
+            await waitForStableFlyout(page, result.expectedTitle, result);
+            await expect(page.locator('.seerr-title')).toHaveText(result.expectedTitle);
+          }
+          await verifySmallViewportFlyout(page, result);
           result.outcome = 'pass';
         }
       } catch (error) {
@@ -74,8 +147,53 @@ const path = require('node:path');
       if (result.outcome === 'failed' && /^(just a moment|access denied|attention required|verify you are human)/i.test(result.pageTitle || '')) {
         result.outcome = 'blocked'; result.reason = 'Access challenge';
       }
-      result.extractedTitle = await page.locator('.seerr-title').textContent({ timeout: 500 }).catch(() => null);
-      result.extractedYear = await page.locator('.seerr-year').textContent({ timeout: 500 }).catch(() => null);
+      result.extractedTitle ??= await page.locator('.seerr-title').textContent({ timeout: 500 }).catch(() => null);
+      result.extractedYear ??= await page.locator('.seerr-year').textContent({ timeout: 500 }).catch(() => null);
+      // Some Trakt redirects leave the expected page and injected panel ready
+      // even though Chromium never observes DOMContentLoaded before timeout.
+      // Retry the actual title and layout assertions before calling that site
+      // unavailable; retain the timeout as a warning in the evidence report.
+      if (result.outcome === 'site-unavailable'
+        && /Timeout .*exceeded/i.test(result.error || '')
+        && result.extractedTitle === result.expectedTitle
+        && await page.locator('.seerr-flyout').count()) {
+        result.navigationWarning = 'Navigation timed out after the expected page title became available.';
+        result.finalUrl = page.url();
+        try {
+          await verifySmallViewportFlyout(page, result);
+          result.outcome = 'pass';
+          delete result.error;
+        } catch (error) {
+          result.outcome = 'failed';
+          result.error = `Page content recovered after navigation timeout, but the flyout check failed: ${error.message.split('\n')[0]}`;
+        }
+      }
+      if (result.outcome === 'failed' && await page.locator('.seerr-flyout').count()) {
+        result.flyoutDebug = await page.evaluate(() => {
+          const describe = element => {
+            if (!element) return null;
+            const bounds = element.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            return {
+              className: element.className,
+              ariaExpanded: element.getAttribute('aria-expanded'),
+              bounds: { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height },
+              transform: style.transform,
+              position: style.position
+            };
+          };
+          const flyout = document.querySelector('.seerr-flyout');
+          const tab = flyout?.querySelector('.seerr-tab');
+          const tabBounds = tab?.getBoundingClientRect();
+          const hit = tabBounds && document.elementFromPoint(tabBounds.x + tabBounds.width / 2, tabBounds.y + tabBounds.height / 2);
+          return {
+            viewport: { width: innerWidth, height: innerHeight },
+            flyout: describe(flyout), panel: describe(flyout?.querySelector('.seerr-panel')),
+            tab: describe(tab), tabHit: hit ? `${hit.tagName.toLowerCase()}${hit.id ? `#${hit.id}` : ''}.${String(hit.className || '').split(/\s+/).join('.')}` : null,
+            flyoutCount: document.querySelectorAll('.seerr-flyout').length
+          };
+        });
+      }
       results.push(result); console.log(JSON.stringify(result));
       // Keep this tab for subsequent TV/localized navigation cases.
     }

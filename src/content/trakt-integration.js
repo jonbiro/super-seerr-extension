@@ -15,6 +15,14 @@ class TraktIntegration extends BaseIntegration {
     this.init();
   }
 
+  // Trakt changes ?season=... while staying on the same show. The media
+  // identity lives in the path, so those view-only changes must not retire an
+  // open Seerr panel or cancel an action for the same show.
+  getNavigationKey() {
+    const path = window.location.pathname.replace(/\/+$/, '') || '/';
+    return `${window.location.origin}${path}`;
+  }
+
   /**
    * Extract media data from Trakt page
    * @returns {Object|null} Media data object or null

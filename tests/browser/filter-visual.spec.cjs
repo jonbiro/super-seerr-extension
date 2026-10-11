@@ -1,23 +1,23 @@
 const { test, expect } = require('@playwright/test');
 const path = require('node:path');
 
-async function showFilter(page, width) {
+async function showFilter(page, width, { apiConfigured = true } = {}) {
   await page.setViewportSize({ width, height: 960 });
   await page.route('https://seerr.example/**', route => route.request().isNavigationRequest()
     ? route.fulfill({ contentType: 'text/html', body: `<style>body{margin:0;background:#0f172a;color:#e2e8f0;font:14px system-ui}main{max-width:1160px;margin:auto;padding:24px}h1{font-size:28px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:16px}article{background:#1e293b;border-radius:12px;min-height:120px;padding:16px}a{color:inherit}</style><main><h1>Discover</h1><div class="grid"><article data-testid="title-card"><a href="/movie/920"><h2>Example</h2></a></article></div></main>
       <script type="application/json">{"props":{"results":[{"id":920,"mediaType":"movie","title":"Example","rtCriticsScore":80,"rtAudienceScore":90,"imdbRating":8,"voteAverage":8}]}}</script>` })
     : route.fulfill({ contentType: 'application/json', body: '{}' }));
   await page.goto('https://seerr.example/discover');
-  await page.evaluate(() => {
+  await page.evaluate(apiConfigured => {
     window.filterStorageListeners = [];
     window.chrome = { storage: { sync: { get: async () => ({ seerrUrl: 'https://seerr.example' }) }, onChanged: { addListener(listener) { filterStorageListeners.push(listener); }, removeListener() {} } },
       runtime: { onMessage: { addListener() {} }, sendMessage: async message => {
-        if (message.action === 'getConfigState') return { success: true, data: { serverUrl: 'https://seerr.example', apiConfigured: true } };
+        if (message.action === 'getConfigState') return { success: true, data: { serverUrl: 'https://seerr.example', apiConfigured } };
         if (message.action === 'saveFilterPreset') { window.savedPreset = message.data; return { success: true, data: [message.data] }; }
         if (message.action === 'getFilterPresets') return { success: true, data: window.presetEntries || [{ name: 'Movie night', sort: 'default', filters: { minCritics: 85 } }] };
         return { success: true, data: {} };
       } } };
-  });
+  }, apiConfigured);
   await page.addStyleTag({ path: path.resolve('src/content/seerr-overlay.css') });
   for (const file of ['shared/RatingsConfig', 'shared/RatingsModel', 'shared/NotificationCenter', 'shared/SeasonPicker',
     'content/OverlayCache', 'content/RatingsPresentation', 'content/SeerrSession', 'content/FilterPresets', 'content/RatingQueue', 'content/seerr-integration']) {
@@ -27,12 +27,25 @@ async function showFilter(page, width) {
   await expect(page.getByLabel('Saved filter presets')).toBeEnabled();
 }
 
+function expectActionGrid({ resetBounds, refreshBounds, loadBounds, actionsBounds }) {
+  const half = (actionsBounds.width - 8) / 2;
+  expect(Math.abs(resetBounds.x - actionsBounds.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(resetBounds.width - half)).toBeLessThanOrEqual(1);
+  expect(Math.abs(refreshBounds.width - half)).toBeLessThanOrEqual(1);
+  expect(Math.abs(resetBounds.y - refreshBounds.y)).toBeLessThanOrEqual(1);
+  expect(Math.abs(refreshBounds.x - resetBounds.x - resetBounds.width - 8)).toBeLessThanOrEqual(1);
+  expect(Math.abs(loadBounds.x - actionsBounds.x)).toBeLessThanOrEqual(1);
+  expect(Math.abs(loadBounds.y - refreshBounds.y - refreshBounds.height - 8)).toBeLessThanOrEqual(1);
+}
+
 for (const width of [1440, 1280, 1024, 768, 600, 390, 320]) test(`filter layout and controls remain usable at ${width}px`, async ({ page }) => {
   await showFilter(page, width);
   if (process.env.FILTER_PREVIEW) await page.locator('#seerr-filter-bar').screenshot({ path: `/tmp/super-seerr-filter-${process.env.FILTER_PREVIEW}-${width}.png` });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const critics = page.getByLabel('Critics ≥', { exact: true });
   const sortBounds = await page.getByLabel('Sort titles', { exact: true }).boundingBox();
+  const sortLabelBounds = await page.locator('label[for="seerr-sort-order"]').boundingBox();
+  const criticsLabelBounds = await page.locator('label[for="seerr-min-critics"]').boundingBox();
   const presetBounds = await page.getByLabel('Saved filter presets').boundingBox();
   const nameBounds = await page.getByLabel('Preset name').boundingBox();
   const saveBounds = await page.getByRole('button', { name: 'Save preset', exact: true }).boundingBox();
@@ -52,24 +65,29 @@ for (const width of [1440, 1280, 1024, 768, 600, 390, 320]) test(`filter layout 
     expect(Math.abs(resetBounds.x - panelBounds.x - 17)).toBeLessThanOrEqual(1);
     expect(Math.abs(refreshBounds.x - resetBounds.x - resetBounds.width - 8)).toBeLessThanOrEqual(1);
   } else {
-    // The optional third action spans the row instead of appearing as a half-width orphan.
+    // A two-column action grid: Reset | Refresh, then Load | Select, with
+    // equal-width cells that share the panel's content edges.
     const loadBounds = await page.getByRole('button', { name: /Load 500 more/ }).boundingBox();
     const selectBounds = await page.getByRole('button', { name: 'Select titles', exact: true }).boundingBox();
-    expect(Math.abs(loadBounds.x - refreshBounds.x - refreshBounds.width - 8)).toBeLessThanOrEqual(1);
-    const secondaryBounds = await page.locator('.seerr-filter-secondary-actions').boundingBox();
-    expect(Math.abs(selectBounds.x - secondaryBounds.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(selectBounds.width - secondaryBounds.width)).toBeLessThanOrEqual(1);
-    expect(selectBounds.y).toBeGreaterThan(loadBounds.y);
+    const actionsBounds = await page.locator('.seerr-filter-actions').boundingBox();
+    expectActionGrid({ resetBounds, refreshBounds, loadBounds, actionsBounds });
+    expect(Math.abs(selectBounds.y - loadBounds.y)).toBeLessThanOrEqual(1);
+    expect(Math.abs(selectBounds.x - loadBounds.x - loadBounds.width - 8)).toBeLessThanOrEqual(1);
+    expect(Math.abs(selectBounds.x + selectBounds.width - actionsBounds.x - actionsBounds.width)).toBeLessThanOrEqual(1);
   }
   if (width >= 600 && width <= 768) {
     expect(Math.abs(presetBounds.y - nameBounds.y)).toBeLessThanOrEqual(1);
     expect(Math.abs(presetBounds.width - nameBounds.width)).toBeLessThanOrEqual(1);
   }
   if (width >= 1024) {
+    // Both control groups start on the same visual line; avoid the old blank
+    // spacer above Sort titles, which made the wide layout feel lopsided.
+    expect(Math.abs(sortLabelBounds.y - ratingHeadingBounds.y)).toBeLessThanOrEqual(1);
     const headingBounds = await page.locator('.seerr-presets-label').boundingBox();
     expect(presetBounds.x - headingBounds.x - headingBounds.width).toBeLessThanOrEqual(12);
-    const scoreBounds = await critics.boundingBox();
-    expect(Math.abs(sortBounds.y + sortBounds.height - scoreBounds.y - scoreBounds.height)).toBeLessThanOrEqual(1);
+    // The sort label starts alongside the ratings-group heading, and its
+    // selector begins alongside the individual rating labels.
+    expect(Math.abs(sortBounds.y - criticsLabelBounds.y)).toBeLessThanOrEqual(4);
     expect((await page.getByLabel('Saved filter presets').boundingBox()).width).toBeLessThanOrEqual(280);
   }
   if (width <= 390) {
@@ -99,6 +117,18 @@ for (const width of [1440, 1280, 1024, 768, 600, 390, 320]) test(`filter layout 
       return bounds.left >= panel.left && bounds.right <= panel.right;
     });
   })).toBe(true);
+});
+
+for (const width of [600, 390, 320]) test(`narrow filter actions stay paired without Select titles at ${width}px`, async ({ page }) => {
+  await showFilter(page, width, { apiConfigured: false });
+  await expect(page.getByRole('button', { name: 'Select titles', exact: true })).toHaveCount(0);
+  const resetBounds = await page.getByRole('button', { name: 'Reset', exact: true }).boundingBox();
+  const refreshBounds = await page.getByRole('button', { name: 'Refresh scores' }).boundingBox();
+  const loadBounds = await page.getByRole('button', { name: /Load 500 more/ }).boundingBox();
+  const actionsBounds = await page.locator('.seerr-filter-actions').boundingBox();
+  expectActionGrid({ resetBounds, refreshBounds, loadBounds, actionsBounds });
+  // Load spans the final row rather than sitting as a half-width orphan.
+  expect(Math.abs(loadBounds.width - actionsBounds.width)).toBeLessThanOrEqual(1);
 });
 
 for (const [label, key, max] of [['Critics ≥', 'minCritics', 100], ['Audience ≥', 'minAudience', 100], ['TMDB ≥', 'minTmdb', 10], ['IMDb ≥', 'minImdb', 10]]) {
