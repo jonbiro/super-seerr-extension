@@ -107,7 +107,14 @@
         confidence: contributors.length ? Math.min(...contributors.map(value => value.confidence ?? 0)) : 0,
         source: other.bundle.source,
         lastUpdated: Math.max(number(other.bundle.lastUpdated) ?? 0, number(newerServer.bundle?.lastUpdated) ?? 0) || null };
+      const publicExpiresAt = other.publicCheckedAt + root.RatingsConfig.rtCacheTtlMs;
+      const nativeComplete = ['rtCriticsScore', 'rtAudienceScore', 'imdbRating', 'tmdbRating']
+        .every(field => newerServer.bundle?.[field] != null);
+      const nativeRetryAt = newerServer.retryAt ?? ((newerServer.cachedAt ?? 0) +
+        (nativeComplete ? root.RatingsConfig.ratingsFreshMs : root.RatingsConfig.partialRatingsRetryMs));
       return { ...newerServer, bundle, publicCheckedAt: other.publicCheckedAt,
+        // An already expired fallback must not defeat a failed-read backoff.
+        ...(publicExpiresAt > Date.now() ? { retryAt: Math.min(nativeRetryAt, publicExpiresAt) } : {}),
         ...(newerServer.diagnostics ? { diagnostics: { ...newerServer.diagnostics, source: bundle.source } } : {}) };
     },
     mergeOverlayCache(previous, incoming, removed) {

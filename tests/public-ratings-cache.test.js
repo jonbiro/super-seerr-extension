@@ -392,3 +392,35 @@ test('cache clearing does not wait for an outstanding public notification', asyn
   assert.equal(worker.api.publicRatings.size, 0);
   assert.equal(worker.localStore.publicRatingsV1, undefined);
 });
+
+for (const deadline of ['later', 'earlier', 'implicit']) test(`adopting shared ratings respects their expiry and the ${deadline} native retry deadline`, async () => {
+  const worker = await seed();
+  const now = Date.now();
+  const shared = worker.localStore.publicRatingsV1.entries['movie:550'];
+  shared.checkedAt = now - Config.rtCacheTtlMs + 60000;
+  shared.expiresAt = shared.checkedAt + Config.rtCacheTtlMs;
+  const cachedAt = now - 1000;
+  const retryAt = deadline === 'earlier' ? now + 10000 : now + 100000;
+  const local = { ...worker.localStore, overlayRatingsByServerV1: { 'https://seerr.example': {
+    server: 'https://seerr.example/', epoch: 0, matcher: Config.matcherVersion, index: [],
+    entries: { 'movie:550': { bundle: { rtCriticsScore: 10, rtAudienceScore: 20, imdbRating: 7.2, tmdbRating: 6.1, confidence: 1 },
+      cachedAt, publicCheckedAt: shared.checkedAt - 1000, ...(deadline === 'implicit' ? {} : { retryAt }) } }
+  } } };
+  const overlay = loadOverlay({ pathname: '/discover', settings: { seerrUrl: 'https://seerr.example/' }, local });
+  const bundle = await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(bundle.rtCriticsScore, 80);
+  assert.equal(bundle.imdbRating, 7.2);
+  const cached = overlay.ratingsCache.get('movie:550');
+  assert.equal(cached.cachedAt, cachedAt, 'public reuse must not renew native score freshness');
+  assert.equal(cached.retryAt, deadline === 'earlier' ? retryAt : shared.expiresAt);
+  await overlay.flushPersistedRatings();
+  assert.equal(overlay.localStore.overlayRatingsByServerV1['https://seerr.example'].entries['movie:550'].retryAt, cached.retryAt);
+  let calls = 0;
+  overlay.setResolver(async () => { calls++; return overlay.Model.createRatingsBundle({ ...bundle, rtCriticsScore: 95 }); });
+  require('node:vm').runInContext(`Date.now = () => ${shared.expiresAt + 1}`, overlay.context);
+  assert.equal((await overlay.getRatings(550, 'Fight Club', 1999, 'movie')).rtCriticsScore, 80,
+    'expired scores stay visible while the background refresh starts');
+  for (let i = 0; i < 12; i++) await tick();
+  assert.equal(calls, 1, 'the adopted score refreshes when its provider expiry passes');
+  assert.equal(overlay.ratingsCache.get('movie:550').bundle.rtCriticsScore, 95);
+});

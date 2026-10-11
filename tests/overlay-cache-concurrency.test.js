@@ -196,3 +196,23 @@ test('a public tier reply cannot survive a cache clear while its read is pending
   assert.equal((await pending).length, 0);
   assert.equal(cache.getPublicRating('movie:550'), null);
 });
+
+for (const publicFirst of [false, true]) {
+  for (const expired of [false, true]) test(`merged public ratings preserve expiry and failed-read backoff (public first: ${publicFirst}, expired: ${expired})`, async () => {
+    const worker = await setup();
+    const a = tab(worker), b = tab(worker);
+    await Promise.all([a.loadPersistedRatings(), b.loadPersistedRatings()]);
+    const now = Date.now();
+    const publicCheckedAt = now - Config.rtCacheTtlMs + (expired ? -1000 : 60000);
+    const nativeRetryAt = now + Config.inconclusiveRetryMs;
+    a.ratingsCache.set('movie:1', { ...entry(20, now), publicCheckedAt: publicCheckedAt - 1000,
+      retryAt: nativeRetryAt, diagnostics: { status: 'failed', checkedAt: now } });
+    b.ratingsCache.set('movie:1', { ...entry(95, now - 1000), publicCheckedAt });
+    for (const cache of publicFirst ? [b, a] : [a, b]) await cache.flushPersistedRatings();
+    const result = stored(worker).entries['movie:1'];
+    assert.equal(result.bundle.rtCriticsScore, 95);
+    assert.equal(result.cachedAt, now);
+    assert.equal(result.retryAt, expired ? nativeRetryAt : publicCheckedAt + Config.rtCacheTtlMs);
+    assert.equal(result.diagnostics.status, 'failed');
+  });
+}

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.104]
+
+- Cap adopted public ratings at their original provider expiry instead of retaining a later server-cache retry deadline.
+- Preserve earlier native retries and apply the same expiry rule when concurrent tabs merge public and server-specific scores; keep failed-read backoff for already expired fallbacks.
+- Add expiry, background refresh, persistence and both-order concurrent merge regressions without renewing native score age.
+
 ## [3.5.103]
 
 - Update Score details when verified shared ratings resolve an uncertain match or fill missing scores, so the explanation agrees with the displayed ratings.

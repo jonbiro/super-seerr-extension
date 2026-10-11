@@ -1104,7 +1104,12 @@
     const shared = !options.refresh && getPublicRating(key, year);
     if (shared && previous?.bundle && shared.checkedAt > (previous.publicCheckedAt ?? previous.cachedAt ?? 0)) {
       const bundle = mergeBundles(shared.bundle, previous.bundle);
+      // Reusing a public record cannot extend it past its provider expiry.
+      // Preserve any earlier native/partial retry rather than renewing it.
+      const nativeRetryAt = previous.retryAt ?? ((previous.cachedAt ?? 0) +
+        (isBundleComplete(previous.bundle) ? Config.ratingsFreshMs : Config.partialRatingsRetryMs));
       previous = { ...previous, bundle, publicCheckedAt: shared.checkedAt,
+        retryAt: Math.min(nativeRetryAt, shared.expiresAt),
         ...(previous.diagnostics ? { diagnostics: { ...previous.diagnostics, status: ratingDetailsStatus(bundle, previous.diagnostics), source: bundle.source } } : {}) };
       ratingsCache.set(key, previous);
       schedulePersistedRatingsFlush();
