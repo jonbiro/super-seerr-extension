@@ -65,17 +65,28 @@
         }
       }
       const labels = { 1: 'Not available', 2: 'Pending', 3: 'Processing', 4: 'Partially available', 5: 'Available', 6: 'Blocked', 7: 'Deleted' };
-      const seasons = [...new Map(details.seasons.filter(validSeason)
+      const metadata = new Map(), conflicting = new Set();
+      for (const season of details.seasons.filter(validSeason)) {
+        const count = Number.isSafeInteger(season.episodeCount) && season.episodeCount > 0 ? season.episodeCount : 0;
+        const previous = metadata.get(season.seasonNumber);
+        if (previous && previous.episodeCount !== count) conflicting.add(season.seasonNumber);
+        metadata.set(season.seasonNumber, { ...season, episodeCount: count });
+      }
+      // Contradictory provider metadata cannot prove that a season can be
+      // requested. Keep conflicts sticky even if a third record agrees.
+      const seasons = [...metadata.values()]
         .map(season => {
           const number = season.seasonNumber;
           const status = availability.get(number) ?? 1;
           const pending = requested.has(number);
           const blocked = info.status === 6;
-          return [number, { number, name: String(season.name || (number ? `Season ${number}` : 'Specials')).slice(0, 200),
-            episodeCount: Number.isSafeInteger(season.episodeCount) && season.episodeCount > 0 ? season.episodeCount : 0,
-            availability: blocked ? 'Blocked' : pending ? 'Already requested' : (labels[status] || 'Status unknown'),
-            requestable: !blocked && !pending && [1, 7].includes(status) && Number.isSafeInteger(season.episodeCount) && season.episodeCount > 0 }];
-        })).values()].sort((a, b) => a.number - b.number);
+          const uncertain = conflicting.has(number);
+          return { number, name: String(season.name || (number ? `Season ${number}` : 'Specials')).slice(0, 200),
+            episodeCount: uncertain ? 0 : season.episodeCount,
+            availability: blocked ? 'Blocked' : pending ? 'Already requested'
+              : uncertain && [1, 7].includes(status) ? 'Season information uncertain' : (labels[status] || 'Status unknown'),
+            requestable: !blocked && !pending && !uncertain && [1, 7].includes(status) && season.episodeCount > 0 };
+        }).sort((a, b) => a.number - b.number);
       return { tmdbId, mediaType: 'tv', title: String(details.name || media.title), server, seasons };
     },
     async validateRequestSeasons(media, tmdbId) {

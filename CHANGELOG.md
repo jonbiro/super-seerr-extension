@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.147]
+
+- Refuse season requests when duplicate metadata reports contradictory episode counts, instead of allowing the final duplicate to decide whether a season is requestable.
+- Show uncertain season information without presenting a disputed count as confirmed; retain known availability and pending-request labels.
+- Add order-independent conflict, repeated-conflict, identical-duplicate and confirmed-availability regressions.
+
 ## [3.5.146]
 
 - Return the title's TMDB ID and nested media title when formatting request-history status, instead of labeling Seerr request or media row IDs as title IDs.

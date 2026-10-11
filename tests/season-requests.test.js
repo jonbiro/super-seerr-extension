@@ -164,3 +164,37 @@ test('a numeric string identity in fresh season details validates the intended T
   assert.equal(state.posts.length, 1);
   assert.equal(state.posts[0].mediaId, 42);
 });
+
+for (const counts of [[0, 8], [8, 0], [8, 10], [10, 8], [8, 0, 8]]) {
+  test(`contradictory duplicate season metadata cannot approve a request (${counts.join(',')})`, async () => {
+    const { api, state } = await setup();
+    state.details.seasons = counts.map(episodeCount => ({ seasonNumber: 6, name: 'Season 6', episodeCount }));
+    const review = await api.getSeasonOptions(media);
+    assert.equal(review.seasons.length, 1);
+    assert.equal(review.seasons[0].requestable, false);
+    assert.equal(review.seasons[0].episodeCount, 0, 'a contradictory count must not be presented as confirmed');
+    assert.equal(review.seasons[0].availability, 'Season information uncertain');
+    await assert.rejects(api.requestMedia({ ...media, seasons: [6] }), /cannot be requested/);
+    assert.equal(state.posts.length, 0);
+  });
+}
+
+test('identical duplicate season metadata remains requestable once', async () => {
+  const { api, state } = await setup();
+  state.details.seasons = [8, 8].map(episodeCount => ({ seasonNumber: 6, name: 'Season 6', episodeCount }));
+  const review = await api.getSeasonOptions(media);
+  assert.equal(review.seasons.length, 1);
+  assert.equal(review.seasons[0].requestable, true);
+  assert.equal(review.seasons[0].episodeCount, 8);
+  await api.requestMedia({ ...media, seasons: [6] });
+  assert.equal(state.posts.length, 1);
+  assert.deepEqual(Array.from(state.posts[0].seasons), [6]);
+});
+
+test('conflicting metadata preserves confirmed availability and pending-request labels', async () => {
+  const { api, state } = await setup();
+  state.details.seasons = [1, 4].flatMap(seasonNumber => [0, 8].map(episodeCount => ({ seasonNumber, episodeCount })));
+  const review = await api.getSeasonOptions(media);
+  assert.deepEqual(Array.from(review.seasons, season => season.availability), ['Available', 'Already requested']);
+  assert.ok(review.seasons.every(season => !season.requestable));
+});
