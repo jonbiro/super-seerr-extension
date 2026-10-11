@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.133]
+
+- Prevent late Plex Watchlist results from changing stale card or detail controls, showing old-title notifications, or adding errors after navigation or a Seerr site switch.
+- Revalidate recycled card identities before starting actions and accepting replies; preserve normal success and retry behavior for the current title.
+- Add regressions covering successful, failed and rejected Plex adds during card reuse, navigation and active-site changes.
+
 ## [3.5.132]
 
 - Restore focus to Choose seasons after nested bulk TV season review, without taking focus moved to another control or a different route.

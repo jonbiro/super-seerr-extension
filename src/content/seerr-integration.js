@@ -1767,8 +1767,13 @@
     button.className = 'seerr-plex-watchlist-button';
     button.setAttribute('data-seerr-overlay', 'true');
     button.textContent = '＋ Add to Plex Watchlist';
+    const generation = routeGeneration;
+    const configuration = configGeneration;
+    const pageUrl = window.location.href;
+    const ownsButton = () => button.isConnected && generation === routeGeneration
+      && configuration === configGeneration && pageUrl === window.location.href;
     button.addEventListener('click', async () => {
-      if (button.disabled) return;
+      if (!ownsButton() || button.disabled) return;
       button.disabled = true;
       button.textContent = 'Adding to Plex…';
       try {
@@ -1776,12 +1781,14 @@
           action: 'plexAddToWatchlist',
           data: { tmdbId: Number(tmdbId), title, mediaType }
         });
+        if (!ownsButton()) return;
         if (response && response.success) {
           button.textContent = response.data && response.data.already ? '✓ On Plex Watchlist' : '✓ Added to Plex Watchlist';
         } else {
           throw new Error((response && response.error) || 'Plex Watchlist failed');
         }
       } catch (error) {
+        if (!ownsButton()) return;
         button.disabled = false;
         button.textContent = '＋ Add to Plex Watchlist';
         const note = document.createElement('div');
@@ -1800,7 +1807,7 @@
       action: 'plexWatchlistState',
       data: { tmdbId: Number(tmdbId), title, mediaType }
     }).then(response => {
-      if (!button.isConnected || button.disabled) return;
+      if (!ownsButton() || button.disabled) return;
       if (response && response.success && response.data && response.data.onWatchlist) {
         button.disabled = true;
         button.textContent = '✓ On Plex Watchlist';
@@ -1853,12 +1860,23 @@
       button.setAttribute('aria-label', `Add ${cardTitle || 'this title'} to Plex Watchlist`);
       button.title = 'Add to Plex Watchlist';
       button.textContent = '＋';
+      const generation = routeGeneration;
+      const configuration = configGeneration;
+      const pageUrl = window.location.href;
+      const ownsButton = () => {
+        if (!button.isConnected || generation !== routeGeneration
+          || configuration !== configGeneration || pageUrl !== window.location.href) return false;
+        // Seerr can reuse the same card node for a different title. Revalidate
+        // its identity before accepting a reply, even before the observer runs.
+        const current = getCardMediaInfo(card);
+        return button.isConnected && Number(current?.tmdbId) === tmdbId
+          && current?.mediaType === info.mediaType;
+      };
       button.addEventListener('click', async event => {
         // The card itself navigates to the detail page; the button must not.
         event.stopPropagation();
         event.preventDefault();
-        getCardMediaInfo(card);
-        if (!button.isConnected || button.disabled) return;
+        if (!ownsButton() || button.disabled) return;
         button.disabled = true;
         button.textContent = '…';
         try {
@@ -1866,6 +1884,7 @@
             action: 'plexAddToWatchlist',
             data: { tmdbId, title: cardTitle, year: cardYear, mediaType: info.mediaType }
           });
+          if (!ownsButton()) return;
           if (!response || !response.success) {
             throw new Error((response && response.error) || 'Plex Watchlist failed');
           }
@@ -1877,6 +1896,7 @@
             `"${cardTitle || response.data.title || 'Title'}" ${response.data && response.data.already ? 'is already' : 'has been added to'} your Plex Watchlist`,
             'success');
         } catch (error) {
+          if (!ownsButton()) return;
           button.disabled = false;
           button.textContent = '＋';
           notifyResult('Plex Watchlist Failed', error.message || 'Failed to add to Plex Watchlist', 'error');

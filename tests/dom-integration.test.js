@@ -36,7 +36,7 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
     runtime: { sendMessage: async message => {
       messages.push(message);
       if (message.action === 'getConfigState') {
-        return { success: true, data: { apiConfigured: !!storage.seerrApiKey, serverUrl: storage.seerrUrl ?? null } };
+        return { success: true, data: { plexConfigured: storage.plexConfigured === true, apiConfigured: !!storage.seerrApiKey, serverUrl: storage.seerrUrl ?? null } };
       }
       return { success: true, data: message.action === 'getRottenTomatoesRatings' ? {
         rtCriticsScore: { Low: 30, High: 95 }[message.data.title] ?? null,
@@ -61,7 +61,7 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
   window.chrome.runtime.sendMessage = message => ['getOverlayCache', 'putOverlayCache'].includes(message.action) ? cacheMessage(message) : send(message);
   for (const file of ['RatingsModel', 'RatingsConfig']) window.eval(source(`src/shared/${file}.js`));
   require('./helpers/overlay-modules').loadOverlayModules(window);
-  window.eval(source('src/content/seerr-integration.js').replace(/\}\)\(\);\s*$/, `window.testOverlay = { injectCardBadges, injectSortFilterControls, handleRouteChange, extractSeerrNativeRatings, loadMoreCards, scoreAllCards }; })();`));
+  window.eval(source('src/content/seerr-integration.js').replace(/\}\)\(\);\s*$/, `window.testOverlay = { injectCardBadges, injectSortFilterControls, handleRouteChange, extractSeerrNativeRatings, loadMoreCards, scoreAllCards, injectPlexWatchlistButton }; })();`));
   return { dom, window, messages, urls, storage, change: changes => storageListeners.forEach(listener => listener(changes, 'sync')) };
 }
 
@@ -1156,4 +1156,83 @@ for (const path of ['/searching', '/discoveries', '/movie/2junk']) {
     assert.equal(f.window.document.querySelectorAll('[data-seerr-overlay="true"]').length, 0);
     assert.equal(f.messages.filter(message => message.action === 'getRottenTomatoesRatings').length, 0);
   });
+}
+
+
+for (const outcome of ['success', 'failure', 'rejection']) {
+  for (const change of ['none', 'recycled card', 'navigation', 'site switch']) {
+    test(`Plex card ${outcome} only updates its owning UI after ${change}`, async t => {
+      const fixture = createOverlay({ settings: { plexConfigured: true } });
+      t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+      await settle();
+      const { window } = fixture;
+      const doc = window.document;
+      const card = doc.querySelector('[data-id="1"]');
+      const button = card.querySelector('.seerr-plex-card-button');
+      assert.ok(button);
+      const send = window.chrome.runtime.sendMessage;
+      let finish;
+      window.chrome.runtime.sendMessage = message => message.action === 'plexAddToWatchlist'
+        ? new Promise((resolve, reject) => { finish = response => outcome === 'rejection' ? reject(new Error('Offline')) : resolve(response); }) : send(message);
+      button.click();
+      assert.equal(button.textContent, '…');
+      if (change === 'recycled card') {
+        card.querySelector('a').setAttribute('href', '/movie/99');
+        card.querySelector('h2').textContent = 'Replacement';
+      } else if (change === 'navigation') {
+        window.history.pushState({}, '', '/search?query=next');
+        window.testOverlay.handleRouteChange();
+      } else if (change === 'site switch') {
+        fixture.storage.seerrUrl = 'https://second.example';
+        fixture.change({ seerrUrl: { newValue: fixture.storage.seerrUrl } });
+      }
+      await settle();
+      finish(outcome === 'success' ? { success: true, data: { title: 'Low' } } : { success: false, error: 'Offline' });
+      await settle();
+      if (change === 'none') {
+        assert.equal(button.textContent, outcome === 'success' ? '✓' : '＋');
+        assert.equal(button.disabled, outcome === 'success');
+        assert.equal(doc.querySelectorAll('.seerr-notification').length, 1);
+      } else {
+        assert.equal(doc.querySelectorAll('.seerr-notification').length, 0);
+        assert.equal(button.textContent, '…', 'obsolete action UI must not be updated');
+        const replacement = card.querySelector('.seerr-plex-card-button');
+        if (replacement) assert.equal(replacement.textContent, '＋');
+      }
+    });
+  }
+  for (const change of ['none', 'navigation']) {
+    test(`Plex detail ${outcome} only updates its owning UI after ${change}`, async t => {
+      const fixture = createOverlay({ settings: { plexConfigured: true }, path: '/movie/1' });
+      t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+      await settle();
+      const { window } = fixture;
+      const doc = window.document;
+      const container = doc.createElement('header');
+      container.innerHTML = '<h1>Low</h1>';
+      doc.body.append(container);
+      window.testOverlay.injectPlexWatchlistButton();
+      const button = container.querySelector('.seerr-plex-watchlist-button');
+      assert.ok(button);
+      const send = window.chrome.runtime.sendMessage;
+      let finish;
+      window.chrome.runtime.sendMessage = message => message.action === 'plexAddToWatchlist'
+        ? new Promise((resolve, reject) => { finish = response => outcome === 'rejection' ? reject(new Error('Offline')) : resolve(response); }) : send(message);
+      button.click();
+      if (change === 'navigation') {
+        window.history.pushState({}, '', '/movie/2');
+        window.testOverlay.handleRouteChange();
+        await settle();
+      }
+      finish(outcome === 'success' ? { success: true, data: {} } : { success: false, error: 'Offline' });
+      await settle();
+      if (change === 'none') {
+        assert.equal(button.textContent, outcome === 'success' ? '✓ Added to Plex Watchlist' : '＋ Add to Plex Watchlist');
+        assert.equal([...container.querySelectorAll('.seerr-quality-summary')].filter(note => note.textContent.startsWith('Plex Watchlist failed:')).length, outcome === 'success' ? 0 : 1);
+      } else {
+        assert.equal(button.textContent, 'Adding to Plex…');
+        assert.equal([...container.querySelectorAll('.seerr-quality-summary')].filter(note => note.textContent.startsWith('Plex Watchlist failed:')).length, 0);
+      }
+    });
+  }
 }
