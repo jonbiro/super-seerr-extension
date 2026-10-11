@@ -149,3 +149,54 @@ for (const success of [true, false]) for (const focus of ['dialog', 'outside', '
     await expect(focus === 'outside' ? page.locator('#outside') : page.getByRole('button', { name: 'Select titles', exact: true })).toBeFocused();
   });
 }
+
+test('partial bulk failure keeps each failed title and reason available', async ({ page }) => {
+  await page.addStyleTag({ path: path.resolve('src/content/seerr-overlay.css') });
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancel', exact: true }).click();
+  await page.getByRole('checkbox', { name: 'Select Series', exact: true }).uncheck();
+  await page.evaluate(() => {
+    for (let i = 1; i <= 4; i++) {
+      const card = document.createElement('article'); card.dataset.testid = 'title-card';
+      const link = document.createElement('a'); link.href = `/movie/${1000 + i}`;
+      const heading = document.createElement('h2'); heading.textContent = i === 2 ? '<img src=x> Movie 2' : `Movie ${i}`;
+      link.append(heading); card.append(link); document.querySelector('main').append(card);
+    }
+    const original = chrome.runtime.sendMessage;
+    chrome.runtime.sendMessage = async message => {
+      if (message.action !== 'requestMedia') return original(message);
+      window.writes.push(message);
+      if (message.data.tmdbId === 1001) return { success: true };
+      if (message.data.tmdbId === 1002) return { success: false, error: 'Permission denied <script>bad()</script>' };
+      if (message.data.tmdbId === 1003) throw new Error('Connection interrupted');
+      return { success: false };
+    };
+  });
+  await expect(page.locator('.seerr-select-checkbox')).toHaveCount(5);
+  await page.locator('.seerr-select-checkbox').evaluateAll(nodes => nodes.slice(1).forEach(node => node.click()));
+  await page.locator('.seerr-bulk-review').click();
+  await page.clock.install();
+  await page.getByRole('button', { name: 'Request 4 titles', exact: true }).click();
+  await page.clock.runFor(2000);
+  const result = page.getByLabel('Bulk request failures', { exact: true });
+  await expect(result).toContainText('1 succeeded, 3 failed');
+  await expect(result).toContainText('<img src=x> Movie 2: Permission denied <script>bad()</script>');
+  await expect(result).toContainText('Movie 3: Connection interrupted');
+  await expect(result).toContainText('Movie 4: Request failed.');
+  await expect(result.locator('img, script')).toHaveCount(0);
+  expect(await page.evaluate(() => window.writes.length)).toBe(4);
+  await page.setViewportSize({ width: 320, height: 220 });
+  const bounds = await result.boundingBox();
+  expect(bounds.x).toBeGreaterThanOrEqual(0);
+  expect(bounds.x + bounds.width).toBeLessThanOrEqual(320);
+  expect(bounds.height).toBeLessThanOrEqual(132);
+  await page.clock.resume();
+  await result.focus();
+  await expect(result).toBeFocused();
+  await page.keyboard.press('End');
+  await expect.poll(() => result.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
+  await result.screenshot({ path: '/tmp/super-seerr-3.5.173-bulk-failures.png' });
+  // Even a warning (partial success) stays available until dismissed.
+  await page.locator('#outside').focus();
+  await page.clock.fastForward(6000);
+  await expect(result).toBeVisible();
+});

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.173]
+
+- Keep bulk failure results visible until dismissed, including partial failures, and list each failed title with its reported reason or a useful fallback.
+- Bound the failure panel to small screens and allow keyboard scrolling without rendering titles or error text as markup.
+- Cover mixed success, rejected requests, transport failures, missing error details, persistence, and narrow-screen layout in the browser.
+
 ## [3.5.172]
 
 - Create bulk-result notifications after selection cleanup and focus restoration, so keyboard dismissal returns to a surviving control rather than dropping focus onto the page.

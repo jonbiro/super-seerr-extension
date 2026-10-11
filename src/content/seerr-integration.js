@@ -1830,9 +1830,10 @@
   // adds) stays readable instead of piling every note on the same spot.
   // Everything here is textContent: titles reaching this point are Seerr's
   // own strings and must never become markup.
-  function notifyResult(title, message, kind) {
-    const note = window.SeerrNotifications.createNotification(title, message, kind);
+  function notifyResult(title, message, kind, duration) {
+    const note = window.SeerrNotifications.createNotification(title, message, kind, duration);
     note.parentElement.setAttribute('data-seerr-overlay', 'true');
+    return note;
   }
 
   // Per-card Plex action for grids (discover, search, watchlist, …): available
@@ -2596,6 +2597,12 @@
 
       let succeeded = 0;
       let failed = 0;
+      const failures = [];
+      const recordFailure = (title, reason) => {
+        failed++;
+        const detail = typeof reason === 'string' && reason.trim() ? reason.trim() : 'Request failed. Check the connection and review this title before trying again.';
+        failures.push(`${String(title.title).slice(0, 200)}: ${detail.slice(0, 300)}`);
+      };
       const BULK_REQUEST_DELAY_MS = 500;
 
       for (let i = 0; i < readyTitles.length; i++) {
@@ -2604,7 +2611,7 @@
         btn.textContent = `Requesting ${i + 1}/${readyTitles.length}...`;
         const tmdbIdNum = parseInt(t.tmdbId, 10);
         if (!t.tmdbId || Number.isNaN(tmdbIdNum)) {
-          failed++;
+          recordFailure(t, 'Missing or invalid media identity.');
           continue;
         }
         try {
@@ -2615,10 +2622,10 @@
           if (response && response.success) {
             succeeded++;
           } else {
-            failed++;
+            recordFailure(t, response?.error);
           }
-        } catch (_) {
-          failed++;
+        } catch (error) {
+          recordFailure(t, error?.message);
         }
         if (i < readyTitles.length - 1) {
           await new Promise(r => setTimeout(r, BULK_REQUEST_DELAY_MS));
@@ -2638,7 +2645,13 @@
       if (restoreFocus || document.activeElement === document.body) document.querySelector('.seerr-toggle-select')?.focus();
       // Notifications remember the current control for keyboard dismissal.
       // Capture the surviving control after cleanup and focus restoration.
-      notifyResult(resultTitle, `${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}`, resultKind);
+      const summary = `${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}`;
+      const note = notifyResult(resultTitle, failures.length ? `${summary}\n\nFailed titles:\n${failures.join('\n')}` : summary, resultKind, failures.length ? 0 : undefined);
+      if (failures.length) {
+        note.classList.add('seerr-bulk-result');
+        note.tabIndex = 0;
+        note.setAttribute('aria-label', 'Bulk request failures');
+      }
     });
   }
 
