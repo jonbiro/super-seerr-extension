@@ -90,3 +90,55 @@ for (const [label, key, max] of [['Critics ≥', 'minCritics', 100], ['Audience 
     expect(await page.evaluate(key => window.savedPreset.filters[key], key)).toBe(Number(expected));
   });
 }
+
+for (const [label, next] of [['Critics ≥', 'Audience ≥'], ['Audience ≥', 'TMDB ≥'], ['TMDB ≥', 'IMDb ≥'], ['IMDb ≥', 'Reset']]) {
+  test(`filter keyboard editing isolates host shortcuts (${label})`, async ({ page }) => {
+    await showFilter(page, 1280);
+    await page.evaluate(() => {
+      const outside = document.createElement('button'); outside.id = 'outside'; outside.textContent = 'Other action'; document.body.append(outside);
+      window.hostKeys = [];
+      document.addEventListener('keydown', event => { hostKeys.push(event.key); event.preventDefault(); });
+    });
+    const input = page.getByLabel(label, { exact: true });
+    await input.fill(''); await input.focus();
+    await page.keyboard.press('5');
+    await expect(input).toHaveValue('5');
+    await page.keyboard.press('Tab');
+    await expect(next === 'Reset' ? page.getByRole('button', { name: next, exact: true }) : page.getByLabel(next, { exact: true })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    await expect(input).toBeFocused();
+    expect(await page.evaluate(() => hostKeys)).toEqual([]);
+    await page.locator('#outside').focus(); await page.keyboard.press('h');
+    expect(await page.evaluate(() => hostKeys)).toEqual(['h']);
+  });
+}
+
+for (const label of ['Critics ≥', 'Audience ≥', 'TMDB ≥', 'IMDb ≥']) test(`Enter in ${label} does not submit a host search form`, async ({ page }) => {
+  await showFilter(page, 1280);
+  await page.evaluate(() => {
+    const bar = document.querySelector('#seerr-filter-bar');
+    const form = document.createElement('form'); bar.before(form); form.append(bar);
+    const submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = 'Host search'; form.append(submit);
+    window.hostSubmits = 0;
+    form.addEventListener('submit', event => { event.preventDefault(); hostSubmits++; });
+  });
+  const input = page.getByLabel(label, { exact: true });
+  await input.fill('5'); await input.focus(); await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => hostSubmits)).toBe(0);
+  await expect(input).toBeFocused();
+  await page.getByRole('button', { name: 'Host search', exact: true }).click();
+  expect(await page.evaluate(() => hostSubmits)).toBe(1);
+});
+
+test('keyboard filter actions and toggle work despite host shortcuts', async ({ page }) => {
+  await showFilter(page, 1280);
+  await page.getByLabel('Critics ≥', { exact: true }).fill('85');
+  await page.evaluate(() => document.addEventListener('keydown', event => event.preventDefault()));
+  await page.getByRole('button', { name: 'Reset', exact: true }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByLabel('Critics ≥', { exact: true })).toHaveValue('0');
+  await page.locator('#seerr-filter-toggle').focus(); await page.keyboard.press('Enter');
+  await expect(page.locator('#seerr-filter-bar')).toBeHidden();
+  await page.keyboard.press('Space');
+  await expect(page.locator('#seerr-filter-bar')).toBeVisible();
+});

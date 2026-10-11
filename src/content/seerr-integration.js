@@ -2100,6 +2100,7 @@
     toggle.textContent = 'Hide filters';
     toggle.setAttribute('aria-controls', 'seerr-filter-bar');
     toggle.setAttribute('aria-expanded', 'true');
+    toggle.addEventListener('keydown', event => event.stopPropagation());
     toggle.addEventListener('click', toggleFilterBar);
     document.body.appendChild(toggle);
   }
@@ -2129,6 +2130,12 @@
     bar.className = 'seerr-sort-filter-bar';
     bar.setAttribute('data-seerr-overlay', 'true');
     bar.id = 'seerr-filter-bar';
+    bar.addEventListener('keydown', event => {
+      event.stopPropagation();
+      // Thresholds apply as they are typed. Enter must not submit a form
+      // that the host page happens to wrap around the injected toolbar.
+      if (event.key === 'Enter' && !event.isComposing && event.target?.matches?.('input[type="number"]')) event.preventDefault();
+    });
 
     bar.innerHTML = `
       <div class="seerr-filter-header">

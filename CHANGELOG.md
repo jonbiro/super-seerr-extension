@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.207]
+
+- Isolate filter and toggle keyboard events from host-page shortcuts so typing, Tab navigation, and button activation continue working.
+- Prevent Enter in a rating threshold from submitting a containing host search form, while retaining normal host controls outside the toolbar.
+- Cover all four threshold fields, forward/backward navigation, form submission, Reset, and toggle activation in Chromium.
+
 ## [3.5.206]
 
 - Apply typed decimal and exponent rating thresholds exactly rather than truncating critics/audience decimals or reading only an exponent's leading digits.
