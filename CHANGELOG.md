@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.202]
+
+- Prevent obsolete preset reads from replacing current presets or hiding recovery after a newer cross-tab refresh fails.
+- Preserve the last confirmed preset list and unsaved name while keeping Retry loading presets available.
+- Cover delayed initial and subsequent reads, newer success/failure outcomes, and successful retry in Chromium.
+
 ## [3.5.201]
 
 - Preserve complementary IMDb and TMDB scores when separate tabs first discover the same title, including after a saved unrated result.

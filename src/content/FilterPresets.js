@@ -19,7 +19,7 @@
     const limits = { minCritics: 100, minAudience: 100, minTmdb: 10, minImdb: 10 };
     let presets = [];
     let busy = false;
-    let revision = 0, appliedRevision = 0, disposed = false, selection = '';
+    let revision = 0, disposed = false, selection = '';
     function setBusy(value) {
       busy = value;
       wrapper.setAttribute('aria-busy', String(value));
@@ -54,11 +54,13 @@
     }
     const load = () => request('getFilterPresets');
     function adopt(result) {
-      if (disposed || result.revision < appliedRevision) return;
+      // A newer read can fail without adopting a result. Its retry state
+      // still supersedes older replies, including the initial load.
+      if (disposed || result.revision !== revision) return;
       const restoreRetryFocus = document.activeElement === retry;
       if (!retry.hidden) status.textContent = '';
       retry.hidden = true;
-      appliedRevision = result.revision; presets = result.value; render();
+      presets = result.value; render();
       if (restoreRetryFocus && wrapper.isConnected) select.focus({ preventScroll: true });
     }
     function render(selected = selection) {

@@ -137,3 +137,47 @@ for (const success of [true, false]) for (const moved of [false, true]) test(`pr
   expect(await page.evaluate(() => window.presetMessages.map(message => message.action))).toEqual(['getFilterPresets', 'getFilterPresets']);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
+
+for (const initialPending of [true, false]) for (const latestSuccess of [true, false]) {
+  test(`obsolete preset replies preserve latest cross-tab outcome (initial pending: ${initialPending}, latest success: ${latestSuccess})`, async ({ page }) => {
+    await page.setContent('<div class="seerr-sort-filter-bar"><select class="seerr-sort-select"><option value="default">Default</option></select></div>');
+    await page.addScriptTag({ path: path.resolve('src/content/FilterPresets.js') });
+    await page.evaluate(() => {
+      window.presetReplies = [];
+      window.chrome = { runtime: { sendMessage: () => new Promise(resolve => window.presetReplies.push(resolve)) },
+        storage: { onChanged: { addListener(listener) { window.changePresets = () => listener({ seerrFilterPresetsV1: {} }, 'sync'); } } } };
+      window.presetReport = name => ({ success: true, data: [{ name, sort: 'default', filters: {} }] });
+      window.installFilterPresets({ bar: document.querySelector('.seerr-sort-filter-bar'), readCurrent: () => ({ sort: 'default', filters: {} }), apply: () => {} });
+    });
+    const select = page.getByLabel('Saved filter presets');
+    if (!initialPending) {
+      await page.evaluate(() => presetReplies[0](presetReport('Confirmed')));
+      await expect(select).toBeEnabled();
+      await page.getByLabel('Preset name').fill('Unsaved draft');
+      await page.evaluate(() => changePresets());
+    }
+    await page.evaluate(() => changePresets());
+    await page.evaluate(latestSuccess => presetReplies.at(-1)(latestSuccess
+      ? presetReport('Latest') : { success: false, error: 'Storage unavailable' }), latestSuccess);
+    const retry = page.getByRole('button', { name: 'Retry loading presets', exact: true });
+    const status = page.getByRole('status');
+    if (latestSuccess) await expect(select.locator('option')).toHaveText(['Saved presets', 'Latest']);
+    else await expect(retry).toBeVisible();
+    await page.evaluate(initialPending => presetReplies[initialPending ? 0 : 1](presetReport('Obsolete')), initialPending);
+    await expect(select).toBeEnabled();
+    await expect(select.locator('option')).toHaveText(latestSuccess ? ['Saved presets', 'Latest']
+      : initialPending ? ['Saved presets'] : ['Saved presets', 'Confirmed']);
+    if (!initialPending) await expect(page.getByLabel('Preset name')).toHaveValue('Unsaved draft');
+    if (latestSuccess) await expect(retry).toBeHidden();
+    else {
+      await expect(retry).toBeVisible();
+      await expect(status).toHaveText('Could not refresh presets. Try again.');
+      await retry.click();
+      await page.evaluate(() => presetReplies.at(-1)(presetReport('Recovered')));
+      await expect(select).toBeEnabled();
+      await expect(select.locator('option')).toHaveText(['Saved presets', 'Recovered']);
+      await expect(retry).toBeHidden();
+      await expect(status).toHaveText('Presets reloaded.');
+    }
+  });
+}
