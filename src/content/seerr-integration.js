@@ -2083,10 +2083,10 @@
     if (!bar) return;
     if (bar.style.display === 'none') {
       bar.style.display = '';
-      if (toggle) toggle.textContent = '🔽 Hide';
+      if (toggle) { toggle.textContent = 'Hide filters'; toggle.setAttribute('aria-expanded', 'true'); }
     } else {
       bar.style.display = 'none';
-      if (toggle) toggle.textContent = '🔼 Sort & Filter';
+      if (toggle) { toggle.textContent = 'Sort & filter'; toggle.setAttribute('aria-expanded', 'false'); }
     }
   }
 
@@ -2096,7 +2096,10 @@
     toggle.id = 'seerr-filter-toggle';
     toggle.className = 'seerr-filter-toggle';
     toggle.setAttribute('data-seerr-overlay', 'true');
-    toggle.textContent = '🔽 Hide';
+    toggle.type = 'button';
+    toggle.textContent = 'Hide filters';
+    toggle.setAttribute('aria-controls', 'seerr-filter-bar');
+    toggle.setAttribute('aria-expanded', 'true');
     toggle.addEventListener('click', toggleFilterBar);
     document.body.appendChild(toggle);
   }
@@ -2128,9 +2131,13 @@
     bar.id = 'seerr-filter-bar';
 
     bar.innerHTML = `
-      <span class="seerr-score-coverage">${rated}/${total} scored</span>
-      <span class="seerr-cache-age" title="Older scores refresh automatically; refresh now to check the titles on this page"></span>
-      <span class="seerr-filter-field"><label for="seerr-sort-order">Sort titles</label>
+      <div class="seerr-filter-header">
+        <div><span class="seerr-filter-eyebrow">Super Seerr</span><h2>Sort &amp; filter</h2></div>
+        <div class="seerr-filter-status"><span class="seerr-score-coverage">${rated}/${total} scored</span>
+          <span class="seerr-cache-age" title="Older scores refresh automatically; refresh now to check the titles on this page"></span></div>
+      </div>
+      <div class="seerr-filter-controls">
+      <span class="seerr-filter-field seerr-sort-field"><label for="seerr-sort-order">Sort titles</label>
       <select id="seerr-sort-order" class="seerr-sort-select">
         <option value="default">Original order</option>
         <option value="score-desc">Best Score ↓</option>
@@ -2144,18 +2151,24 @@
         <option value="imdb-desc">⭐ IMDb ↓</option>
         <option value="imdb-asc">⭐ IMDb ↑</option>
       </select></span>
+      <section class="seerr-rating-filters" aria-label="Minimum ratings">
+      <div class="seerr-minimum-heading"><h3>Minimum ratings</h3><p>Set to 0 for any score.</p></div>
+      <div class="seerr-threshold-grid">
       <span class="seerr-filter-field" data-score="critics"><label for="seerr-min-critics">Critics ≥</label>
-        <input id="seerr-min-critics" type="number" class="seerr-min-critics" min="0" max="100" step="5" value="0"></span>
+        <input id="seerr-min-critics" type="number" class="seerr-min-critics" min="0" max="100" step="5" value="0"><span class="seerr-score-scale" aria-hidden="true">/ 100</span></span>
       <span class="seerr-filter-field" data-score="audience"><label for="seerr-min-audience">Audience ≥</label>
-        <input id="seerr-min-audience" type="number" class="seerr-min-audience" min="0" max="100" step="5" value="0"></span>
+        <input id="seerr-min-audience" type="number" class="seerr-min-audience" min="0" max="100" step="5" value="0"><span class="seerr-score-scale" aria-hidden="true">/ 100</span></span>
       <span class="seerr-filter-field" data-score="tmdb"><label for="seerr-min-tmdb">TMDB ≥</label>
-        <input id="seerr-min-tmdb" type="number" class="seerr-min-tmdb" min="0" max="10" step="0.5" value="0"></span>
+        <input id="seerr-min-tmdb" type="number" class="seerr-min-tmdb" min="0" max="10" step="0.5" value="0"><span class="seerr-score-scale" aria-hidden="true">/ 10</span></span>
       <span class="seerr-filter-field" data-score="imdb"><label for="seerr-min-imdb">IMDb ≥</label>
-        <input id="seerr-min-imdb" type="number" class="seerr-min-imdb" min="0" max="10" step="0.5" value="0"></span>
+        <input id="seerr-min-imdb" type="number" class="seerr-min-imdb" min="0" max="10" step="0.5" value="0"><span class="seerr-score-scale" aria-hidden="true">/ 10</span></span>
+      </div></section></div>
+      <div class="seerr-filter-actions">
       <button type="button" class="seerr-reset-sort">Reset</button>
       <button type="button" class="seerr-refresh-scores" title="Refetch scores for the titles loaded on this page">Refresh scores</button>
       <button type="button" class="seerr-load-all" title="Load up to ${Config.bulkLoadTarget} more titles and score them, so sorting covers the whole grid. Click again to stop.">Load ${Config.bulkLoadTarget} more</button>
       ${FEATURE_FLAGS.bulkActions && apiConfigured ? '<button type="button" class="seerr-toggle-select" data-seerr-overlay="true">Select titles</button>' : ''}
+      </div>
     `;
 
     const grid = getCardsGrid(cards);

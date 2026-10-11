@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.204]
+
+- Redesign the filter panel with separate status, sorting, minimum-rating, action, and preset sections.
+- Add larger controls, explicit score scales, clearer active thresholds, and a responsive two-column threshold grid that fixes narrow-screen overflow.
+- Clarify the floating filter toggle and announce its expanded state; preserve thresholds when collapsing the panel.
+- Verify desktop, tablet, and mobile layouts alongside filtering, resetting, sorting, and collapse/reopen behavior in Chromium.
+
 ## [3.5.203]
 
 - Transfer preset loading-control ownership to the newest cross-tab read when it supersedes the initial load or a manual retry.

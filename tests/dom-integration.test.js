@@ -357,16 +357,17 @@ test('every filter label stays attached to its own input', async t => {
   }
 });
 
-test('the sort control is not left to collapse to an unreadable width', async t => {
+test('the sort control keeps its label and ordering choices', async t => {
   const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
   await settle();
 
-  const css = require('node:fs').readFileSync('src/content/seerr-overlay.css', 'utf8');
   const select = fixture.window.document.querySelector('.seerr-sort-select');
   assert.ok(select, 'the sort control should exist');
-  assert.match(css, /\.seerr-sort-select\s*\{[^}]*min-width/, 'it should carry a minimum width');
-  assert.match(css, /\.seerr-filter-field\s*\{[^}]*white-space:\s*nowrap/, 'field groups should not break internally');
-  // The sort pair wraps like any other, so it is grouped too.
+  assert.equal(select.labels[0]?.textContent, 'Sort titles');
+  assert.equal(select.value, 'default');
+  assert.ok([...select.options].some(option => option.value === 'rt-critics-desc'));
+  assert.ok([...select.options].some(option => option.value === 'rt-critics-asc'));
+  // Actual rendered widths and overflow are checked in filter-visual.spec.cjs.
   const sortField = select.closest('.seerr-filter-field');
   assert.ok(sortField, 'the sort control should sit in a field group');
   assert.ok(sortField.querySelector('label'), 'grouped with its own label');

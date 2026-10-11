@@ -159,190 +159,133 @@
 
 /* ─── Sort & Filter Bar ─── */
 
+/* The filter is a small workspace: status, controls, then actions. */
 .seerr-sort-filter-bar {
-  --seerr-panel: #141a24;
-  --seerr-well: #1f2836;
-  --seerr-edge: #2f3a4c;
-  --seerr-text: #e8edf5;
-  --seerr-label: #97a4b8;
-  --seerr-violet: #8b5cf6;
-
+  --seerr-panel: #151d2c;
+  --seerr-well: #1c2739;
+  --seerr-edge: #344158;
+  --seerr-text: #eef2fa;
+  --seerr-label: #b1bdd0;
+  --seerr-violet: #a78bfa;
+  container: seerr-filters / inline-size;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  min-width: 0;
+  padding: 20px;
+  margin: 0 0 20px;
+  box-sizing: border-box;
+  color: var(--seerr-text);
+  font-size: 13px;
+  line-height: 1.5;
+  font-family: inherit;
+  background: linear-gradient(120deg, #1b2437, var(--seerr-panel) 60%);
+  border: 1px solid var(--seerr-edge);
+  border-radius: 16px;
+  box-shadow: 0 8px 24px #0002, 0 1px 0 #ffffff08 inset;
+}
+.seerr-filter-header, .seerr-filter-status, .seerr-filter-actions {
   display: flex;
   align-items: center;
-  gap: 8px 14px;
-  width: 100%;
-  padding: 10px 14px;
-  margin: 0 0 14px;
-  font-size: 12px;
-  font-family: inherit;
-  color: var(--seerr-text);
   flex-wrap: wrap;
-  background: var(--seerr-panel);
-  border: 1px solid var(--seerr-edge);
-  border-radius: 10px;
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03) inset;
-  box-sizing: border-box;
+  gap: 8px;
+  min-width: 0;
 }
-
-/* Coverage and cache age are status, not controls: quiet, but readable. */
+.seerr-filter-header { justify-content: space-between; gap: 12px; }
+.seerr-filter-eyebrow, .seerr-presets-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--seerr-violet);
+}
+.seerr-filter-header h2 { margin: 2px 0 0; font-size: 18px; line-height: 1.3; font-weight: 650; color: var(--seerr-text); }
 .seerr-score-coverage {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
-  color: var(--seerr-text);
-  padding: 2px 8px;
+  padding: 4px 10px;
   border-radius: 999px;
   background: var(--seerr-well);
   border: 1px solid var(--seerr-edge);
 }
-
-.seerr-cache-age {
-  font-size: 11px;
-  color: var(--seerr-label);
-  /* Closes the gap to the coverage pill so the two read as one status group,
-     and opens one before the controls. */
-  margin: 0 6px 0 -6px;
-  padding-right: 14px;
-  border-right: 1px solid var(--seerr-edge);
-}
-
-.seerr-cache-age:empty {
-  margin: 0;
-  padding: 0;
-  border-right: 0;
-}
-
-/* A label and its control are one unit: the bar wraps, and as separate flex
-   items they could end up on different lines from each other. */
-.seerr-filter-field {
-  display: inline-flex;
+.seerr-cache-age { font-size: 11px; color: var(--seerr-label); }
+.seerr-cache-age:empty { display: none; }
+.seerr-filter-controls { display: flex; flex-wrap: wrap; gap: 20px 24px; align-items: flex-start; }
+.seerr-filter-field { min-width: 0; box-sizing: border-box; }
+.seerr-sort-field { display: flex; flex-direction: column; gap: 8px; flex: 1 1 220px; }
+.seerr-rating-filters { flex: 3 1 420px; min-width: 0; }
+.seerr-minimum-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; margin-bottom: 8px; }
+.seerr-minimum-heading h3 { margin: 0; font-size: 12px; font-weight: 600; color: var(--seerr-text); }
+.seerr-minimum-heading p { margin: 0; font-size: 11px; color: var(--seerr-label); }
+.seerr-threshold-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.seerr-filter-field[data-score] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 7px;
-  white-space: nowrap;
-  padding: 2px 8px 2px 10px;
-  border-radius: 7px;
-  border: 1px solid transparent;
-  transition: border-color 0.15s, background 0.15s;
+  gap: 7px 5px;
+  padding: 10px;
+  border: 1px solid var(--seerr-edge);
+  border-radius: 10px;
+  background: #10182766;
+  transition: border-color .15s, background .15s;
 }
-
-.seerr-sort-filter-bar label {
-  font-size: 11px;
-  font-weight: 500;
-  color: var(--seerr-label);
-  letter-spacing: 0.01em;
-}
-
+.seerr-sort-filter-bar label { font-size: 12px; font-weight: 600; color: var(--seerr-label); }
+.seerr-filter-field[data-score] label { grid-column: 1 / -1; white-space: nowrap; }
+.seerr-score-scale { color: var(--seerr-label); font-size: 11px; white-space: nowrap; }
 .seerr-sort-filter-bar select,
 .seerr-sort-filter-bar input[type="text"],
 .seerr-sort-filter-bar input[type="number"] {
-  padding: 4px 8px;
-  border-radius: 6px;
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 36px;
+  padding: 7px 10px;
+  border-radius: 8px;
   border: 1px solid var(--seerr-edge);
   background: var(--seerr-well);
   color: var(--seerr-text);
-  font-size: 12px;
-  font-weight: 500;
-  font-family: inherit;
+  font: inherit;
+  font-size: 13px;
   font-variant-numeric: tabular-nums;
-  outline: none;
+  color-scheme: dark;
 }
-
-.seerr-filter-field input[type="number"] {
-  width: 56px;
+.seerr-filter-field input[type="number"] { width: 100%; padding: 6px; }
+.seerr-sort-select { width: 100%; max-width: 100%; }
+.seerr-sort-filter-bar select:hover, .seerr-sort-filter-bar input:hover { border-color: #65738d; }
+.seerr-sort-filter-bar :is(select, input, button):focus-visible {
+  outline: 2px solid var(--seerr-violet);
+  outline-offset: 3px;
 }
-
-/* Wide enough to read the selected option rather than truncating it. */
-.seerr-sort-select {
-  min-width: 190px;
-  max-width: 100%;
-}
-
-.seerr-sort-filter-bar select:hover,
-.seerr-sort-filter-bar input[type="number"]:hover {
-  border-color: #3d4a60;
-}
-
-/* Keyboard focus must be obvious, not a tint. */
-.seerr-sort-filter-bar select:focus-visible,
-.seerr-sort-filter-bar input[type="number"]:focus-visible,
-.seerr-sort-filter-bar button:focus-visible {
-  border-color: var(--seerr-violet);
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.3);
-}
-
-/* A threshold above zero is live. The field takes the colour of the badge it
-   filters, so the bar says at a glance what is narrowing the grid. */
 .seerr-filter-field[data-score].is-active {
-  background: var(--seerr-well);
-  border-color: var(--score);
-  background: color-mix(in srgb, var(--score) 14%, transparent);
-  border-color: color-mix(in srgb, var(--score) 55%, transparent);
+  background: color-mix(in srgb, var(--score) 12%, #101827);
+  border-color: color-mix(in srgb, var(--score) 65%, var(--seerr-edge));
 }
-
-.seerr-filter-field[data-score].is-active label {
-  color: var(--score);
-}
-
-.seerr-filter-field[data-score].is-active input[type="number"] {
-  border-color: var(--score);
-  border-color: color-mix(in srgb, var(--score) 45%, transparent);
-  color: #fff;
-}
-
-.seerr-filter-field[data-score="critics"]  { --score: #f2584c; }
-.seerr-filter-field[data-score="audience"] { --score: #f5a623; }
-.seerr-filter-field[data-score="tmdb"]     { --score: #4cc2d4; }
-.seerr-filter-field[data-score="imdb"]     { --score: #f5c518; }
-
+.seerr-filter-field[data-score].is-active label { color: var(--score); }
+.seerr-filter-field[data-score].is-active input { border-color: var(--score); color: #fff; }
+.seerr-filter-field[data-score="critics"] { --score: #ff8d81; }
+.seerr-filter-field[data-score="audience"] { --score: #f6bd60; }
+.seerr-filter-field[data-score="tmdb"] { --score: #6bd8e6; }
+.seerr-filter-field[data-score="imdb"] { --score: #f5d350; }
 .seerr-sort-filter-bar button {
-  padding: 5px 12px;
-  border-radius: 6px;
+  min-height: 36px;
+  padding: 7px 12px;
+  border-radius: 8px;
   border: 1px solid var(--seerr-edge);
   background: var(--seerr-well);
   color: var(--seerr-text);
-  font-size: 11px;
-  font-weight: 500;
   font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
-  outline: none;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
+  transition: background .15s, border-color .15s;
 }
-
-.seerr-sort-filter-bar button:hover {
-  background: #253044;
-  border-color: #3d4a60;
-}
-
-/* Reset only matters once something is set, so it stays the quietest thing. */
-.seerr-reset-sort {
-  background: transparent;
-  border-color: transparent;
-  color: var(--seerr-label);
-}
-
-.seerr-reset-sort:hover {
-  background: var(--seerr-well);
-  color: var(--seerr-text);
-}
-
-/* The two actions that reach the network or change mode carry the accent. */
-.seerr-refresh-scores,
-.seerr-load-all,
-.seerr-toggle-select {
-  border-color: rgba(139, 92, 246, 0.45);
-  color: #cdbcfb;
-}
-
-.seerr-refresh-scores:hover,
-.seerr-load-all:hover,
-.seerr-toggle-select:hover {
-  background: rgba(139, 92, 246, 0.16);
-  border-color: rgba(139, 92, 246, 0.7);
-  color: #fff;
-}
-
-.seerr-refresh-scores:disabled {
-  opacity: 0.55;
-  cursor: default;
+.seerr-sort-filter-bar button:hover:not(:disabled) { background: #2a3750; border-color: #65738d; }
+.seerr-sort-filter-bar button:disabled, .seerr-sort-filter-bar input:disabled, .seerr-sort-filter-bar select:disabled { opacity: .5; cursor: default; }
+.seerr-sort-filter-bar .seerr-reset-sort { background: transparent; color: var(--seerr-label); }
+.seerr-sort-filter-bar .seerr-toggle-select { background: #7c3aed33; border-color: #a78bfa88; color: #ddd1ff; }
+@container seerr-filters (max-width: 600px) {
+  .seerr-threshold-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .seerr-filter-actions > button { flex: 1 1 auto; }
 }
 
 /* ─── Filter Toggle Button ─── */
@@ -368,6 +311,7 @@
   outline: none;
 }
 
+.seerr-filter-toggle:focus-visible { outline: 3px solid #c4b5fd; outline-offset: 3px; }
 .seerr-filter-toggle:hover {
   background: rgba(55, 65, 81, 0.92);
   color: #f9fafb;
@@ -647,8 +591,10 @@
 .seerr-rating-details[open] { box-shadow: 0 3px 12px #0006; }
 .seerr-rating-details summary:focus-visible, .seerr-rating-details button:focus-visible { outline: 3px solid #f59e0b; outline-offset: 2px; }
 
-.seerr-filter-presets { display: flex; gap: .4rem; align-items: center; flex-wrap: wrap; }
-.seerr-filter-presets input { width: 120px; }
+.seerr-filter-presets { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: 100%; padding-top: 16px; border-top: 1px solid var(--seerr-edge); }
+.seerr-presets-label { flex-basis: 100%; color: var(--seerr-label); }
+.seerr-filter-presets input { width: 160px; flex: 1 1 140px; }
+.seerr-filter-presets select { flex: 1 1 170px; }
 .seerr-filter-presets input:focus-visible { outline: 3px solid #f59e0b; }
 
 /* Long preset names and storage messages must wrap within the toolbar. */

@@ -14,7 +14,8 @@
     const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = 'Delete preset'; remove.disabled = true;
     const retry = document.createElement('button'); retry.type = 'button'; retry.textContent = 'Retry loading presets'; retry.hidden = true;
     const status = document.createElement('span'); status.setAttribute('role', 'status');
-    wrapper.append(select, name, save, remove, retry, status); bar.appendChild(wrapper);
+    const heading = document.createElement('span'); heading.className = 'seerr-presets-label'; heading.textContent = 'Presets';
+    wrapper.append(heading, select, name, save, remove, retry, status); bar.appendChild(wrapper);
     const sorts = new Set([...bar.querySelector('.seerr-sort-select').options].map(option => option.value));
     const limits = { minCritics: 100, minAudience: 100, minTmdb: 10, minImdb: 10 };
     let presets = [];
