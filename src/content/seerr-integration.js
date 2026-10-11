@@ -1800,12 +1800,7 @@
         if (!ownsButton()) return;
         button.disabled = false;
         button.textContent = '＋ Add to Plex Watchlist';
-        const note = document.createElement('div');
-        note.className = 'seerr-quality-summary';
-        note.setAttribute('data-seerr-overlay', 'true');
-        note.textContent = `Plex Watchlist failed: ${error.message}`;
-        container.appendChild(note);
-        setTimeout(() => note.remove(), 5000);
+        notifyResult('Plex Watchlist Failed', error.message || 'Failed to add to Plex Watchlist', 'error');
       }
     });
     container.appendChild(button);

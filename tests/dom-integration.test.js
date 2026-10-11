@@ -1229,10 +1229,11 @@ for (const outcome of ['success', 'failure', 'rejection']) {
       await settle();
       if (change === 'none') {
         assert.equal(button.textContent, outcome === 'success' ? '✓ Added to Plex Watchlist' : '＋ Add to Plex Watchlist');
-        assert.equal([...container.querySelectorAll('.seerr-quality-summary')].filter(note => note.textContent.startsWith('Plex Watchlist failed:')).length, outcome === 'success' ? 0 : 1);
+        await new Promise(resolve => setTimeout(resolve, 10));
+        assert.equal(doc.querySelectorAll('.seerr-notification.error').length, outcome === 'success' ? 0 : 1);
       } else {
         assert.equal(button.textContent, 'Adding to Plex…');
-        assert.equal([...container.querySelectorAll('.seerr-quality-summary')].filter(note => note.textContent.startsWith('Plex Watchlist failed:')).length, 0);
+        assert.equal(doc.querySelectorAll('.seerr-notification.error').length, 0);
       }
     });
   }
