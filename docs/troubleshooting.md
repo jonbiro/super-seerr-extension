@@ -14,7 +14,7 @@ Rebuild once, then reload the extension in `chrome://extensions`. Refresh Seerr 
 
 ## Scores look wrong or uncertain
 
-A tilde means an approximate RT match. Remakes and titles without a year are especially ambiguous. Check the underlying title and media type. Scores from different sources may update at different times. In-memory caches expire or reset when their execution context restarts; a service worker restart clears its RT cache.
+A tilde means an approximate RT match. Remakes and titles without a year are especially ambiguous. Check the underlying title and media type. Scores from different sources may update at different times. Verified public Rotten Tomatoes scores persist across worker restarts and are shared across your saved sites; Seerr-specific scores remain separate.
 
 For a reproducible issue, report title, year, movie/TV type, page route, extension version, and expected versus actual behavior. Do not share API keys or private server addresses in a public issue.
 
@@ -44,7 +44,7 @@ The site integrations and the Seerr overlay use different permissions. Open Sett
 
 ## A rating looks wrong or out of date
 
-Cached ratings do not expire, so a score that has changed upstream keeps its stored value. The grid controls show when the loaded titles were cached; **Refresh scores** refetches just those. To drop everything, use **Settings → Troubleshooting → Clear ratings cache**, which open Seerr tabs pick up without a reload.
+Cached ratings remain visible while full bundles refresh after 24 hours and partial bundles after one hour. Sharing a public score does not renew its original freshness timestamp. The grid controls show when the loaded titles were cached; **Refresh scores** refetches just those. To drop everything, use **Settings → Troubleshooting → Clear ratings cache**, which open Seerr tabs pick up without a reload.
 
 ## Cards on a Seerr grid have no scores
 

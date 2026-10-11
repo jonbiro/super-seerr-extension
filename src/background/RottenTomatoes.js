@@ -101,7 +101,7 @@
     // the choice between them rests on Rotten Tomatoes' own ordering.
     rtMatchIsAmbiguous(candidates, best) {
       return candidates.some(candidate =>
-        candidate !== best &&
+        candidate !== best && candidate.href !== best.href &&
         candidate.confidence >= best.confidence &&
         this.normalizeTitleForMatch(candidate.title) === this.normalizeTitleForMatch(best.title));
     },
@@ -165,15 +165,23 @@
       return response.text();
     },
 
+    rtTitleCacheKey(data) {
+      const title = typeof data?.title === 'string' ? data.title.trim() : '';
+      const original = typeof data?.originalTitle === 'string' ? data.originalTitle.trim() : '';
+      return `${data.mediaType || 'movie'}:${title}:${data.year || ''}${original && original !== title ? `:original:${original}` : ''}`;
+    },
+
     async getRottenTomatoesRatings(data) {
       const title = typeof data?.title === 'string' ? data.title.trim() : '';
       if (!title) return null;
       const refresh = data?.refresh === true;
       const originalTitle = typeof data?.originalTitle === 'string' ? data.originalTitle.trim() : null;
-      const normalized = { ...data, title, originalTitle, mediaType: data.mediaType || 'movie', refresh };
+      const normalized = { ...data, title, originalTitle, mediaType: data.mediaType || 'movie', refresh,
+        // A default lookup type is not verified identity for cross-site reuse.
+        tmdbId: this.publicRatingKey(data) ? data.tmdbId : null };
       // A refresh coalesces with other refreshes but must not join an ordinary
       // lookup already in flight, which would hand back the stale value.
-      const key = `${refresh ? 'refresh:' : ''}${normalized.mediaType}:${title}:${normalized.year || ''}`;
+      const key = `${refresh ? 'refresh:' : ''}${normalized.mediaType}:${title}:${normalized.year || ''}:${originalTitle || ''}:${this.publicRatingKey(normalized) || ''}`;
       if (this.rtPending.has(key)) return this.rtPending.get(key);
       const pending = this.resolveRottenTomatoesRatings(normalized);
       this.rtPending.set(key, pending);
@@ -213,32 +221,39 @@
 
       const best = candidates[0];
       if (!best) return null;
-      // Several films can share a title exactly. With no year to choose between
-      // them, taking whichever Rotten Tomatoes ranked first is a guess, and a
+      // Several films can share a title exactly. Even an identical release year can leave
+      // a tie; taking whichever Rotten Tomatoes ranked first is a guess, and a
       // wrong score presented as fact is worse than none. Another query may
       // still be unambiguous.
-      if (!year && this.rtMatchIsAmbiguous(candidates, best)) {
+      if (this.rtMatchIsAmbiguous(candidates, best)) {
         outcome.uncertain = true;
-        this.log(`Rotten Tomatoes has more than one "${best.title}" and no year was known; not guessing`);
+        this.log(`Rotten Tomatoes has more than one "${best.title}" with equally strong matches; not guessing`);
         return null;
       }
       if (best.confidence < RatingsConfig.confidenceThreshold) outcome.uncertain = true;
       return best.confidence >= RatingsConfig.confidenceThreshold ? best : null;
     },
 
-    async resolveRottenTomatoesRatings({ title, originalTitle = null, year = null, mediaType = 'movie', refresh = false }) {
+    async resolveRottenTomatoesRatings({ title, originalTitle = null, year = null, mediaType = 'movie', refresh = false, tmdbId = null }) {
       if (!title) return null;
 
       if (this.cacheClearPending) await this.cacheClearPending;
       const generation = this.rtCacheGeneration;
       await this.loadRtCache();
 
-      const cacheKey = `${mediaType}:${title}:${year || ''}`;
+      const identity = { title, originalTitle, year, mediaType, tmdbId };
+      const shared = !refresh && this.cachedPublicRating(identity);
+      if (shared) return { ...shared.value, lastUpdated: shared.checkedAt, diagnostic: 'rated' };
+      const cacheKey = this.rtTitleCacheKey(identity);
       // Scores move as reviews arrive, so a refresh discards what we hold and
       // refetches; the new value then becomes the cached one.
       if (refresh) this.rtCache.delete(cacheKey);
       const cached = this.rtCache.get(cacheKey);
-      if (cached && Date.now() < cached.expiresAt) return cached.value;
+      if (cached && Date.now() < cached.expiresAt) {
+        this.sharePublicRating(identity, cached.value, cached, generation);
+        return cached.value ? { ...cached.value, lastUpdated: cached.checkedAt, diagnostic: cached.diagnostic } : null;
+      }
+      const checkedAt = this.rtLookupClock = Math.max(Date.now(), this.rtLookupClock + 1);
 
       // Bound the worker cache during long browsing sessions. Insertion enforces
       // the hard limit; this only clears entries that have already expired.
@@ -269,7 +284,7 @@
 
       if (!best) {
         const empty = null;
-        this.cacheRottenTomatoesResult(cacheKey, empty, RatingsConfig.rtNegativeCacheTtlMs, generation, outcome.uncertain ? 'uncertain' : 'unrated');
+        this.cacheRottenTomatoesResult(cacheKey, empty, RatingsConfig.rtNegativeCacheTtlMs, generation, outcome.uncertain ? 'uncertain' : 'unrated', checkedAt);
         return empty;
       }
 
@@ -288,12 +303,15 @@
         source: 'rotten-tomatoes',
         url: best.href,
         matchedTitle: best.title,
-        matchedYear: best.year
+        matchedYear: best.year,
+        lastUpdated: checkedAt,
+        diagnostic: outcome.failed ? 'failed' : 'rated'
       };
 
       const ttl = result.rtCriticsScore === null && result.rtAudienceScore === null
         ? RatingsConfig.rtNegativeCacheTtlMs : RatingsConfig.rtCacheTtlMs;
-      this.cacheRottenTomatoesResult(cacheKey, result, outcome.failed ? RatingsConfig.rtNegativeCacheTtlMs : ttl, generation, outcome.failed ? 'failed' : 'rated');
+      this.cacheRottenTomatoesResult(cacheKey, result, outcome.failed ? RatingsConfig.rtNegativeCacheTtlMs : ttl, generation, outcome.failed ? 'failed' : 'rated', checkedAt);
+      this.sharePublicRating(identity, result, this.rtCache.get(cacheKey), generation);
       return result;
     },
   };

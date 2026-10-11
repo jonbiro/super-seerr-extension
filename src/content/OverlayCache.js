@@ -4,6 +4,7 @@
     // key: `${mediaType}:${tmdbId}`, value: { bundle }. `pending:` keys hold the
     // in-flight promise instead, so serialisation skips them.
     const ratingsCache = new Map();
+    const publicRatings = new Map();
 
     // Resolved bundles persist so a page reload does not re-resolve every card.
     // Aging entries remain renderable while sources refresh in the background;
@@ -29,7 +30,7 @@
     const indexFingerprint = item => JSON.stringify([String(item.tmdbId), item.mediaType, item.title || '',
       item.originalTitle || '', item.year ?? null, item.posterPath || null, item.releaseDate || '', item.firstAirDate || '']);
     const storedEntry = value => ({ bundle: value.bundle ?? null, cachedAt: value.cachedAt ?? null,
-      retryAt: value.retryAt ?? null, diagnostics: value.diagnostics ?? null });
+      retryAt: value.retryAt ?? null, ...(typeof value.publicCheckedAt === 'number' ? { publicCheckedAt: value.publicCheckedAt } : {}), diagnostics: value.diagnostics ?? null });
 
     function loadPersistedRatings() {
       const expected = generation;
@@ -40,6 +41,13 @@
           const local = response.data;
           if (expected !== generation) return loadPersistedRatings();
           epoch = local.ratingsCacheEpoch ?? 0;
+          publicRatings.clear();
+          if (local.publicRatingsV1?.matcher === Config.matcherVersion) {
+            for (const [key, entry] of Object.entries(local.publicRatingsV1.entries || {})) {
+              if (entry.expiresAt > Date.now()) publicRatings.set(key, { ...entry,
+                bundle: Model.createRatingsBundle({ ...entry.value, lastUpdated: entry.checkedAt }) });
+            }
+          }
           const stored = local[PERSISTED_RATINGS_KEY];
           if (!stored || typeof stored !== 'object' || (stored.epoch ?? 0) !== epoch) return true;
           // Entries belong to the server they were read from.
@@ -70,6 +78,7 @@
             const cachedAt = typeof entry.cachedAt === 'number' ? entry.cachedAt : null;
             const loaded = { bundle: bundle ? Model.createRatingsBundle(bundle) : null, cachedAt,
               ...(typeof entry.retryAt === 'number' ? { retryAt: entry.retryAt } : {}),
+              ...(typeof entry.publicCheckedAt === 'number' ? { publicCheckedAt: entry.publicCheckedAt } : {}),
               ...(entry.diagnostics && typeof entry.diagnostics === 'object' ? { diagnostics: entry.diagnostics } : {}) };
             persistedEntries.set(key, JSON.stringify(storedEntry(loaded)));
             if (ratingsCache.has(key)) continue;
@@ -168,10 +177,16 @@
       clearTimeout(persistedRatingsFlushTimer);
       persistedRatingsFlushTimer = null;
       ratingsCache.clear();
+      publicRatings.clear();
       persistedRatingsReady = null;
       persistedEntries.clear(); persistedIndex.clear();
     }
 
-    return { ratingsCache, loadPersistedRatings, schedulePersistedRatingsFlush, flushPersistedRatings, forgetPersistedRatings };
+    function getPublicRating(key, year = null) {
+      const entry = publicRatings.get(key);
+      return entry && entry.expiresAt > Date.now() && (!year || Number(year) === entry.value.matchedYear) ? entry : null;
+    }
+
+    return { ratingsCache, getPublicRating, loadPersistedRatings, schedulePersistedRatingsFlush, flushPersistedRatings, forgetPersistedRatings };
   };
 })(typeof window !== 'undefined' ? window : globalThis);

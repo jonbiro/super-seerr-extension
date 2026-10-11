@@ -4,6 +4,7 @@ import '../shared/MediaValidation.js';
 import './SeerrMatching.js';
 import './MediaStatus.js';
 import './RtCache.js';
+import './PublicRatings.js';
 import './RottenTomatoes.js';
 import './SeerrTransport.js';
 import './SeerrReadCache.js';
@@ -60,6 +61,8 @@ class SeerrAPI {
     this.debugLogging = false;
     this.mediaServerName = null;
     this.rtCache = new Map();
+    this.publicRatings = new Map();
+    this.rtLookupClock = 0;
     this.rtPending = new Map();
     this.rtCacheReady = null;
     this.rtCacheFlushTimer = null;
@@ -426,9 +429,13 @@ class SeerrAPI {
 
         case 'getRottenTomatoesRatings': {
           const input = request.data || {};
+          if (input.tmdbId != null) {
+            if (sender?.tab) this.overlayStorageServer(sender);
+            else this.requireExtensionPage(sender);
+          }
           const rtResult = await this.getRottenTomatoesRatings(input);
-          const key = `${input.mediaType || 'movie'}:${String(input.title || '').trim()}:${input.year || ''}`;
-          sendResponse({ success: true, data: rtResult, diagnostic: this.rtCache.get(key)?.diagnostic ?? null });
+          const key = this.rtTitleCacheKey(input);
+          sendResponse({ success: true, data: rtResult, diagnostic: rtResult?.diagnostic ?? this.rtCache.get(key)?.diagnostic ?? null });
           break;
         }
 
@@ -801,7 +808,7 @@ class SeerrAPI {
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
 
-Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.SeerrConnections, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests, globalThis.OverlayStorage, globalThis.TitleCorrections, globalThis.FilterPresetStorage);
+Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.PublicRatings, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.SeerrConnections, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests, globalThis.OverlayStorage, globalThis.TitleCorrections, globalThis.FilterPresetStorage);
 
 const seerrAPI = new SeerrAPI();
 let initializing = true;

@@ -157,20 +157,25 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     await eventually(badges, 2, 'back navigation restores one badge set');
 
     await navigate(optionsUrl);
+    const reloadBackground = async () => {
+      // Reload closes extension documents; call from an unsupported Seerr route.
+      await navigate(`${origin}/settings`);
+      await context('chrome');
+      await asyncScript(`const { AddonManager } = ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs');
+        await (await AddonManager.getAddonByID(arguments[0])).reload();`, [addonId]);
+      await context('content');
+      await navigate(optionsUrl);
+    };
     await extensionScript(`await api.storage.local.set({ rtCacheV1: { matcher: arguments[0], entries: {
       'movie:Example:2020': { value: { rtCriticsScore: 22 }, expiresAt: Date.now() + 60000 }
     } } });`, [Config.matcherVersion]);
+    // The overlay has warmed memory already; seed disk and reload explicitly.
+    await reloadBackground();
     assert.equal((await message({ action: 'getRottenTomatoesRatings', data: { title: 'Example', year: 2020 } })).data.rtCriticsScore, 22);
     await extensionScript(`const { rtCacheV1 } = await api.storage.local.get('rtCacheV1');
       rtCacheV1.entries['movie:Example:2020'].value.rtCriticsScore = 88;
       await api.storage.local.set({ rtCacheV1 });`);
-    // Reload closes extension documents; keep the WebDriver caller on a normal page.
-    await navigate(`${origin}/settings`);
-    await context('chrome');
-    await asyncScript(`const { AddonManager } = ChromeUtils.importESModule('resource://gre/modules/AddonManager.sys.mjs');
-      await (await AddonManager.getAddonByID(arguments[0])).reload();`, [addonId]);
-    await context('content');
-    await navigate(optionsUrl);
+    await reloadBackground();
     assert.equal((await message({ action: 'getRottenTomatoesRatings', data: { title: 'Example', year: 2020 } })).data.rtCriticsScore, 88, 'reloaded background reads persisted rather than old in-memory data');
     const state = await message({ action: 'getConfigState' });
     assert.equal(state.data.apiConfigured, true);

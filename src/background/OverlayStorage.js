@@ -47,7 +47,8 @@
         const diagnostics = ['rated', 'partial', 'unrated', 'failed', 'uncertain'].includes(entry.diagnostics?.status) ? {
           status: entry.diagnostics.status, checkedAt: number(entry.diagnostics.checkedAt, Date.now() + 60000), source: text(entry.diagnostics.source, 100)
         } : null;
-        entries[key] = { bundle, cachedAt: number(entry.cachedAt, Date.now() + 60000), retryAt: number(entry.retryAt, Date.now() + root.RatingsConfig.ratingsFreshMs), diagnostics };
+        entries[key] = { bundle, cachedAt: number(entry.cachedAt, Date.now() + 60000), retryAt: number(entry.retryAt, Date.now() + root.RatingsConfig.ratingsFreshMs),
+          ...(number(entry.publicCheckedAt, Date.now() + 60000) !== null ? { publicCheckedAt: entry.publicCheckedAt } : {}), diagnostics };
       }
       const index = (Array.isArray(value.index) ? value.index : []).slice(-root.RatingsConfig.listIndexMaxEntries).filter(item =>
         item && /^(movie|tv)$/.test(item.mediaType) && /^[1-9]\d*$/.test(String(item.tmdbId)) && Number.isSafeInteger(Number(item.tmdbId))
@@ -107,6 +108,7 @@
     async getOverlayCache(sender) {
       const server = this.overlayStorageServer(sender);
       await this.cacheClearPending;
+      await this.loadRtCache();
       return this.queueOverlayStorage(async () => {
         if (server !== this.overlayStorageServer(sender)) throw new Error('Server changed');
         const local = await chrome.storage.local.get([KEY, SITES_KEY, 'ratingsCacheEpoch']);
@@ -120,7 +122,7 @@
           if (server !== this.overlayStorageServer(sender)) throw new Error('Server changed');
         }
         const cached = caches[serverKey(server)];
-        return { ratingsCacheEpoch: epoch, [KEY]: cached ? { ...cached, server } : null };
+        return { ratingsCacheEpoch: epoch, [KEY]: cached ? { ...cached, server } : null, publicRatingsV1: this.publicRatingsPayload() };
       });
     },
     async putOverlayCache(value, sender) {

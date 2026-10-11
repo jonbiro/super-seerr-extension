@@ -53,11 +53,28 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     expect(requests.filter(r => r.path === '/api/v1/auth/me').at(-1)).toMatchObject({ site: 'Family', key: 'family-key' });
     const familyRequest = await options.evaluate(async () => chrome.runtime.sendMessage({ action: 'requestMedia', data: { tmdbId: 550, mediaType: 'movie', title: 'Fight Club' } }));
     expect(familyRequest.success).toBe(true);
+    // Seed a verified provider fixture, then restart the actual worker to
+    // exercise the persisted public tier rather than its in-memory state.
+    await options.evaluate(async matcher => {
+      const checkedAt = Date.now();
+      await chrome.storage.local.set({ publicRatingsV1: { matcher, entries: { 'movie:550': {
+        source: 'rotten-tomatoes', checkedAt, expiresAt: checkedAt + 86400000,
+        value: { source: 'rotten-tomatoes', confidence: 1, rtCriticsScore: 62, rtAudienceScore: 73,
+          matchedTitle: 'Fight Club', matchedYear: 1999, url: 'https://www.rottentomatoes.com/m/fight_club' }
+      } } } });
+    }, require('../../src/shared/RatingsConfig').matcherVersion);
+    const seedSession = await context.newCDPSession(options);
+    await seedSession.send('ServiceWorker.enable');
+    await seedSession.send('ServiceWorker.stopAllWorkers');
+    await options.evaluate(() => chrome.runtime.sendMessage({ action: 'getConfigState' }));
+    await seedSession.detach();
     const seerr = await context.newPage();
     await seerr.goto(`${second.origin}/discover`);
     await expect(seerr.locator('.seerr-card-badge')).toHaveCount(2);
     const cachedSites = () => options.evaluate(async () => (await chrome.storage.local.get('overlayRatingsByServerV1')).overlayRatingsByServerV1 || {});
     await expect.poll(async () => Object.keys((await cachedSites())[second.origin]?.entries || {})).toContain('movie:550');
+    expect((await cachedSites())[second.origin].entries['movie:550'].bundle.rtCriticsScore).toBe(62);
+    expect((await cachedSites())[second.origin].entries['movie:550'].bundle.imdbRating).toBe(8);
     // Two independently loaded cache clients must preserve each other's
     // ratings and title indexes while using the real worker/storage bridge.
     const sibling = await context.newPage();
@@ -108,6 +125,14 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await expect.poll(async () => Object.keys((await cachedSites())[first.origin]?.entries || {})).toContain('movie:550');
     await homePage.close();
     expect(Object.keys(await cachedSites()).sort()).toEqual([first.origin, second.origin].sort());
+    expect((await cachedSites())[first.origin].entries['movie:550'].bundle.rtCriticsScore).toBe(62);
+    await options.evaluate(async () => {
+      const { publicRatingsV1: shared } = await chrome.storage.local.get('publicRatingsV1');
+      const entry = shared.entries['movie:550'];
+      entry.checkedAt = Date.now(); entry.expiresAt = entry.checkedAt + 86400000;
+      entry.value.rtCriticsScore = 95;
+      await chrome.storage.local.set({ publicRatingsV1: shared });
+    });
     const cdp = await context.newCDPSession(options);
     await cdp.send('ServiceWorker.enable');
     await cdp.send('ServiceWorker.stopAllWorkers');
@@ -128,6 +153,8 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await expect(seerr.locator('.seerr-card-badge')).toHaveCount(2);
     expect((await cachedSites())[first.origin].entries['movie:550']).toBeTruthy();
     expect((await cachedSites())[second.origin].entries['movie:550']).toBeTruthy();
+    await expect.poll(async () => (await cachedSites())[second.origin].entries['movie:550'].bundle.rtCriticsScore).toBe(95);
+    expect((await cachedSites())[second.origin].entries['movie:550'].bundle.imdbRating).toBe(8);
     await expect(popup.locator('#activeSeerrSite')).toHaveValue(second.origin);
     await expect(popup.locator('#activeSeerrSite')).toHaveAttribute('title', second.origin);
     await expect(popup.locator('#serverUrl')).toContainText(new URL(second.origin).host);
@@ -162,6 +189,7 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await seerr.close();
     expect(await options.evaluate(() => chrome.runtime.sendMessage({ action: 'clearRatingsCache' }))).toEqual({ success: true });
     expect(await cachedSites()).toEqual({});
+    expect(await options.evaluate(async () => (await chrome.storage.local.get('publicRatingsV1')).publicRatingsV1)).toBeUndefined();
   } finally {
     await context?.close();
     await Promise.all([new Promise(resolve => first.server.close(resolve)), new Promise(resolve => second.server.close(resolve))]);

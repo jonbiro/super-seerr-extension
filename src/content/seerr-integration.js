@@ -100,7 +100,7 @@
 
   const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';
   const { ratingsCache, loadPersistedRatings, schedulePersistedRatingsFlush,
-    flushPersistedRatings, forgetPersistedRatings } = window.createOverlayCache({
+    flushPersistedRatings, forgetPersistedRatings, getPublicRating } = window.createOverlayCache({
       Config, Model, log, getServer: () => configuredServer,
       getListIndex: projectListIndex, restoreListIndex
     });
@@ -737,7 +737,7 @@
   // MV3 evicts the worker after seconds of idle, so a sendMessage failing
   // mid-burst is ordinary, and caching that as "unrated" would hide a real
   // score for as long as the absence lives.
-  async function fetchRottenTomatoesRatings(title, year, mediaType, refresh = false, originalTitle = null, outcome = {}) {
+  async function fetchRottenTomatoesRatings(title, year, mediaType, refresh = false, originalTitle = null, outcome = {}, tmdbId = null) {
     if (!title) return null;
 
     try {
@@ -745,7 +745,7 @@
         action: 'getRottenTomatoesRatings',
         // The worker holds RT for 24 hours, and RT is the score most likely to
         // have moved, so a refresh has to reach past that cache too.
-        data: { title, originalTitle, year, mediaType, refresh }
+        data: { title, originalTitle, year, mediaType, refresh, tmdbId }
       });
       // The worker answering "no match" is an answer. The worker failing is not.
       if (!response?.success) {
@@ -755,13 +755,14 @@
       if (response.diagnostic === 'uncertain') outcome.uncertain = true;
       if (response.diagnostic === 'failed') outcome.conclusive = false;
       if (!response.data) return null;
+      if (typeof response.data.lastUpdated === 'number') outcome.publicCheckedAt = response.data.lastUpdated;
 
       return Model.createRatingsBundle({
         rtCriticsScore: response.data.rtCriticsScore ?? null,
         rtAudienceScore: response.data.rtAudienceScore ?? null,
         confidence: response.data.confidence ?? 0,
         source: response.data.source || 'rotten-tomatoes',
-        lastUpdated: Date.now()
+        lastUpdated: response.data.lastUpdated || Date.now()
       });
     } catch (error) {
       log('Rotten Tomatoes lookup failed:', error);
@@ -786,6 +787,11 @@
     const lookupYear = year || pageMeta?.year || null;
     const pageBundle = tmdbId !== null && tmdbId !== undefined ? pageRatingsByTmdbId.get(ratingKey(tmdbId, mediaType)) : null;
     let bundle = options.refresh ? null : mergeBundles(native, pageBundle);
+    const shared = !options.refresh && getPublicRating(ratingKey(tmdbId, mediaType), lookupYear);
+    if (shared) {
+      bundle = mergeBundles(shared.bundle, bundle);
+      if (options.outcome) options.outcome.publicCheckedAt = shared.checkedAt;
+    }
     // A refresh asks the configured server first, avoiding external scraping
     // entirely when Seerr can already supply the current ratings.
     if (options.refresh) bundle = await fetchSeerrSessionRatings(tmdbId, mediaType, null, options.outcome ?? {});
@@ -793,7 +799,7 @@
     if (options.signal?.aborted) return null;
     if (!bundle || bundle.rtCriticsScore === null || bundle.rtAudienceScore === null) {
       const rtBundle = await fetchRottenTomatoesRatings(
-        lookupTitle, lookupYear, mediaType, options.refresh === true, pageMeta?.originalTitle || null, options.outcome ?? {});
+        lookupTitle, lookupYear, mediaType, options.refresh === true, pageMeta?.originalTitle || null, options.outcome ?? {}, tmdbId);
       if (rtBundle && rtBundle.confidence >= Config.confidenceThreshold) {
         bundle = mergeBundles(bundle, rtBundle);
       } else if (rtBundle && options.outcome) {
@@ -971,7 +977,17 @@
     await loadRatingsAvailability();
 
     const key = ratingsCacheKey(tmdbId, title, year, mediaType);
-    const previous = ratingsCache.get(key);
+    let previous = ratingsCache.get(key);
+    const shared = !options.refresh && getPublicRating(key, year);
+    if (shared && previous?.bundle && shared.checkedAt > (previous.publicCheckedAt ?? previous.cachedAt ?? 0)) {
+      const bundle = mergeBundles(shared.bundle, previous.bundle);
+      previous = { ...previous, bundle, publicCheckedAt: shared.checkedAt,
+        ...(previous.diagnostics ? { diagnostics: { ...previous.diagnostics, source: bundle.source } } : {}) };
+      ratingsCache.set(key, previous);
+      schedulePersistedRatingsFlush();
+    } else if (shared && previous && !previous.bundle) {
+      ratingsCache.delete(key); previous = null;
+    }
     let cached = options.refresh === true ? null : previous;
     // Missing scores expire sooner than complete results.
     const absenceTtl = cached?.provisional ? Config.inconclusiveRetryMs : Config.unratedRetryMs;
@@ -1043,6 +1059,7 @@
       // re-asking on every pass, short enough to cost nothing once the server
       // or the worker is back.
       const provisional = !storable && outcome.conclusive === false;
+      const publicCheckedAt = outcome.publicCheckedAt ?? (outcome.conclusive === false ? previous?.publicCheckedAt : null);
       if (ratingsCache.get(pendingKey) === promise) {
         while (resolvedCacheSize() >= Config.overlayCacheMaxEntries) {
           const lru = [...ratingsCache.keys()].find(existingKey => !existingKey.startsWith('pending:'));
@@ -1055,7 +1072,8 @@
         const retryMs = outcome.conclusive === false ? Config.inconclusiveRetryMs
           : status === 'unrated' ? Config.unratedRetryMs
           : status === 'rated' ? Config.ratingsFreshMs : Config.partialRatingsRetryMs;
-        ratingsCache.set(key, { bundle: storable, cachedAt: checkedAt, retryAt: checkedAt + retryMs,
+        ratingsCache.set(key, { bundle: storable, cachedAt: checkedAt,
+          ...(publicCheckedAt ? { publicCheckedAt } : {}), retryAt: Math.min(checkedAt + retryMs, (publicCheckedAt ?? checkedAt) + Config.rtCacheTtlMs),
           diagnostics: { status, checkedAt, source: storable?.source || 'No source returned a score' },
           ...(provisional ? { provisional: true } : {}) });
         if (!provisional) schedulePersistedRatingsFlush();

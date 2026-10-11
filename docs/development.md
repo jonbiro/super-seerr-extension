@@ -11,6 +11,7 @@ Runtime code remains plain JavaScript with no bundling step. The background entr
 | `src/background/SeerrMatching.js` | Search variants and conservative identity matching for writes |
 | `src/background/MediaStatus.js` | Request/media enum mapping and user-facing status |
 | `src/background/RottenTomatoes.js` | RT fetching, parsing, matching, lookup coalescing |
+| `src/background/PublicRatings.js` | Verified public RT identity, schema, freshness and byte bounds |
 | `src/background/RtCache.js` | Worker persistence, bounds, and coordinated cache clearing |
 | `src/shared/MediaValidation.js` | Positive safe-integer IDs, media types, and request payload validation |
 | `src/content/OverlayCache.js` | Per-tab ratings persistence and clear-generation handling |
@@ -26,7 +27,7 @@ The source check validates imported module paths as well as static and dynamical
 - Media POSTs are sent once. A missing message reply is an **unknown outcome**, not permission to retry. Read-only status messages retain bounded retries.
 - Failed search/detail/request-list reads produce an error with a status-retry action. They are not equivalent to an empty media record.
 - Startup waits for migration, configuration, and script registration, not public server metadata. Late metadata responses cannot override a newer server's name.
-- Cache clearing is owned by the worker. It invalidates memory and in-flight RT results, waits for writes already running, removes both persisted ratings layers and endpoint availability, then publishes a new cache epoch. Open tabs invalidate pending resolutions and flushes. Epoch-stamped writes from an old tab cannot be served after a subsequent load, even if they finish after the clear.
+- Cache clearing is owned by the worker. It invalidates memory and in-flight RT results, waits for writes already running, removes every per-server ratings cache, the shared public-provider and RT title caches, and endpoint availability, then publishes a new cache epoch. Open tabs invalidate pending resolutions and flushes. Epoch-stamped writes from an old tab cannot be served after a subsequent load, even if they finish after the clear.
 
 ## Firefox verification (opt-in)
 

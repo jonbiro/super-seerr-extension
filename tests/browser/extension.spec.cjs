@@ -106,6 +106,13 @@ test('worker restart preserves configuration and cache; clear removes persisted 
     } } });
     await chrome.runtime.sendMessage({ action: 'reloadSettings' });
   }, { origin, matcher: require('../../src/shared/RatingsConfig').matcherVersion });
+  // Earlier overlays may already have loaded an empty RT cache. A worker
+  // restart is required to test newly seeded disk data, not warm memory.
+  const seeded = await context.newCDPSession(options);
+  await seeded.send('ServiceWorker.enable');
+  await seeded.send('ServiceWorker.stopAllWorkers');
+  await options.evaluate(() => chrome.runtime.sendMessage({ action: 'getConfigState' }));
+  await seeded.detach();
   const before = await options.evaluate(() => chrome.runtime.sendMessage({ action: 'getRottenTomatoesRatings', data: { title: 'Example', year: 2020 } }));
   expect(before.data.rtCriticsScore).toBe(22);
   await options.evaluate(async () => {
@@ -348,7 +355,7 @@ test('content scripts cannot access local secrets; cache bridge and clear notifi
     } }); return result.result;
   }, tabId);
   expect(result.denied).toBe(true); expect(result.success).toBe(true);
-  expect(result.keys.sort()).toEqual(['overlayRatingsV1', 'ratingsCacheEpoch']);
+  expect(result.keys.sort()).toEqual(['overlayRatingsV1', 'publicRatingsV1', 'ratingsCacheEpoch']);
   await options.evaluate(async tabId => {
     await chrome.scripting.executeScript({ target: { tabId }, func: () => {
       document.body.dataset.cacheCleared = 'no';

@@ -17,7 +17,9 @@ const RatingsConfig = {
   //    because a worker that could not answer and a worker answering "no match"
   //    both produced a null bundle. Those absences hide real scores, and there
   //    is no way to tell them apart after the fact, so they are all discarded.
-  matcherVersion: 3,
+  // 4: reject equally strong RT candidates even when a release year is known;
+  //    an old title-cache verdict must not seed the shared public ID cache.
+  matcherVersion: 4,
 
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {

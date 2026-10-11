@@ -6,6 +6,15 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.73]
+
+- Share independently verified Rotten Tomatoes scores across Seerr sites by media type and TMDB ID, including localized titles, while retaining separate server ratings, requests, availability and catalogue indexes.
+- Reject equally strong RT candidates even when the release year is known, and invalidate earlier matcher verdicts before they can seed shared results.
+- Admit only exact title/original-title and year matches into the public tier, preserving source timestamps and expiry; reject approximate, failed, malformed and obsolete records, and bound each public/RT storage tier to roughly 1 MB, leaving quota headroom alongside ten site caches.
+- Reconcile newer shared RT scores on site load without changing server-local IMDb/TMDB scores or their age; clear every ratings tier together and prevent late results from restoring cleared data.
+- Include original titles in RT cache and pending-request keys so an earlier unsuccessful lookup cannot block an original-title rescue; prevent slow older lookups from overwriting newer refreshes and retry temporary persistence read failures.
+- Add cross-site, localized-title, identity, provenance, freshness, failure, storage-bound and concurrency regressions, plus real Chromium restart/reuse/update/clear coverage.
+
 ## [3.5.72]
 
 - Merge changes from multiple tabs on the same Seerr site instead of replacing the site's entire ratings cache and title index with each tab's snapshot.

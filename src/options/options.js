@@ -76,10 +76,10 @@ class OptionsManager {
     if (!this.cacheCount) return;
     let held = 0;
     try {
-      const stored = await chrome.storage.local.get([RATINGS_CACHE_KEY, SITE_RATINGS_CACHE_KEY, RT_CACHE_KEY, RATINGS_UNAVAILABLE_KEY]);
+      const stored = await chrome.storage.local.get([RATINGS_CACHE_KEY, SITE_RATINGS_CACHE_KEY, RT_CACHE_KEY, 'publicRatingsV1', RATINGS_UNAVAILABLE_KEY]);
       held = Object.keys(stored[RATINGS_CACHE_KEY]?.entries || {}).length +
         Object.values(stored[SITE_RATINGS_CACHE_KEY] || {}).reduce((count, cache) => count + Object.keys(cache?.entries || {}).length, 0) +
-        Object.keys(stored[RT_CACHE_KEY]?.entries || {}).length;
+        Object.keys(stored[RT_CACHE_KEY]?.entries || {}).length + Object.keys(stored.publicRatingsV1?.entries || {}).length;
       this.hasRatingsAvailability = !!stored[RATINGS_UNAVAILABLE_KEY];
     } catch (_) {
       this.cacheCount.textContent = 'Could not read the ratings cache';
