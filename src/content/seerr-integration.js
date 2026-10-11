@@ -112,7 +112,13 @@
       return;
     }
     const relevant = namespace === 'sync' && (changes.seerrUrl || changes.overlayFeatures);
-    if (relevant) checkApiConfig().then(current => { if (current) { cleanupOverlay(); injectOverlay(); } });
+    if (relevant) {
+      // Invalidate queued card/detail work as soon as the selected site starts
+      // changing. Waiting for the config read leaves a window where an old
+      // site's delayed rating response can repaint this page.
+      cleanupOverlay();
+      checkApiConfig().then(current => { if (current) injectOverlay(); });
+    }
   }
   chrome.storage.onChanged.addListener(handleSettingsChange);
   chrome.runtime.onMessage?.addListener(message => {
@@ -130,7 +136,12 @@
     }
     if (message?.action !== 'seerrStateChanged') return;
     if (message.cacheCleared) handleSettingsChange({ ratingsCacheEpoch: {} }, 'local');
-    else checkApiConfig().then(current => { if (current) { cleanupOverlay(); injectOverlay(); } });
+    else {
+      // Site activation is announced after the worker has selected its new
+      // server. Tear down old controls before awaiting a second config read.
+      cleanupOverlay();
+      checkApiConfig().then(current => { if (current) injectOverlay(); });
+    }
   });
 
   const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';

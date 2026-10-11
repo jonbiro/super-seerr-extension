@@ -29,7 +29,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
   const { window } = dom;
   const localStore = { ...local };
   const syncStore = { ...(serverUrl ? { seerrUrl: serverUrl } : {}) };
-  let changeListener = null;
+  const changeListeners = new Set();
   let messageListener = null;
   const messages = [];
   window.chrome = {
@@ -44,7 +44,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
         set: async value => { Object.assign(localStore, value); },
         remove: async keys => { (Array.isArray(keys) ? keys : [keys]).forEach(key => { delete localStore[key]; }); }
       },
-      onChanged: { addListener(fn) { changeListener = fn; } }
+      onChanged: { addListener(fn) { changeListeners.add(fn); }, removeListener(fn) { changeListeners.delete(fn); } }
     },
     runtime: { onMessage: { addListener: fn => { messageListener = fn; } }, sendMessage: async message => {
       messages.push(message);
@@ -70,7 +70,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
   };
   require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(fs.readFileSync('src/content/seerr-integration.js', 'utf8').replace(/\}\)\(\);\s*$/, `window.testOverlay = {
-    injectCardBadges, injectPlexCardButtons, injectSortFilterControls, hydrateCardsFromListItems, getRatings,
+    injectCardBadges, injectPlexCardButtons, injectSortFilterControls, hydrateCardsFromListItems, getRatings, ratingsCache,
     flushPersistedRatings, projectListIndex, detectRoute, handleObservedApiResponse, handleRouteChange,
     toggleBulkMode, notifyResult, restoreListIndex, rememberListItems, listItemCount: () => lastListItems.length
   }; })();`));
@@ -79,7 +79,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
     notify: message => messageListener?.(message),
     saveServerUrl: url => {
       syncStore.seerrUrl = url;
-      return changeListener?.({ seerrUrl: { newValue: url } }, 'sync');
+      for (const listener of changeListeners) listener({ seerrUrl: { newValue: url } }, 'sync');
     }
   };
 }
@@ -181,6 +181,53 @@ test('a slow inactive-site verdict cannot suppress the overlay after rapid SPA n
   assert.equal(fixture.window.document.querySelectorAll('.seerr-card-badge').length, 2);
   finish({ apiConfigured: false, serverUrl: null }); await flush(fixture.window);
   assert.equal(fixture.window.document.querySelectorAll('.seerr-card-badge').length, 2);
+});
+
+for (const trigger of ['site activation', 'single-site URL update']) test(`a late card score cannot repaint the previous site while the ${trigger} check is pending`, async t => {
+  let activeServer = 'https://seerr.example';
+  let deferConfig = false, releaseConfig;
+  const fixture = openGrid({ local: seedBlob({ entries: { 'movie:123': { bundle: BUNDLE, cachedAt: Date.now() } } }),
+    configForPage: () => deferConfig ? new Promise(resolve => { releaseConfig = resolve; })
+      : { apiConfigured: false, serverUrl: activeServer } });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+
+  const card = fixture.window.document.querySelector('article');
+  assert.ok(card.querySelector('.seerr-card-badge'), 'the previous site is visible before activation');
+  const pendingCard = card.cloneNode(true);
+  pendingCard.querySelectorAll('[data-seerr-overlay="true"]').forEach(element => element.remove());
+  fixture.window.document.querySelector('#grid').appendChild(pendingCard);
+  fixture.window.testOverlay.ratingsCache.delete('movie:123');
+
+  const originalSend = fixture.window.chrome.runtime.sendMessage;
+  let finishRating, announceRating;
+  const ratingStarted = new Promise(resolve => { announceRating = resolve; });
+  fixture.window.chrome.runtime.sendMessage = message => {
+    if (message.action === 'getRottenTomatoesRatings') {
+      return new Promise(resolve => { finishRating = resolve; announceRating(); });
+    }
+    return originalSend(message);
+  };
+  fixture.window.testOverlay.injectCardBadges();
+  await ratingStarted;
+
+  activeServer = 'https://family.example';
+  deferConfig = true;
+  if (trigger === 'site activation') fixture.notify({ action: 'seerrStateChanged' });
+  else fixture.saveServerUrl(activeServer);
+  await flush(fixture.window);
+  assert.equal(typeof releaseConfig, 'function');
+  assert.equal(fixture.window.document.querySelectorAll('[data-seerr-overlay="true"]').length, 0,
+    'old site controls are removed before the config read finishes');
+
+  finishRating({ success: true, data: { ...BUNDLE, source: 'rotten-tomatoes' } });
+  await flush(fixture.window);
+  assert.equal(pendingCard.querySelectorAll('.seerr-card-badge').length, 0);
+  assert.equal(pendingCard.querySelector('.seerr-rating-details'), null);
+
+  releaseConfig({ apiConfigured: false, serverUrl: activeServer });
+  await flush(fixture.window);
+  assert.equal(fixture.window.document.querySelectorAll('[data-seerr-overlay="true"]').length, 0);
 });
 
 function seedBlob({ entries = {}, index = [INDEX_ENTRY], server = SERVER, matcher = Config.matcherVersion } = {}) {
