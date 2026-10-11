@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.137]
+
+- Preserve keyboard focus after preset saves and failed deletions; move focus to the preset selector after successful deletion without taking focus moved elsewhere.
+- Keep host-page keydown shortcuts from blocking preset-name typing and Tab navigation within the preset controls.
+- Add browser checks for save/delete success and failure, moved focus and host keyboard interference.
+
 ## [3.5.136]
 
 - Keep host-page keydown shortcuts from cancelling score-details keyboard opening, closing and Tab navigation.

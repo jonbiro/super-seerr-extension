@@ -4,6 +4,7 @@
     const KEY = 'seerrFilterPresetsV1';
     const wrapper = document.createElement('span');
     wrapper.className = 'seerr-filter-presets';
+    wrapper.addEventListener('keydown', event => event.stopPropagation());
     const select = document.createElement('select');
     select.setAttribute('aria-label', 'Saved filter presets');
     const name = document.createElement('input');
@@ -23,6 +24,16 @@
       wrapper.setAttribute('aria-busy', String(value));
       select.disabled = value; name.disabled = value; save.disabled = value;
       remove.disabled = value || !select.value;
+    }
+    function finishAction(control, restoreFocus) {
+      if (disposed) return;
+      setBusy(false);
+      // Disabled controls can retain activeElement until the browser updates
+      // layout. A deleted preset leaves Delete disabled, so use the selector.
+      if (restoreFocus && wrapper.isConnected &&
+          (document.activeElement === document.body || document.activeElement === control)) {
+        (control.disabled ? select : control).focus({ preventScroll: true });
+      }
     }
     function validate(value) {
       if (!value || typeof value.name !== 'string' || !value.name.trim() || !sorts.has(value.sort)) return null;
@@ -66,6 +77,7 @@
       if (busy) return;
       const preset = validate({ name: name.value, ...readCurrent() });
       if (!preset) { status.textContent = 'Enter a name for this preset.'; name.focus(); return; }
+      const restoreFocus = document.activeElement === save;
       setBusy(true);
       try {
         const next = await request('saveFilterPreset', preset);
@@ -73,17 +85,18 @@
         selection = preset.name; adopt(next); render();
         status.textContent = `Saved ${preset.name}`;
       } catch (error) { if (!disposed) status.textContent = error.message || 'Could not save preset.'; }
-      finally { if (!disposed) setBusy(false); }
+      finally { finishAction(save, restoreFocus); }
     });
     remove.addEventListener('click', async () => {
       const selected = select.value; if (busy || !selected) return;
+      const restoreFocus = document.activeElement === remove;
       setBusy(true);
       try {
         const next = await request('deleteFilterPreset', { name: selected });
         if (disposed) return;
         selection = ''; adopt(next); render(); name.value = ''; status.textContent = `Deleted ${selected}`;
       } catch (_) { if (!disposed) status.textContent = 'Could not delete preset.'; }
-      finally { if (!disposed) setBusy(false); }
+      finally { finishAction(remove, restoreFocus); }
     });
     function changed(changes, area) {
       if (area !== 'sync' || !changes[KEY]) return;
