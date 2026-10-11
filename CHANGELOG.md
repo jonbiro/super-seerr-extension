@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.84]
+
+- Ignore null, unrelated media types and 4K entries in embedded request lists when deriving standard-quality request status; retain direct media availability when no relevant request exists.
+- Reject malformed or out-of-range status enums with a read-only Retry Status action instead of showing misleading availability or allowing a new request.
+- Clear cached Seerr reads on a retryable status failure so retries fetch fresh responses; keep late failures from an earlier site from evicting the active site's cache.
+- Skip malformed season records when rendering TV monitoring information and add status, immediate-retry and cross-site cache regressions.
+
 ## [3.5.83]
 
 - Recognize IMDb TV metadata in links, spans and list items, including hyphenated mini-series labels; ignore episode text in query strings, fragments and unrelated sidebar metadata when choosing movie versus TV controls.

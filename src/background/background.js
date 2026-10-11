@@ -553,7 +553,17 @@ class SeerrAPI {
   async getMediaStatus(mediaData) {
     const media = MediaValidation.media(mediaData);
     const key = `status:${JSON.stringify([media.mediaType, media.tmdbId, media.title, media.year])}`;
-    return this.cachedSeerrRead(key, () => this.getMediaStatusUncached(media));
+    const generation = this.seerrReadGeneration || 0;
+    return this.cachedSeerrRead(key, async () => {
+      const result = await this.getMediaStatusUncached(media);
+      // A retryable status may have come from malformed cached request/detail
+      // JSON. Drop those raw reads too, so the next click contacts the server.
+      // A late failure from a previous site must not clear the current cache.
+      if (result?.status === 'error' && generation === (this.seerrReadGeneration || 0)) {
+        this.invalidateSeerrReads();
+      }
+      return result;
+    });
   }
 
   async getMediaStatusUncached(mediaData) {

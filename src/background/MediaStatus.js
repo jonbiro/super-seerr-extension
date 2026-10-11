@@ -36,7 +36,7 @@
         this.log('📊 [Background] Seasons data available:', mediaDetails.seasons.length);
       }
 
-      let status = null;
+      let status;
       let mediaUrl = null;
       let serviceUrl = null;
       // Seerr has two status enums. A request carries MediaRequestStatus
@@ -45,6 +45,14 @@
       // blocklisted/deleted). The same number means different things.
       let statusKind = 'media';
 
+      // Embedded requests are separate quality/type records, just like the
+      // paged history. A 4K request must not block the standard-quality action.
+      const latestRequest = Array.isArray(mediaDetails.requests)
+        ? mediaDetails.requests.find(request => request && typeof request === 'object' &&
+          !Array.isArray(request) && !request.is4k && request.status !== undefined &&
+          (request.type === undefined || request.type === mediaType))
+        : null;
+
       if (mediaDetails.status !== undefined && mediaDetails.media) {
         status = mediaDetails.status;
         statusKind = 'request';
@@ -52,8 +60,7 @@
         serviceUrl = mediaDetails.media.serviceUrl;
         this.log('📊 [Background] Found REQUEST object with status:', status);
         this.log('📊 [Background] Media has status', mediaDetails.media.status, 'but using request status', status);
-      } else if (mediaDetails.requests && mediaDetails.requests.length > 0) {
-        const latestRequest = mediaDetails.requests[0];
+      } else if (latestRequest) {
         status = latestRequest.status;
         statusKind = 'request';
         if (latestRequest.media) {
@@ -79,7 +86,7 @@
       this.log('📊 [Background] Final extracted status:', status);
       this.log('📊 [Background] Media URLs - mediaUrl:', mediaUrl, 'serviceUrl:', serviceUrl);
 
-      if (status === null || status === undefined) {
+      if (status === undefined) {
         this.log('📊 [Background] No status found, returning available for request');
         return {
           status: 'available',
@@ -104,15 +111,16 @@
       this.log('📊 [Background] Mapping', statusKind, 'status:', status, '(type:', typeof status, ') to UI format');
       this.log('📊 [Background] Raw status value for debugging:', JSON.stringify(status));
 
-      const numericStatus = parseInt(status);
-      if (isNaN(numericStatus)) {
-        this.warn('📊 [Background] Unparseable status value:', status, 'treating as unknown');
-        result.status = 'unknown';
-        result.message = 'Status unavailable';
-        result.buttonText = 'Request on Seerr';
-        result.buttonClass = 'request';
-        this.log('📊 [Background] Formatted status:', result);
-        return result;
+      // Accept the documented integer enums (and their JSON string form),
+      // never partial numbers, arrays or other coercible values. Unknown
+      // responses need another read, not permission to create a request.
+      const numericStatus = typeof status === 'number' ||
+        (typeof status === 'string' && /^\d+$/.test(status)) ? Number(status) : NaN;
+      const maximumStatus = statusKind === 'request' ? 5 : 7;
+      if (!Number.isInteger(numericStatus) || numericStatus < 1 || numericStatus > maximumStatus) {
+        this.warn('📊 [Background] Invalid status value:', status);
+        return { ...result, status: 'error', message: 'Status unavailable. Retry the status lookup.',
+          buttonText: 'Retry Status', buttonClass: 'error', action: 'retryStatus' };
       }
       this.log('📊 [Background] Numeric status:', numericStatus);
 
@@ -301,7 +309,7 @@
         }
 
         if (media.seasons && Array.isArray(media.seasons)) {
-          const incompleteSeasons = media.seasons.filter(season => season.status !== 5);
+          const incompleteSeasons = media.seasons.filter(season => season && typeof season === 'object' && !Array.isArray(season) && season.status !== 5);
           if (incompleteSeasons.length > 0) {
             return { type: 'future_seasons', message: `Monitoring ${incompleteSeasons.length} season(s)`, indicator: '📡' };
           }
