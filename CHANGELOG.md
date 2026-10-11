@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.142]
+
+- Mark the ratings-toolbar buttons as non-submit actions, preventing Reset, Refresh, Load more and Select titles from submitting a containing host form.
+- Associate each score-filter label with its numeric input, enabling label clicks and accessible names for all four thresholds.
+- Add browser regressions for unintended form submission and label interaction on critics, audience, TMDB and IMDb filters.
+
 ## [3.5.141]
 
 - Measure each queued card once per dispatch pass when prioritizing ratings, instead of repeatedly reading layout inside the sort comparator.

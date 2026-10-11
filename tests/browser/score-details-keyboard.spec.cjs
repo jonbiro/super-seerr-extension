@@ -61,3 +61,28 @@ for (const outcome of ['success', 'failure']) for (const moved of [false, true])
   await expect(details).toHaveAttribute('open', '');
   await expect(moved ? page.locator('#outside') : details.getByRole('button', { name: 'Retry scores' })).toBeFocused();
 });
+
+test('overlay toolbar actions never submit a containing host form', async ({ page }) => {
+  await page.evaluate(() => {
+    const bar = document.querySelector('#seerr-filter-bar');
+    const form = document.createElement('form');
+    bar.before(form); form.append(bar);
+    window.submissions = 0;
+    form.addEventListener('submit', event => { event.preventDefault(); window.submissions++; });
+  });
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  expect(await page.evaluate(() => window.submissions)).toBe(0);
+  await page.getByRole('button', { name: 'Select titles', exact: true }).click();
+  expect(await page.evaluate(() => window.submissions)).toBe(0);
+  // This also covers actions with async handlers that disable their button or
+  // are inconvenient to finish in a test, such as loading more of the grid.
+  expect(await page.locator('#seerr-filter-bar button').evaluateAll(buttons => buttons.every(button => button.type === 'button'))).toBe(true);
+});
+
+for (const label of ['Critics ≥', 'Audience ≥', 'TMDB ≥', 'IMDb ≥']) test(`score filter has a usable label: ${label}`, async ({ page }) => {
+  const input = page.getByLabel(label, { exact: true });
+  await expect(input).toHaveAttribute('type', 'number');
+  await expect(input).toHaveAccessibleName(label);
+  await page.getByText(label, { exact: true }).click();
+  await expect(input).toBeFocused();
+});

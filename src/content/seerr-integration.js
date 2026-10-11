@@ -2148,18 +2148,18 @@
         <option value="imdb-desc">⭐ IMDb ↓</option>
         <option value="imdb-asc">⭐ IMDb ↑</option>
       </select></span>
-      <span class="seerr-filter-field" data-score="critics"><label>Critics ≥</label>
-        <input type="number" class="seerr-min-critics" min="0" max="100" step="5" value="0"></span>
-      <span class="seerr-filter-field" data-score="audience"><label>Audience ≥</label>
-        <input type="number" class="seerr-min-audience" min="0" max="100" step="5" value="0"></span>
-      <span class="seerr-filter-field" data-score="tmdb"><label>TMDB ≥</label>
-        <input type="number" class="seerr-min-tmdb" min="0" max="10" step="0.5" value="0"></span>
-      <span class="seerr-filter-field" data-score="imdb"><label>IMDb ≥</label>
-        <input type="number" class="seerr-min-imdb" min="0" max="10" step="0.5" value="0"></span>
-      <button class="seerr-reset-sort">Reset</button>
-      <button class="seerr-refresh-scores" title="Refetch scores for the titles loaded on this page">Refresh scores</button>
-      <button class="seerr-load-all" title="Load up to ${Config.bulkLoadTarget} more titles and score them, so sorting covers the whole grid. Click again to stop.">Load ${Config.bulkLoadTarget} more</button>
-      ${FEATURE_FLAGS.bulkActions && apiConfigured ? '<button class="seerr-toggle-select" data-seerr-overlay="true">Select titles</button>' : ''}
+      <span class="seerr-filter-field" data-score="critics"><label for="seerr-min-critics">Critics ≥</label>
+        <input id="seerr-min-critics" type="number" class="seerr-min-critics" min="0" max="100" step="5" value="0"></span>
+      <span class="seerr-filter-field" data-score="audience"><label for="seerr-min-audience">Audience ≥</label>
+        <input id="seerr-min-audience" type="number" class="seerr-min-audience" min="0" max="100" step="5" value="0"></span>
+      <span class="seerr-filter-field" data-score="tmdb"><label for="seerr-min-tmdb">TMDB ≥</label>
+        <input id="seerr-min-tmdb" type="number" class="seerr-min-tmdb" min="0" max="10" step="0.5" value="0"></span>
+      <span class="seerr-filter-field" data-score="imdb"><label for="seerr-min-imdb">IMDb ≥</label>
+        <input id="seerr-min-imdb" type="number" class="seerr-min-imdb" min="0" max="10" step="0.5" value="0"></span>
+      <button type="button" class="seerr-reset-sort">Reset</button>
+      <button type="button" class="seerr-refresh-scores" title="Refetch scores for the titles loaded on this page">Refresh scores</button>
+      <button type="button" class="seerr-load-all" title="Load up to ${Config.bulkLoadTarget} more titles and score them, so sorting covers the whole grid. Click again to stop.">Load ${Config.bulkLoadTarget} more</button>
+      ${FEATURE_FLAGS.bulkActions && apiConfigured ? '<button type="button" class="seerr-toggle-select" data-seerr-overlay="true">Select titles</button>' : ''}
     `;
 
     const grid = getCardsGrid(cards);
