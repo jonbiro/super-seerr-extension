@@ -90,9 +90,19 @@
       }
       return Object.fromEntries(Object.entries(caches).slice(-10));
     },
-    mergeOverlayRating(previous, incoming) {
+    mergeOverlayRating(previous, incoming, expected = null) {
       if (!previous) return incoming;
-      const newerServer = (incoming.cachedAt ?? 0) >= (previous.cachedAt ?? 0) ? incoming : previous;
+      let newerServer = (incoming.cachedAt ?? 0) >= (previous.cachedAt ?? 0) ? incoming : previous;
+      // Millisecond timestamps can tie across tabs. A public reconciliation
+      // still carries its original native snapshot: it must not undo native
+      // data or retry metadata another tab saved in that same clock tick.
+      if (expected && incoming.cachedAt === previous.cachedAt && incoming.cachedAt === expected.cachedAt &&
+          incoming.publicCheckedAt > (expected.publicCheckedAt ?? 0) &&
+          ['imdbRating', 'tmdbRating'].every(field => (incoming.bundle?.[field] ?? null) === (expected.bundle?.[field] ?? null)) &&
+          (['imdbRating', 'tmdbRating'].some(field => (previous.bundle?.[field] ?? null) !== (expected.bundle?.[field] ?? null)) ||
+            previous.retryAt !== expected.retryAt || JSON.stringify(previous.diagnostics) !== JSON.stringify(expected.diagnostics))) {
+        newerServer = previous;
+      }
       const other = newerServer === incoming ? previous : incoming;
       // Public RT can advance without refreshing this server's IMDb/TMDB.
       // Compare its own timestamp instead of replacing the entire bundle.
@@ -112,12 +122,17 @@
         .every(field => newerServer.bundle?.[field] != null);
       const nativeRetryAt = newerServer.retryAt ?? ((newerServer.cachedAt ?? 0) +
         (nativeComplete ? root.RatingsConfig.ratingsFreshMs : root.RatingsConfig.partialRatingsRetryMs));
+      const verifiedRt = bundle.confidence >= root.RatingsConfig.confidenceThreshold && rtFields.some(field => bundle[field] != null);
+      const complete = ['rtCriticsScore', 'rtAudienceScore', 'imdbRating', 'tmdbRating'].every(field => bundle[field] != null);
+      const diagnosticStatus = newerServer.diagnostics?.status === 'failed' ? 'failed'
+        : newerServer.diagnostics?.status === 'uncertain' && !verifiedRt ? 'uncertain'
+        : complete && verifiedRt ? 'rated' : 'partial';
       return { ...newerServer, bundle, publicCheckedAt: other.publicCheckedAt,
         // An already expired fallback must not defeat a failed-read backoff.
         ...(publicExpiresAt > Date.now() ? { retryAt: Math.min(nativeRetryAt, publicExpiresAt) } : {}),
-        ...(newerServer.diagnostics ? { diagnostics: { ...newerServer.diagnostics, source: bundle.source } } : {}) };
+        ...(newerServer.diagnostics ? { diagnostics: { ...newerServer.diagnostics, status: diagnosticStatus, source: bundle.source } } : {}) };
     },
-    mergeOverlayCache(previous, incoming, removed) {
+    mergeOverlayCache(previous, incoming, removed, expectedEntries = {}) {
       const entries = previous?.matcher === incoming.matcher ? { ...previous.entries } : {};
       const removals = (Array.isArray(removed) ? removed : []).slice(-root.RatingsConfig.overlayCacheMaxEntries);
       // Compare canonical records: the bridge sanitizes saved values, while
@@ -132,8 +147,9 @@
             (!Object.hasOwn(item, 'expected') || (expected[item.key] &&
               JSON.stringify(entries[item.key]) === JSON.stringify(expected[item.key])))) delete entries[item.key];
       }
+      const bases = this.sanitizeOverlayCache({ ...incoming, index: [], entries: expectedEntries }, incoming.server, incoming.epoch).entries;
       for (const [key, entry] of Object.entries(incoming.entries)) {
-        entries[key] = this.mergeOverlayRating(entries[key], entry);
+        entries[key] = this.mergeOverlayRating(entries[key], entry, bases[key]);
       }
       const index = new Map((previous?.index || []).map(item => [`${item.mediaType}:${item.tmdbId}`, item]));
       for (const item of incoming.index) {
@@ -172,7 +188,7 @@
         if (!clean) return { stored: false };
         const caches = this.overlayCachesFromStorage(local, local.ratingsCacheEpoch ?? 0);
         const key = serverKey(server);
-        const merged = value.delta === true ? this.mergeOverlayCache(caches[key], clean, value.removed) : clean;
+        const merged = value.delta === true ? this.mergeOverlayCache(caches[key], clean, value.removed, value.expectedEntries) : clean;
         delete caches[key];
         caches[key] = this.boundedOverlayCache(merged);
         await chrome.storage.local.set({ [SITES_KEY]: Object.fromEntries(Object.entries(caches).slice(-10)), [KEY]: null });

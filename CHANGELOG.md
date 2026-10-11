@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.163]
+
+- Include prior entry snapshots in cache deltas so same-millisecond public reconciliations can be distinguished from native rating updates.
+- Preserve another tab's refreshed IMDb/TMDB scores and retry timing when a public-only update carries an older native snapshot.
+- Add both-write-order concurrency and reload regressions, plus a control for genuine combined native/public refreshes.
+
 ## [3.5.162]
 
 - Require decimal native score strings, preventing missing percentages and hexadecimal/binary/exponent notation from becoming confident ratings.

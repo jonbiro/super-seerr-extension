@@ -195,6 +195,8 @@
           // could overwrite another tab's fresher scores or deleted entries.
           const snapshot = new Map(Object.entries(entries).map(([key, value]) => [key, JSON.stringify(value)]));
           const changed = Object.fromEntries(Object.entries(entries).filter(([key]) => snapshot.get(key) !== persistedEntries.get(key)));
+          const expectedEntries = Object.fromEntries(Object.keys(changed).filter(key => persistedEntries.has(key))
+            .map(key => [key, JSON.parse(persistedEntries.get(key))]));
           const removed = [...persistedEntries].filter(([key]) => !snapshot.has(key))
             .map(([key, value]) => {
               const entry = JSON.parse(value);
@@ -203,7 +205,7 @@
           const indexSnapshot = new Map(index.map(item => [indexKey(item), indexFingerprint(item)]));
           const indexChanges = index.filter(item => indexSnapshot.get(indexKey(item)) !== persistedIndex.get(indexKey(item)));
           const reply = await chrome.runtime.sendMessage({ action: 'putOverlayCache',
-            data: { server, epoch: writeEpoch, matcher: Config.matcherVersion, delta: true, entries: changed, removed, index: indexChanges }
+            data: { server, epoch: writeEpoch, matcher: Config.matcherVersion, delta: true, entries: changed, expectedEntries, removed, index: indexChanges }
           });
           if (!reply?.success) throw new Error(reply?.error || 'Cache write unavailable');
           if (expected !== generation) return;

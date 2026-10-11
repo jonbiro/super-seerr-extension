@@ -255,3 +255,47 @@ for (const change of ['same-time score', 'retry backoff']) {
     assert.equal(stored(worker).entries['movie:1'], undefined, 'the matching current snapshot remains removable');
   });
 }
+
+for (const field of ['imdbRating', 'tmdbRating']) for (const publicFirst of [false, true]) {
+  test(`same-time public reconciliation preserves another tab's ${field} update (public first: ${publicFirst})`, async () => {
+    const worker = await setup();
+    const now = Date.now();
+    const original = { ...entry(20, now - 1000), publicCheckedAt: now - 2000, retryAt: now + 10000,
+      diagnostics: { status: 'partial', checkedAt: now - 1000, source: 'seerr-native' } };
+    original.bundle.imdbRating = 8; original.bundle.tmdbRating = 8;
+    original.bundle[field] = 7;
+    const seed = tab(worker); await seed.loadPersistedRatings();
+    seed.ratingsCache.set('movie:1', original); await seed.flushPersistedRatings();
+    const native = tab(worker), shared = tab(worker);
+    await Promise.all([native.loadPersistedRatings(), shared.loadPersistedRatings()]);
+    // Two checks can finish in the same millisecond. Only one tab refreshed
+    // native data; the other still carries its unchanged original snapshot.
+    native.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, [field]: 9 }, retryAt: now + 5000 });
+    shared.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, rtCriticsScore: 95, rtAudienceScore: 90 }, publicCheckedAt: now });
+    for (const cache of publicFirst ? [shared, native] : [native, shared]) await cache.flushPersistedRatings();
+    const result = stored(worker).entries['movie:1'];
+    assert.equal(result.bundle[field], 9, 'an unchanged native snapshot must not undo another tab\'s refresh');
+    assert.equal(result.bundle.rtCriticsScore, 95);
+    assert.equal(result.retryAt, now + 5000, 'public reconciliation must preserve the native retry deadline');
+    assert.equal(result.diagnostics.status, 'rated', 'diagnostics must describe the completed merged bundle');
+    const reloaded = tab(worker); await reloaded.loadPersistedRatings();
+    assert.equal(reloaded.ratingsCache.get('movie:1').bundle[field], 9);
+  });
+}
+
+test('a same-time refresh that changes native and public scores still applies its native changes', async () => {
+  const worker = await setup(), now = Date.now();
+  const original = { ...entry(20, now - 1000), publicCheckedAt: now - 2000 };
+  original.bundle.imdbRating = 7;
+  const seed = tab(worker); await seed.loadPersistedRatings();
+  seed.ratingsCache.set('movie:1', original); await seed.flushPersistedRatings();
+  const a = tab(worker), b = tab(worker);
+  await Promise.all([a.loadPersistedRatings(), b.loadPersistedRatings()]);
+  a.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, imdbRating: 9 } });
+  await a.flushPersistedRatings();
+  b.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, rtCriticsScore: 95, imdbRating: 8 }, publicCheckedAt: now });
+  await b.flushPersistedRatings();
+  const result = stored(worker).entries['movie:1'];
+  assert.equal(result.bundle.imdbRating, 8, 'an actual native change must not be classified as a public-only reconciliation');
+  assert.equal(result.bundle.rtCriticsScore, 95);
+});
