@@ -56,6 +56,38 @@ function openOptions({ granted = true, synced = {}, local = {} } = {}) {
 
 const warningHidden = window => window.document.getElementById('permissionWarning').classList.contains('hidden');
 
+test('Settings updates its count and clear button when another tab changes shared or site caches', async t => {
+  const ctx = openOptions(); t.after(() => ctx.dom.window.close()); await flush();
+  const count = ctx.window.document.getElementById('ratingsCacheCount');
+  const clear = ctx.window.document.getElementById('clearRatingsCache');
+  const snapshots = [
+    { publicRatingsV1: { entries: { 'movie:1': {} } } },
+    { overlayRatingsByServerV1: { first: { entries: { 'movie:1': {} } }, second: { entries: { 'movie:1': {} } } } },
+    {}
+  ];
+  for (const [i, key] of ['publicRatingsV1', 'overlayRatingsByServerV1', 'ratingsCacheEpoch'].entries()) {
+    ctx.window.chrome.storage.local.get = async () => snapshots[i];
+    for (const listener of ctx.storageListeners) listener({ [key]: { newValue: snapshots[i][key] } }, 'local');
+    await flush();
+    assert.equal(count.textContent, i === 2 ? 'No ratings cached' : `${i + 1} cache entr${i ? 'ies' : 'y'}`);
+    assert.equal(clear.disabled, i === 2);
+  }
+});
+
+test('an older count read cannot restore pre-clear Settings state', async t => {
+  const ctx = openOptions(); t.after(() => ctx.dom.window.close()); await flush();
+  const reads = [];
+  ctx.window.chrome.storage.local.get = () => new Promise(resolve => reads.push(resolve));
+  for (const key of ['publicRatingsV1', 'ratingsCacheEpoch']) {
+    for (const listener of ctx.storageListeners) listener({ [key]: {} }, 'local');
+  }
+  assert.equal(reads.length, 2);
+  reads[1]({}); await flush();
+  reads[0]({ publicRatingsV1: { entries: { 'movie:1': {} } } }); await flush();
+  assert.equal(ctx.window.document.getElementById('ratingsCacheCount').textContent, 'No ratings cached');
+  assert.equal(ctx.window.document.getElementById('clearRatingsCache').disabled, true);
+});
+
 test('a saved server with no permission shows the standing notice', async t => {
   const ctx = openOptions({ granted: false, synced: { seerrUrl: 'https://seerr.example' } });
   t.after(() => ctx.dom.window.close());
@@ -155,7 +187,7 @@ test('Settings reports how many ratings are cached and clears them', async t => 
   t.after(() => ctx.dom.window.close());
   await flush();
 
-  assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /2 titles cached/);
+  assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /2 cache entries/);
   assert.equal(ctx.window.document.getElementById('clearRatingsCache').disabled, false);
 
   ctx.window.document.getElementById('clearRatingsCache').click();
@@ -176,7 +208,7 @@ test('Settings counts and clears ratings held for multiple Seerr sites', async t
     'https://family.example': { entries: { 'movie:1': {} } }
   } } });
   t.after(() => ctx.window.close()); await flush();
-  assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /3 titles cached/);
+  assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /3 cache entries/);
   ctx.window.document.getElementById('clearRatingsCache').click(); await flush();
   assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /No ratings cached/);
 });

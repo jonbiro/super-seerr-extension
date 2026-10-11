@@ -75,6 +75,8 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await expect.poll(async () => Object.keys((await cachedSites())[second.origin]?.entries || {})).toContain('movie:550');
     expect((await cachedSites())[second.origin].entries['movie:550'].bundle.rtCriticsScore).toBe(62);
     expect((await cachedSites())[second.origin].entries['movie:550'].bundle.imdbRating).toBe(8);
+    await expect(options.locator('#ratingsCacheCount')).toHaveText(/\d+ cache entries/);
+    await expect(options.locator('#clearRatingsCache')).toBeEnabled();
     // Two independently loaded cache clients must preserve each other's
     // ratings and title indexes while using the real worker/storage bridge.
     const sibling = await context.newPage();
@@ -82,19 +84,27 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await expect(sibling.locator('.seerr-card-badge')).toHaveCount(2);
     await options.evaluate(async origin => {
       const tabs = (await chrome.tabs.query({})).filter(tab => tab.url?.startsWith(`${origin}/discover`));
-      await Promise.all(tabs.map(tab => chrome.scripting.executeScript({ target: { tabId: tab.id }, func: async () => {
+      const checkedAt = Date.now();
+      await Promise.all(tabs.map(tab => chrome.scripting.executeScript({ target: { tabId: tab.id }, args: [checkedAt], func: async checkedAt => {
         const id = location.search ? '222222' : '111111';
         window.cacheProbe = window.createOverlayCache({ Config: window.RatingsConfig, Model: window.RatingsModel,
           log() {}, getServer: () => new URL(location.origin),
           getListIndex: () => [{ tmdbId: id, mediaType: 'movie', title: `Tab ${id}` }], restoreListIndex() {} });
         await window.cacheProbe.loadPersistedRatings();
         window.cacheProbe.ratingsCache.set(`movie:${id}`, { bundle: window.RatingsModel.createRatingsBundle({ rtCriticsScore: Number(id[0]) * 10 }), cachedAt: Date.now() });
+        const publicUpdate = !!location.search;
+        window.cacheProbe.ratingsCache.set('movie:333333', {
+          bundle: window.RatingsModel.createRatingsBundle({ rtCriticsScore: publicUpdate ? 95 : 20,
+            imdbRating: publicUpdate ? 7 : 9, confidence: 1 }),
+          cachedAt: checkedAt - (publicUpdate ? 10000 : 1000), publicCheckedAt: checkedAt - (publicUpdate ? 0 : 20000)
+        });
       } })));
       await Promise.all(tabs.map(tab => chrome.scripting.executeScript({ target: { tabId: tab.id },
         func: () => window.cacheProbe.flushPersistedRatings() })));
     }, second.origin);
     expect((await cachedSites())[second.origin].entries['movie:111111'].bundle.rtCriticsScore).toBe(10);
     expect((await cachedSites())[second.origin].entries['movie:222222'].bundle.rtCriticsScore).toBe(20);
+    expect((await cachedSites())[second.origin].entries['movie:333333'].bundle).toMatchObject({ rtCriticsScore: 95, imdbRating: 9 });
     expect((await cachedSites())[second.origin].index.map(item => item.tmdbId)).toEqual(expect.arrayContaining(['111111', '222222']));
     await sibling.close();
     expect(await options.locator('.connection-options').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
@@ -190,6 +200,8 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     expect(await options.evaluate(() => chrome.runtime.sendMessage({ action: 'clearRatingsCache' }))).toEqual({ success: true });
     expect(await cachedSites()).toEqual({});
     expect(await options.evaluate(async () => (await chrome.storage.local.get('publicRatingsV1')).publicRatingsV1)).toBeUndefined();
+    await expect(options.locator('#ratingsCacheCount')).toHaveText('No ratings cached');
+    await expect(options.locator('#clearRatingsCache')).toBeDisabled();
   } finally {
     await context?.close();
     await Promise.all([new Promise(resolve => first.server.close(resolve)), new Promise(resolve => second.server.close(resolve))]);

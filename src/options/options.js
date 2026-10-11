@@ -31,6 +31,10 @@ class OptionsManager {
 
   async init() {
     chrome.storage.onChanged?.addListener((changes, area) => {
+      if (area === 'local' && [RATINGS_CACHE_KEY, SITE_RATINGS_CACHE_KEY, RT_CACHE_KEY,
+        'publicRatingsV1', RATINGS_UNAVAILABLE_KEY, 'ratingsCacheEpoch'].some(key => key in changes)) {
+        void this.refreshCacheCount();
+      }
       if ((area === 'local' && changes.seerrConnectionsV1) || (area === 'sync' && changes.seerrUrl)) {
         // Refresh the active label and available actions without discarding
         // the site (or unsaved credentials) this window is editing.
@@ -74,21 +78,24 @@ class OptionsManager {
   // Cached ratings persist until cleared, so show how many are held.
   async refreshCacheCount() {
     if (!this.cacheCount) return;
+    const generation = this.cacheCountGeneration = (this.cacheCountGeneration || 0) + 1;
     let held = 0;
     try {
       const stored = await chrome.storage.local.get([RATINGS_CACHE_KEY, SITE_RATINGS_CACHE_KEY, RT_CACHE_KEY, 'publicRatingsV1', RATINGS_UNAVAILABLE_KEY]);
+      if (generation !== this.cacheCountGeneration) return;
       held = Object.keys(stored[RATINGS_CACHE_KEY]?.entries || {}).length +
         Object.values(stored[SITE_RATINGS_CACHE_KEY] || {}).reduce((count, cache) => count + Object.keys(cache?.entries || {}).length, 0) +
         Object.keys(stored[RT_CACHE_KEY]?.entries || {}).length + Object.keys(stored.publicRatingsV1?.entries || {}).length;
       this.hasRatingsAvailability = !!stored[RATINGS_UNAVAILABLE_KEY];
     } catch (_) {
+      if (generation !== this.cacheCountGeneration) return;
       this.cacheCount.textContent = 'Could not read the ratings cache';
       if (this.clearCacheButton) this.clearCacheButton.disabled = !!this.clearingCache;
       return;
     }
     this.cacheCount.textContent = held === 0
       ? 'No ratings cached'
-      : `${held} title${held === 1 ? '' : 's'} cached`;
+      : `${held} cache entr${held === 1 ? 'y' : 'ies'}`;
     if (this.clearCacheButton) this.clearCacheButton.disabled = !!this.clearingCache || (held === 0 && !this.hasRatingsAvailability);
   }
 

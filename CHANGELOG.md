@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.75]
+
+- Merge concurrent cache writes using separate public-score and server-check timestamps, preserving newer RT scores alongside newer server-local IMDb/TMDB values and confidence for only the RT fields retained.
+- Prevent an older tab from forgetting a public score that another tab updated without changing the server's check time.
+- Update the Settings cache count and Clear button as other tabs write or clear caches, ignore stale count reads, and label the total as cache entries rather than distinct titles.
+- Add concurrent-source, deletion, confidence and Settings regressions, with real Chromium worker/storage coverage for combined source updates and live cache counts.
+
 ## [3.5.74]
 
 - Respect failed-refresh backoff after a shared public score expires, keeping known scores visible without repeatedly retrying on every badge pass.

@@ -90,13 +90,34 @@
       }
       return Object.fromEntries(Object.entries(caches).slice(-10));
     },
+    mergeOverlayRating(previous, incoming) {
+      if (!previous) return incoming;
+      const newerServer = (incoming.cachedAt ?? 0) >= (previous.cachedAt ?? 0) ? incoming : previous;
+      const other = newerServer === incoming ? previous : incoming;
+      // Public RT can advance without refreshing this server's IMDb/TMDB.
+      // Compare its own timestamp instead of replacing the entire bundle.
+      const rtFields = ['rtCriticsScore', 'rtAudienceScore'];
+      if (!other.bundle || !rtFields.some(field => other.bundle[field] !== null) ||
+          !(other.publicCheckedAt > (newerServer.publicCheckedAt ?? newerServer.cachedAt ?? 0))) return newerServer;
+      const contributors = rtFields.map(field => other.bundle[field] !== null ? other.bundle : newerServer.bundle)
+        .filter((bundle, index) => bundle?.[rtFields[index]] != null);
+      const bundle = { ...newerServer.bundle,
+        rtCriticsScore: other.bundle.rtCriticsScore ?? newerServer.bundle?.rtCriticsScore ?? null,
+        rtAudienceScore: other.bundle.rtAudienceScore ?? newerServer.bundle?.rtAudienceScore ?? null,
+        confidence: contributors.length ? Math.min(...contributors.map(value => value.confidence ?? 0)) : 0,
+        source: other.bundle.source,
+        lastUpdated: Math.max(number(other.bundle.lastUpdated) ?? 0, number(newerServer.bundle?.lastUpdated) ?? 0) || null };
+      return { ...newerServer, bundle, publicCheckedAt: other.publicCheckedAt,
+        ...(newerServer.diagnostics ? { diagnostics: { ...newerServer.diagnostics, source: bundle.source } } : {}) };
+    },
     mergeOverlayCache(previous, incoming, removed) {
       const entries = previous?.matcher === incoming.matcher ? { ...previous.entries } : {};
       for (const item of (Array.isArray(removed) ? removed : []).slice(-root.RatingsConfig.overlayCacheMaxEntries)) {
-        if (item && entries[item.key] && entries[item.key].cachedAt === item.cachedAt) delete entries[item.key];
+        if (item && entries[item.key] && entries[item.key].cachedAt === item.cachedAt &&
+            (entries[item.key].publicCheckedAt ?? null) === (item.publicCheckedAt ?? null)) delete entries[item.key];
       }
       for (const [key, entry] of Object.entries(incoming.entries)) {
-        if (!entries[key] || (entry.cachedAt ?? 0) >= (entries[key].cachedAt ?? 0)) entries[key] = entry;
+        entries[key] = this.mergeOverlayRating(entries[key], entry);
       }
       const index = new Map((previous?.index || []).map(item => [`${item.mediaType}:${item.tmdbId}`, item]));
       for (const item of incoming.index) {

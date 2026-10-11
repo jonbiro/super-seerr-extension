@@ -25,6 +25,54 @@ function tab(worker, { index = [], send } = {}) {
 }
 const stored = worker => worker.localStore.overlayRatingsByServerV1['https://seerr.example'];
 
+for (const publicFirst of [false, true]) test(`concurrent public and server updates retain both sources (${publicFirst ? 'public' : 'server'} first)`, async () => {
+  const worker = await setup();
+  const seed = tab(worker); await seed.loadPersistedRatings();
+  const original = { ...entry(20, 100), publicCheckedAt: 50 };
+  original.bundle.imdbRating = 7;
+  seed.ratingsCache.set('movie:1', original); await seed.flushPersistedRatings();
+  const a = tab(worker), b = tab(worker);
+  await Promise.all([a.loadPersistedRatings(), b.loadPersistedRatings()]);
+  a.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, rtCriticsScore: 95 }, publicCheckedAt: 400 });
+  b.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, imdbRating: 9 }, cachedAt: 300 });
+  for (const cache of publicFirst ? [a, b] : [b, a]) await cache.flushPersistedRatings();
+  const result = stored(worker).entries['movie:1'];
+  assert.equal(result.bundle.rtCriticsScore, 95);
+  assert.equal(result.bundle.imdbRating, 9);
+  assert.equal(result.cachedAt, 300);
+  assert.equal(result.publicCheckedAt, 400);
+  const reloaded = tab(worker); await reloaded.loadPersistedRatings();
+  assert.equal(reloaded.ratingsCache.get('movie:1').bundle.rtCriticsScore, 95);
+});
+
+test('forgetting an old snapshot cannot remove a newer public reconciliation with the same server age', async () => {
+  const worker = await setup();
+  const seed = tab(worker); await seed.loadPersistedRatings();
+  seed.ratingsCache.set('movie:1', { ...entry(20, 100), publicCheckedAt: 50 }); await seed.flushPersistedRatings();
+  const a = tab(worker), b = tab(worker);
+  await Promise.all([a.loadPersistedRatings(), b.loadPersistedRatings()]);
+  a.ratingsCache.set('movie:1', { ...entry(95, 100), publicCheckedAt: 400 }); await a.flushPersistedRatings();
+  b.ratingsCache.delete('movie:1'); await b.flushPersistedRatings();
+  assert.equal(stored(worker).entries['movie:1']?.bundle.rtCriticsScore, 95);
+  const current = tab(worker); await current.loadPersistedRatings();
+  current.ratingsCache.delete('movie:1'); await current.flushPersistedRatings();
+  assert.equal(stored(worker).entries['movie:1'], undefined, 'a current snapshot can still forget its rating');
+});
+
+for (const field of ['rtCriticsScore', 'rtAudienceScore']) test(`concurrent merging gates only RT fields actually retained (${field})`, async () => {
+  const worker = await setup();
+  const a = tab(worker), b = tab(worker);
+  await Promise.all([a.loadPersistedRatings(), b.loadPersistedRatings()]);
+  const serverEntry = entry(20, 300); serverEntry.bundle.confidence = 0.2; serverEntry.bundle.imdbRating = 9;
+  a.ratingsCache.set('movie:1', serverEntry); await a.flushPersistedRatings();
+  b.ratingsCache.set('movie:1', { bundle: Model.createRatingsBundle({ [field]: 95, confidence: 1 }), cachedAt: 100, publicCheckedAt: 400 });
+  await b.flushPersistedRatings();
+  const result = stored(worker).entries['movie:1'].bundle;
+  assert.equal(result[field], 95);
+  assert.equal(result.imdbRating, 9);
+  assert.equal(result.confidence, field === 'rtCriticsScore' ? 1 : 0.2);
+});
+
 test('two tabs preserve each other\'s new ratings and title indexes', async () => {
   const worker = await setup();
   const a = tab(worker, { index: [{ tmdbId: '1', mediaType: 'movie', title: 'First' }] });

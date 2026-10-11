@@ -150,7 +150,10 @@
           const snapshot = new Map(Object.entries(entries).map(([key, value]) => [key, JSON.stringify(value)]));
           const changed = Object.fromEntries(Object.entries(entries).filter(([key]) => snapshot.get(key) !== persistedEntries.get(key)));
           const removed = [...persistedEntries].filter(([key]) => !snapshot.has(key))
-            .map(([key, value]) => ({ key, cachedAt: JSON.parse(value).cachedAt }));
+            .map(([key, value]) => {
+              const entry = JSON.parse(value);
+              return { key, cachedAt: entry.cachedAt, publicCheckedAt: entry.publicCheckedAt ?? null };
+            });
           const indexSnapshot = new Map(index.map(item => [indexKey(item), indexFingerprint(item)]));
           const indexChanges = index.filter(item => indexSnapshot.get(indexKey(item)) !== persistedIndex.get(indexKey(item)));
           const reply = await chrome.runtime.sendMessage({ action: 'putOverlayCache',
