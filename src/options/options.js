@@ -488,6 +488,12 @@ class OptionsManager {
       const loaded = await this.loadSettings();
       await this.loadConnectionChoices();
       if (loaded) await this.refreshPermissionWarning();
+      const active = !this.connectionChoicesLoading && !this.connectionChoicesUnavailable
+        ? this.connectionChoices?.sites.find(site => site.id === this.connectionChoices.activeId) : null;
+      if (loaded && active && active.id !== selected.id) {
+        this.showStatus('info', `The active site changed again in another window. Now using ${active.name}. Review the active site above before requesting titles.`);
+        return;
+      }
       this.showStatus(loaded ? 'success' : 'error', loaded
         ? `Now using ${selected.name}. Reload its Seerr tab if ratings are not visible yet.`
         : 'Site switched, but the saved settings could not be loaded. Reload this Settings page before saving changes.');

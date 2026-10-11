@@ -156,6 +156,24 @@ for (const action of ['useConnection', 'removeConnection']) {
   });
 }
 
+for (const settingsActive of ['home', 'family']) test(`a concurrent site switch reports the latest active site (settings snapshot: ${settingsActive})`, async t => {
+  const f = await fixture(t);
+  const original = f.reply().data;
+  const committed = { ...original, revision: 2, activeId: 'family' };
+  const latest = { ...original, revision: 3, activeId: 'home' };
+  f.window.chrome.runtime.sendMessage = async message => ({ success: true,
+    data: message.action === 'activateSeerrConnection' ? committed : latest });
+  f.window.chrome.storage.local.get = async () => ({ seerrConnectionsV1: { ...latest, activeId: settingsActive } });
+  await f.manager.useConnection();
+  const status = f.doc.getElementById('status');
+  assert.ok(status.classList.contains('info'));
+  assert.match(status.textContent, /active site changed again/i);
+  assert.match(status.textContent, /Now using Home/);
+  assert.doesNotMatch(status.textContent, /Now using Family/);
+  assert.match(f.doc.getElementById('activeSeerrSite').textContent, /Active site: Home/);
+  assert.equal(f.doc.getElementById('apiKey').value, `${settingsActive}-key`);
+});
+
 test('a failed legacy fallback read cannot relabel the previous draft as another site', async t => {
   const f = await fixture(t);
   f.doc.getElementById('savedSeerrSites').value = 'home';

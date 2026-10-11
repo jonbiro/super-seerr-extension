@@ -8,7 +8,7 @@ const SITES = [
     expect: { title: 'The Shawshank Redemption', year: 1994, mediaType: 'movie', imdbId: 'tt0111161' }
   },
   {
-    site: 'imdb', label: 'mini-series metadata',
+    site: 'imdb', label: 'mini-series metadata', live: false,
     url: 'https://www.imdb.com/title/tt0000083/',
     html: '<h1 data-testid="hero-title-block__title">Example Mini-Series</h1><div data-testid="hero-title-block__metadata"><a>TV Mini-Series</a><a>2020</a></div>',
     expect: { title: 'Example Mini-Series', year: 2020, mediaType: 'tv', imdbId: 'tt0000083' }

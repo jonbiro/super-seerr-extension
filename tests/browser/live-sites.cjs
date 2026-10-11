@@ -96,7 +96,9 @@ async function waitForStableFlyout(page, expectedTitle, result) {
       channel: 'chromium', headless: true,
       args: [`--disable-extensions-except=${build.extension}`, `--load-extension=${build.extension}`]
     });
-    const cases = [...SITES, {
+    // Contract fixtures can use fictional metadata to exercise parser edges.
+    // Those expectations are not claims about the real URL's title.
+    const cases = [...SITES.filter(site => site.live !== false), {
       site: 'tmdb', url: 'https://www.themoviedb.org/movie/550-fight-club?language=es-ES',
       expect: { title: 'El club de la lucha', mediaType: 'movie' }, locale: 'es-ES'
     }];
