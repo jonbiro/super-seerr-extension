@@ -1,5 +1,11 @@
 # Troubleshooting Super Seerr
 
+For step-by-step configuration and usage, see the [User guide](user-guide.md). For browser permissions, locally stored keys, and private data, see [Data, storage and permissions](privacy-and-permissions.md).
+
+## Quick checks
+
+Confirm the extension was **reloaded** after rebuilding, the Seerr URL was explicitly **saved**, and the browser granted **host access** for that Seerr origin. In the popup, run **Check connections** to distinguish server access, host permission, key acceptance and Plex connectivity. A ratings-only setup can work without a Seerr API key; making external-site requests requires one.
+
 ## The extension still shows an old version
 
 Rebuild once, then reload the extension in `chrome://extensions`. Refresh Seerr and any external media pages so their content scripts are replaced. Confirm the loaded folder is `dist/chrome` from this checkout.
@@ -36,7 +42,9 @@ Cancel or Escape stops future submissions. A request already sent to Seerr may s
 
 ## Firefox fails to load
 
-The Firefox manifest now uses the `background.scripts` module form that Firefox supports, but the package has not been exercised in a running Firefox. Treat Firefox as untested rather than supported. See README.
+The Firefox manifest uses the `background.scripts` module form Firefox understands, instead of Chromium's `service_worker`. Build with `make build`, then open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on** and select `dist/firefox/manifest.json`. Temporary installs are not signed distribution packages and may disappear when Firefox closes.
+
+The real-extension **synthetic fixture** smoke test passed locally on **Firefox 157.0.1** with **geckodriver 0.37.1**, including permissions, script injection, SPA navigation, addon reload, cache clearing and supported-site fixture pages. That does **not** establish full compatibility with actual public websites or a verified store release. See [Firefox verification](development.md#firefox-verification-opt-in) for prerequisites and remaining checks. If installation fails, inspect the browser's add-on error details and verify the generated Firefox manifest, not the Chrome output.
 
 ## The ratings overlay does not appear on Seerr
 
@@ -72,7 +80,7 @@ IMDb ratings come from Seerr's own `/ratingscombined` endpoint, which reaches an
 
 ## The API key is missing on another device
 
-The server URL and overlay preferences sync across devices; the API key does not, because it is a secret held in device-local storage. Enter it once per device from Seerr Settings → General → API Key. Upgrading from a version that synced the key moves it to local storage on the device where it was saved.
+Overlay preferences can sync across browsers. A **legacy single-site URL** can sync, but named/multiple site URLs and active choice are device-local, as are the Seerr API key and Plex token. Secrets are not synced. Enter it once per device from Seerr Settings → General → API Key. Upgrading from a version that synced the key moves it to local storage on the device where it was saved.
 
 ## Reporting a bug
 
