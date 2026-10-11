@@ -55,3 +55,35 @@ test('a request retains the reviewed connection token while its preflight is pen
   finish(true); await pending;
   assert.equal(sent.connectionToken, '1:home');
 });
+
+for (const token of ['1:home', null]) {
+  test(`a status read retains its initial connection token (${token}) while preflight is pending`, async () => {
+    const client = new SeerrClient();
+    client.connectionToken = token;
+    let finish, sent;
+    client.testExtensionConnection = () => new Promise(resolve => { finish = resolve; });
+    client.sendMessage = async message => { sent = message; return { success: true, data: { status: 'available' } }; };
+    const pending = client.getMediaStatus({ tmdbId: 550, mediaType: 'movie' });
+    client.connectionToken = '2:family';
+    finish(true); await pending;
+    assert.equal(sent.connectionToken, token);
+  });
+}
+
+test('status transport retries cannot move an earlier identity to the newly selected site', async () => {
+  const client = new SeerrClient({ retryDelay: 0 });
+  client.connectionToken = '1:home';
+  client.testExtensionConnection = async () => true;
+  const messages = [];
+  client.sendMessage = async message => {
+    messages.push(message);
+    if (messages.length === 1) {
+      client.connectionToken = '2:family';
+      throw new Error('Port closed');
+    }
+    return { success: false, error: 'Active Seerr site changed' };
+  };
+  await assert.rejects(client.getMediaStatus({ tmdbId: 550, mediaType: 'movie' }), /site changed/);
+  assert.equal(messages.length, 2);
+  assert.ok(messages.every(message => message.connectionToken === '1:home'));
+});

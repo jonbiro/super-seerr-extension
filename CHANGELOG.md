@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.82]
+
+- Load remembered title choices using the current site's connection token before building discovery panels, fixing saved choices being ignored after switching sites.
+- Re-extract the title if the selected site changes between the saved-match reply and the status lookup; rebuild open panels when their site changes even when the displayed title is identical, and discard late extraction/configuration replies.
+- Keep status reads bound to their initiating site during ping and transport retries; a configuration read failure leaves a retryable error rather than allowing an unscoped lookup.
+- Add site-switch, open-panel, delayed-reply, configuration-recovery and client retry regressions, plus Chromium coverage for two independent saved matches and correctly scoped requests from an actual IMDb integration fixture.
+
 ## [3.5.81]
 
 - Treat malformed or non-object Rotten Tomatoes scorecard JSON as a failed detail read, preserving successful fallback scores and using the short retry window instead of promoting the attempt into the shared public cache.

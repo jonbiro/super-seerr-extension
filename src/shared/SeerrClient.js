@@ -77,6 +77,9 @@ class SeerrClient {
    * Get media status from Seerr
    */
   async getMediaStatus(mediaData) {
+    // A ping or read retry can outlive a site switch. Keep this lookup bound
+    // to the site that supplied its title identity, just like media writes.
+    const connectionToken = this.connectionToken;
     // Pre-flight check — only run once, not per retry
     const extensionOk = await this.testExtensionConnection();
     if (!extensionOk) throw new Error('Extension background script not responding');
@@ -85,7 +88,8 @@ class SeerrClient {
       try {
         const response = await this.sendMessage({
           action: 'getMediaStatus',
-          data: mediaData
+          data: mediaData,
+          ...(connectionToken !== undefined ? { connectionToken } : {})
         });
 
         if (response && response.success) {

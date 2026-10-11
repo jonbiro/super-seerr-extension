@@ -169,27 +169,41 @@ class BaseIntegration {
   async extractAndSetup() {
     const generation = this._extractionGeneration = (this._extractionGeneration || 0) + 1;
     const pageUrl = window.location.href;
+    const isCurrent = () => !this.destroyed && generation === this._extractionGeneration && window.location.href === pageUrl;
     try {
       this.log('Starting media data extraction...');
       let mediaData = await this.extractMediaData();
+      let connectionToken = this.client.connectionToken;
+      if (!isCurrent()) return;
       if (mediaData?.title) {
         try {
-          const saved = await this.client.sendMessage({ action: 'getSavedTitleCorrection', data: mediaData });
-          if (saved?.success && saved.data?.tmdbId && saved.data?.title && saved.data.mediaType === mediaData.mediaType) {
-            mediaData = { ...mediaData, ...saved.data };
+          // A remembered choice belongs to the selected site. Read its token
+          // before looking up the choice, without retargeting an open panel.
+          const config = await this.client.sendMessage({ action: 'getConfigState' });
+          if (!isCurrent()) return;
+          if (config?.success) {
+            connectionToken = config.data?.connectionToken;
+            const saved = await this.client.sendMessage({ action: 'getSavedTitleCorrection', data: mediaData,
+              ...(connectionToken !== undefined ? { connectionToken } : {}) });
+            if (saved?.success && saved.data?.tmdbId && saved.data?.title && saved.data.mediaType === mediaData.mediaType) {
+              mediaData = { ...mediaData, ...saved.data };
+            }
           }
         } catch (_) { /* Matching stays available if local storage is unavailable. */ }
       }
-      if (this.destroyed || generation !== this._extractionGeneration || window.location.href !== pageUrl) return;
+      if (!isCurrent()) return;
       this.log('Extracted media data:', mediaData);
 
       if (mediaData && mediaData.title) {
         // A same-page retry must not replace the identity behind an open panel
         // while its status lookup is still using that identity.
         if (this.isFlyoutExpanded() && this.mediaData
+          && this._mediaConnectionToken === connectionToken
           && ['title', 'mediaType', 'tmdbId', 'imdbId', 'year'].every(key => this.mediaData[key] === mediaData[key])) return;
         if (this.isFlyoutExpanded()) this.cleanupUI();
         this.mediaData = mediaData;
+        this._mediaConnectionToken = connectionToken;
+        this.client.connectionToken = connectionToken;
         this.log('Valid media data found, setting up UI...');
         await this.setupUI();
       } else {
@@ -339,14 +353,21 @@ class BaseIntegration {
       let plexConfigured = false;
       let connectionToken;
       let serverUrl;
-      try {
-        const config = await this.client.sendMessage({ action: 'getConfigState' });
-        connectionToken = config?.data?.connectionToken;
-        serverUrl = config?.data?.serverUrl;
-        plexConfigured = config?.success === true && config.data?.plexConfigured === true;
-      } catch (_) { /* Treat current configuration failures as disconnected. */ }
-
+      const config = await this.client.sendMessage({ action: 'getConfigState' });
       if (!isCurrent()) return;
+      if (!config?.success) throw new Error(config?.error || 'Could not read the selected Seerr site. Retry the status lookup.');
+      connectionToken = config.data?.connectionToken;
+      serverUrl = config.data?.serverUrl;
+      plexConfigured = config.data?.plexConfigured === true;
+
+      // The site may change between the saved-match reply and this status
+      // read, even before its notification reaches the tab. Re-extract for
+      // that site instead of sending the old site's chosen ID to it.
+      if (Object.prototype.hasOwnProperty.call(this, '_mediaConnectionToken') && this._mediaConnectionToken !== connectionToken) {
+        this.cleanupUI();
+        await this.extractAndSetup();
+        return;
+      }
       this.plexConfigured = plexConfigured;
       this.client.connectionToken = connectionToken;
       const panel = this.uiElements.panel;
@@ -933,6 +954,7 @@ class BaseIntegration {
     // Clear references
     this.uiElements = {};
     this.mediaData = null;
+    delete this._mediaConnectionToken;
     this.currentStatusData = null;
     // A request in flight belongs to the old page: navigating mid-request
     // must not wedge the new page's button shut forever.
