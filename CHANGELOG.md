@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.165]
+
+- Protect settings fields during the initial storage read and bind submit handling before that read, preventing lost edits and native form navigation during startup.
+- Restore controls after successful or failed initial reads; continue cache-count setup and popup repair focus when permission-state reads fail.
+- Add delayed-startup success/failure and permission-read regressions, including narrow-layout Chromium checks.
+
 ## [3.5.164]
 
 - Disable settings inputs while a saved-site selection, activation, or removal loads replacement values, preventing delayed reads from erasing newly typed edits.

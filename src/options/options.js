@@ -42,11 +42,7 @@ class OptionsManager {
         this.refreshPermissionWarning().catch(() => {});
       }
     });
-    // Load existing settings
-    await this.loadSettings();
-    await this.loadConnectionChoices();
-    
-    // Bind event listeners
+    // Bind before reading storage so even an early submit is intercepted.
     document.getElementById('retrySeerrSites')?.addEventListener('click', () => this.loadConnectionChoices());
     document.getElementById('addSeerrSite')?.addEventListener('click', () => this.newConnection());
     document.getElementById('savedSeerrSites')?.addEventListener('change', () => this.editConnection());
@@ -61,7 +57,19 @@ class OptionsManager {
     this.grantButton?.addEventListener('click', () => this.grantOverlayAccess());
     this.clearCacheButton?.addEventListener('click', () => this.clearRatingsCache());
 
-    await this.refreshPermissionWarning();
+    // Initial reads replace the form just like selecting a saved site.
+    this._connectionBusy = true;
+    this.updateConnectionControls();
+    try {
+      await this.loadSettings();
+      await this.loadConnectionChoices();
+    } finally {
+      this._connectionBusy = false;
+      this.updateConnectionControls();
+    }
+
+    // A permission-state read failure must not prevent the remaining setup.
+    await this.refreshPermissionWarning().catch(() => {});
     await this.refreshCacheCount();
     this.focusDiagnosticSetting();
     window.addEventListener('hashchange', () => this.focusDiagnosticSetting());
