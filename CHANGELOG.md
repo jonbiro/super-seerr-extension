@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.196]
+
+- Restore keyboard focus after popup history refresh and clear operations when the initiating control still owns focus.
+- Move focus to Refresh statuses after confirmed clearing leaves Clear history disabled, while preserving focus moved elsewhere during an operation.
+- Cover successful and failed refreshes and clears, each with retained or moved focus, in Chromium.
+
 ## [3.5.195]
 
 - Recognize equivalent relative, absolute, protocol-relative, and default-port Rotten Tomatoes links as one provider page when checking search ambiguity.

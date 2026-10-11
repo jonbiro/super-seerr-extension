@@ -55,6 +55,7 @@
     }
   }
   clear.addEventListener('click', async () => {
+    const restoreFocus = document.activeElement === clear;
     clearing = true;
     generation++; clear.disabled = true; refresh.disabled = true;
     try {
@@ -65,7 +66,12 @@
       status.textContent = 'No confirmed actions yet.';
       await load();
     } catch (_) { status.textContent = 'Could not clear history. Try again.'; clear.disabled = false; }
-    finally { clearing = false; refresh.disabled = false; }
+    finally {
+      clearing = false; refresh.disabled = false;
+      if (restoreFocus && (document.activeElement === clear || document.activeElement === document.body)) {
+        (clear.disabled ? refresh : clear).focus();
+      }
+    }
   });
   const refresh = document.createElement('button'); refresh.type = 'button'; refresh.textContent = 'Refresh statuses';
   refresh.className = 'button secondary';
@@ -73,11 +79,15 @@
   const actions = document.createElement('div'); actions.className = 'recent-action-controls';
   clear.before(actions); actions.append(refresh, clear);
   async function refreshHistory() {
+    const restoreFocus = document.activeElement === refresh;
     refresh.disabled = true;
     const pending = load();
     const current = generation;
     await pending;
-    if (current === generation) refresh.disabled = false;
+    if (current === generation) {
+      refresh.disabled = false;
+      if (restoreFocus && (document.activeElement === refresh || document.activeElement === document.body)) refresh.focus();
+    }
   }
   refresh.addEventListener('click', refreshHistory);
   chrome.runtime.onMessage?.addListener(message => {
