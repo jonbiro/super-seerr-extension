@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.199]
+
+- Hide obsolete connection readiness and diagnostic results immediately when the popup checks again or switches sites, rather than presenting a previous site's accepted API key while loading.
+- Expose the current diagnostic busy state and preserve keyboard access when refreshing removes a focused repair button.
+- Cover manual checks, site-change checks, focused repairs, and successful or failed completion in Chromium.
+
 ## [3.5.198]
 
 - Preserve keyboard focus ownership when a site-change refresh removes a focused history link, returning to Refresh statuses when the latest refresh finishes.

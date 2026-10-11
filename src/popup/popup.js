@@ -33,6 +33,14 @@ class PopupManager {
   async checkStatus() {
     const generation = ++this.checkGeneration;
     this.setStatus('loading', 'Checking connections…');
+    const diagnostics = document.getElementById('diagnosticChecks');
+    const repairFocused = diagnostics.contains(document.activeElement);
+    this.configuredState.classList.add('hidden');
+    this.notConfiguredState.classList.add('hidden');
+    this.errorState.classList.add('hidden');
+    diagnostics.replaceChildren();
+    diagnostics.setAttribute('aria-busy', 'true');
+    if (repairFocused) (this.testConnectionButton.disabled ? this.openOptionsButton : this.testConnectionButton).focus();
     try {
       const response = await this.sendMessage({ action: 'getPopupDiagnostics' });
       if (generation !== this.checkGeneration) return;
@@ -59,6 +67,8 @@ class PopupManager {
       document.getElementById('diagnosticChecks').replaceChildren();
       this.showErrorState(error.message);
       this.setStatus('error', 'Could not check connections');
+    } finally {
+      if (generation === this.checkGeneration) diagnostics.removeAttribute('aria-busy');
     }
   }
 
