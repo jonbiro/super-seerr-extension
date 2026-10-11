@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.65]
+
+- Allow failed TV-season requests to be retried while continuing to block pending or approved requests and seasons already available.
+- Refuse requests when season availability is malformed or contradictory, and prevent invalid episode counts from enabling a request.
+- Add Select all requestable, Clear selection, and a live selection count to TV-season review, with keyboard focus preserved after each action.
+- Add worker, Chromium, and Firefox regressions for retry behavior, malformed availability, bulk selection, and keyboard use; verify the picker on narrow screens.
+- Give the Firefox smoke test an available BiDi port so an occupied debugging port cannot prevent verification.
+
 ## [3.5.64]
 
 - Stop Seerr watchlist adds and season reviews when the server or API key changes during title verification or search.

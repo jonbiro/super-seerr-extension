@@ -29,21 +29,46 @@
       const details = await this.sendAPIRequest('GET', `/api/v1/tv/${tmdbId}`);
       assertCurrent();
       if (!Array.isArray(details?.seasons)) throw new Error('Season information is unavailable. Try again before requesting.');
-      const info = details.mediaInfo || {};
-      const availability = new Map((info.seasons || []).map(season => [season.seasonNumber, season.status]));
-      const requested = new Set((info.requests || []).filter(request => !request.is4k && ![3, 5].includes(request.status))
-        .flatMap(request => (request.seasons || []).map(season => season.seasonNumber)));
+      const unavailable = () => { throw new Error('Season availability is unavailable. Try again before requesting.'); };
+      const list = value => value == null ? [] : Array.isArray(value) ? value : unavailable();
+      const validSeason = season => season && Number.isSafeInteger(season.seasonNumber) && season.seasonNumber >= 0;
+      const info = details.mediaInfo ?? {};
+      if (typeof info !== 'object' || Array.isArray(info)) unavailable();
+      if (info.status != null && ![1, 2, 3, 4, 5, 6, 7].includes(info.status)) unavailable();
+      const availability = new Map();
+      for (const season of list(info.seasons)) {
+        if (!validSeason(season)) unavailable();
+        // A present record with no usable status is unknown, not unrequested.
+        const status = [1, 2, 3, 4, 5, 6, 7].includes(season.status) ? season.status : 0;
+        const previous = availability.get(season.seasonNumber);
+        availability.set(season.seasonNumber, previous !== undefined && previous !== status ? 0 : status);
+      }
+      const requested = new Set();
+      for (const request of list(info.requests)) {
+        if (!request || typeof request !== 'object' || Array.isArray(request)) unavailable();
+        if (request.is4k === true) continue;
+        if (request.is4k != null && request.is4k !== false) unavailable();
+        if (![1, 2, 3, 4, 5].includes(request.status)) unavailable();
+        // Only pending/approved requests reserve seasons. Failed requests can
+        // be retried; fresh per-season availability still protects existing media.
+        if (![1, 2].includes(request.status)) continue;
+        if (!Array.isArray(request.seasons)) unavailable();
+        for (const season of request.seasons) {
+          if (!validSeason(season)) unavailable();
+          requested.add(season.seasonNumber);
+        }
+      }
       const labels = { 1: 'Not available', 2: 'Pending', 3: 'Processing', 4: 'Partially available', 5: 'Available', 6: 'Blocked', 7: 'Deleted' };
-      const seasons = [...new Map(details.seasons.filter(season => Number.isSafeInteger(season.seasonNumber) && season.seasonNumber >= 0)
+      const seasons = [...new Map(details.seasons.filter(validSeason)
         .map(season => {
           const number = season.seasonNumber;
           const status = availability.get(number) ?? 1;
           const pending = requested.has(number);
           const blocked = info.status === 6;
           return [number, { number, name: String(season.name || (number ? `Season ${number}` : 'Specials')).slice(0, 200),
-            episodeCount: Number.isSafeInteger(season.episodeCount) ? season.episodeCount : 0,
+            episodeCount: Number.isSafeInteger(season.episodeCount) && season.episodeCount > 0 ? season.episodeCount : 0,
             availability: blocked ? 'Blocked' : pending ? 'Already requested' : (labels[status] || 'Status unknown'),
-            requestable: !blocked && !pending && [1, 7].includes(status) && season.episodeCount > 0 }];
+            requestable: !blocked && !pending && [1, 7].includes(status) && Number.isSafeInteger(season.episodeCount) && season.episodeCount > 0 }];
         })).values()].sort((a, b) => a.number - b.number);
       return { tmdbId, mediaType: 'tv', title: String(details.name || media.title), server, seasons };
     },

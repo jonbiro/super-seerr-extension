@@ -59,6 +59,54 @@ test('changed availability, configuration, and missing season data refuse the wr
   assert.equal(state.posts.length, 0);
 });
 
+test('failed season requests can be retried while pending and approved requests remain blocked', async () => {
+  const { api, state } = await setup();
+  state.details.mediaInfo = { requests: [1, 2, 3, 4, 5].map(status => ({
+    is4k: false, status, seasons: [{ seasonNumber: status }]
+  })) };
+  const review = await api.getSeasonOptions(media);
+  assert.deepEqual(Array.from(review.seasons.filter(s => s.requestable), s => s.number), [0, 3, 4, 5, 6]);
+  await api.requestMedia({ ...media, seasons: [4] });
+  assert.equal(state.posts.length, 1);
+  assert.deepEqual(Array.from(state.posts[0].seasons), [4]);
+});
+
+test('invalid episode counts and unknown availability cannot enable season requests', async () => {
+  const { api, state } = await setup();
+  state.details.seasons = [null, ...['8', 1.5, -1, 0, 8].map((episodeCount, seasonNumber) => ({ seasonNumber, episodeCount }))];
+  state.details.mediaInfo = { seasons: [{ seasonNumber: 4 }] };
+  const review = await api.getSeasonOptions(media);
+  assert.equal(review.seasons.length, 5);
+  assert.ok(review.seasons.every(season => !season.requestable));
+  assert.equal(review.seasons[4].availability, 'Status unknown');
+  for (const seasons of [[0], [1], [4]]) await assert.rejects(api.requestMedia({ ...media, seasons }), /cannot be requested/);
+  assert.equal(state.posts.length, 0);
+});
+
+test('malformed availability fails with an actionable message before any write', async () => {
+  const { api, state } = await setup();
+  for (const mediaInfo of [
+    'invalid', { status: '6' }, { seasons: {} }, { seasons: [null] }, { requests: {} }, { requests: [null] },
+    { requests: [{ status: 1 }] },
+    { requests: [{ status: 1, seasons: {} }] },
+    { requests: [{ status: 1, seasons: [null] }] },
+    { requests: [{ status: 'unknown', seasons: [{ seasonNumber: 6 }] }] }
+  ]) {
+    state.details.mediaInfo = mediaInfo;
+    await assert.rejects(api.requestMedia({ ...media, seasons: [6] }), /Season availability is unavailable.*Try again/);
+  }
+  assert.equal(state.posts.length, 0);
+});
+
+test('conflicting availability records stay unknown and cannot allow a duplicate request', async () => {
+  const { api, state } = await setup();
+  state.details.mediaInfo = { seasons: [{ seasonNumber: 6, status: 5 }, { seasonNumber: 6, status: 1 }] };
+  const review = await api.getSeasonOptions(media);
+  assert.equal(review.seasons.find(season => season.number === 6).availability, 'Status unknown');
+  await assert.rejects(api.requestMedia({ ...media, seasons: [6] }), /cannot be requested/);
+  assert.equal(state.posts.length, 0);
+});
+
 test('season picker shows availability, requires a choice, and excludes disabled seasons from confirmation', async t => {
   const page = loadIntegration(); t.after(() => page.window.close());
   const ui = new page.window.UIComponents();

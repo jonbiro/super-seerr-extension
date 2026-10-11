@@ -35,8 +35,11 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
   const baseline = await createExtension('firefox', { ref: '4864269' });
   const { server, origin } = await startServer();
   const port = await unusedPort();
+  // Geckodriver otherwise shares port 9222 with unrelated debugging sessions.
+  let websocketPort = await unusedPort();
+  while (websocketPort === port) websocketPort = await unusedPort();
   const profileRoot = await fs.realpath(build.temporary);
-  const driver = spawn(process.env.GECKODRIVER_PATH || 'geckodriver', ['--port', String(port), '--allow-system-access', '--profile-root', profileRoot, '--log', 'debug', '--log-no-truncate'], {
+  const driver = spawn(process.env.GECKODRIVER_PATH || 'geckodriver', ['--port', String(port), '--websocket-port', String(websocketPort), '--allow-system-access', '--profile-root', profileRoot, '--log', 'debug', '--log-no-truncate'], {
     stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32'
   });
   let driverLog = '', driverError, session, siteFixtures;
@@ -216,7 +219,14 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     await eventually(() => script('return document.body.dataset.chosenTitle;'), '911', 'Firefox picker returns the explicit choice');
     await eventually(() => script('return document.querySelectorAll(".seerr-season-picker input").length;'), 3, 'Firefox renders season availability');
     assert.equal(await script('return document.querySelectorAll(".seerr-season-picker input")[0].disabled;'), true);
-    await script('document.querySelectorAll(".seerr-season-picker input")[1].click(); Array.from(document.querySelectorAll(".seerr-season-picker button")).find(button => button.textContent === "Use selected seasons").click();');
+    await script('Array.from(document.querySelectorAll(".seerr-season-picker button")).find(button => button.textContent === "Select all requestable").click();');
+    assert.equal(await script('return document.querySelector(".seerr-season-picker [role=status]").textContent;'), '1 season selected');
+    assert.equal(await script('return document.activeElement.textContent;'), 'Clear selection');
+    assert.equal(await script('return document.querySelectorAll(".seerr-season-picker input")[0].checked;'), false);
+    await script('document.activeElement.click();');
+    assert.equal(await script('return document.querySelector(".seerr-season-picker [role=status]").textContent;'), '0 seasons selected');
+    assert.equal(await script('return document.activeElement.textContent;'), 'Select all requestable');
+    await script('document.activeElement.click(); Array.from(document.querySelectorAll(".seerr-season-picker button")).find(button => button.textContent === "Use selected seasons").click();');
     await eventually(() => script('return document.body.dataset.chosenSeasons;'), '[2]', 'Firefox confirms only the selected season');
     await action('/window', undefined, 'DELETE');
     await action('/window', { handle: optionsHandle });

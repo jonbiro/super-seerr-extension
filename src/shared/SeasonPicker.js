@@ -20,11 +20,39 @@
       dialog.append(el('h2', { textContent: options.title }), el('p', { textContent: 'Choose seasons to request. Availability is for standard quality. Specials depend on your Seerr server settings.' }));
       const inputs = [];
       const confirm = el('button', { type: 'button', textContent: confirmText }); confirm.disabled = true;
+      const selectAll = el('button', { type: 'button', textContent: 'Select all requestable' });
+      const clearSelection = el('button', { type: 'button', textContent: 'Clear selection' });
+      const selectionCount = el('p', { role: 'status', 'aria-live': 'polite', 'aria-atomic': 'true' });
+      const updateSelection = () => {
+        const eligible = inputs.filter(input => !input.disabled);
+        const count = eligible.filter(input => input.checked).length;
+        selectionCount.textContent = `${count} season${count === 1 ? '' : 's'} selected`;
+        confirm.disabled = count === 0;
+        selectAll.disabled = eligible.length === count;
+        clearSelection.disabled = count === 0;
+        for (const button of [selectAll, clearSelection, confirm]) {
+          button.style.opacity = button.disabled ? '0.5' : '1';
+          button.style.cursor = button.disabled ? 'default' : 'pointer';
+        }
+      };
+      selectAll.addEventListener('click', () => {
+        inputs.filter(input => !input.disabled).forEach(input => { input.checked = true; });
+        updateSelection();
+        clearSelection.focus();
+      });
+      clearSelection.addEventListener('click', () => {
+        inputs.forEach(input => { input.checked = false; });
+        updateSelection();
+        selectAll.focus();
+      });
+      const selectionActions = el('div');
+      selectionActions.append(selectAll, clearSelection);
+      dialog.append(selectionActions, selectionCount);
       for (const season of options.seasons) {
         const label = el('label'); label.style.cssText = 'display:block;padding:10px 0;';
         const input = el('input', { type: 'checkbox', value: String(season.number) });
         input.disabled = !season.requestable;
-        input.addEventListener('change', () => { confirm.disabled = !inputs.some(item => item.checked && !item.disabled); confirm.style.opacity = confirm.disabled ? '0.5' : '1'; });
+        input.addEventListener('change', updateSelection);
         inputs.push(input);
         label.append(input, document.createTextNode(` ${season.name} (${season.episodeCount} episodes) — ${season.availability}`));
         dialog.appendChild(label);
@@ -42,8 +70,8 @@
         const selected = inputs.filter(input => input.checked && !input.disabled).map(input => Number(input.value));
         if (selected.length) finish(selected);
       });
-      for (const button of [cancelButton, confirm]) button.style.cssText = 'font:inherit;white-space:normal;min-height:44px;max-width:100%;padding:8px 12px;margin:12px 8px 0 0;background:#263244;color:#fff;border:1px solid #94a3b8;border-radius:6px;cursor:pointer;';
-      confirm.style.opacity = '0.5';
+      for (const button of [selectAll, clearSelection, cancelButton, confirm]) button.style.cssText = 'font:inherit;white-space:normal;min-height:44px;max-width:100%;padding:8px 12px;margin:12px 8px 0 0;background:#263244;color:#fff;border:1px solid #94a3b8;border-radius:6px;cursor:pointer;';
+      updateSelection();
       dialog.append(cancelButton, confirm); backdrop.appendChild(dialog); document.body.appendChild(backdrop);
       dialog.addEventListener('keydown', event => {
         if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); cancel(); }
