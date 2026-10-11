@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.88]
+
+- Rank queued card ratings by distance from both viewport axes, fixing horizontally offscreen cards taking priority over visible titles.
+- Deprioritize empty rectangles from filtered cards or hidden layout wrappers instead of treating them as visible at the page origin; still resolve them after rendered cards so score filters can recover unrated titles.
+- Add queue ordering regressions and a Chromium test using actual card layout, horizontal overflow and a hidden wrapper.
+
 ## [3.5.87]
 
 - Share the complete bounded ratings lookup between concurrent callers, including its deadline, cached-score fallback and cleanup, instead of exposing the raw provider promise to duplicate cards.

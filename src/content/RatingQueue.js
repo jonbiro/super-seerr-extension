@@ -6,7 +6,13 @@
     const priority = node => {
       if (!node?.isConnected) return Infinity;
       const r = node.getBoundingClientRect();
-      return r.bottom >= 0 && r.top <= root.innerHeight && r.right >= 0 && r.left <= root.innerWidth ? 0 : Math.abs(r.top);
+      // display:none cards (including hidden layout wrappers) have an empty
+      // rectangle at the origin. They are not visible, but still get resolved
+      // after rendered cards so unrated titles can eventually pass a filter.
+      if (r.right <= r.left || r.bottom <= r.top) return Infinity;
+      const horizontal = Math.max(0, -r.right, r.left - root.innerWidth);
+      const vertical = Math.max(0, -r.bottom, r.top - root.innerHeight);
+      return Math.hypot(horizontal, vertical);
     };
     function drain() {
       scheduled = false;
