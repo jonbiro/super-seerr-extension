@@ -379,8 +379,10 @@ class SeerrAPI {
         }
 
         case 'plexAddToWatchlist': {
+          // The account watchlist is global; history retains the initiating site.
+          const historyServer = this.baseUrl ?? null;
           const plexWatchlistResult = await this.plexAddToWatchlist(request.data);
-          if (!plexWatchlistResult.already) await this.recordRecentAction('plex-watchlist', request.data);
+          if (!plexWatchlistResult.already) await this.recordRecentAction('plex-watchlist', { ...request.data, historyServer });
           sendResponse({ success: true, data: plexWatchlistResult });
           break;
         }

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.186]
+
+- Keep Plex action history attributed to the Seerr site active when the action starts, even if the user switches sites before it finishes.
+- Preserve absent site attribution and ignore caller-supplied history URLs for Plex additions.
+- Cover pending site switches, unchanged settings, persisted history after restart, and caller attribution overrides.
+
 ## [3.5.185]
 
 - Offer a read-only Retry loading presets action after initial or cross-tab load failures, without requiring users to save a preset to recover existing choices.

@@ -76,7 +76,7 @@
         for (const secret of [this.apiKey, this.plexToken]) {
           if (secret) title = title.split(secret).join('[redacted]');
         }
-        const entry = clean({ kind, mediaType: media.mediaType, title, at: Date.now(), tmdbId: Number(media.tmdbId), server: media.historyServer || this.baseUrl });
+        const entry = clean({ kind, mediaType: media.mediaType, title, at: Date.now(), tmdbId: Number(media.tmdbId), server: media.historyServer !== undefined ? media.historyServer : this.baseUrl });
         if (!entry) return;
         await this.queueRecentAction(async () => {
           const stored = (await chrome.storage.local.get(KEY))[KEY];

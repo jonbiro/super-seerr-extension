@@ -327,3 +327,32 @@ test('configuration notifications cannot reload history during a pending clear',
   assert.equal(reads, before + 1);
   assert.equal([...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Refresh statuses').disabled, false);
 });
+
+for (const initialServer of ['https://first.example/base', null]) for (const switched of [false, true]) {
+  test(`Plex action history retains its starting server (initial: ${initialServer}, switched: ${switched})`, async () => {
+    const worker = await setup({ get: async () => initialServer ? { seerrUrl: initialServer } : {} });
+    let finish, started;
+    const running = new Promise(resolve => { started = resolve; });
+    worker.api.plexAddToWatchlist = () => { started(); return new Promise(resolve => { finish = resolve; }); };
+    const pending = message(worker, { action: 'plexAddToWatchlist', data: { title: 'Dune', mediaType: 'movie', tmdbId: 123 } });
+    await running;
+    if (switched) worker.api.baseUrl = 'https://second.example/';
+    finish({ already: false, ratingKey: '123' });
+    assert.equal((await pending).success, true);
+    const rows = await worker.api.getRecentActions();
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].server, initialServer || undefined);
+    const restarted = await setup({ local: worker.localStore });
+    assert.equal((await restarted.api.getRecentActions())[0].server, rows[0].server);
+  });
+}
+
+test('Plex callers cannot supply the history server attribution', async () => {
+  const worker = await setup({ get: async () => ({ seerrUrl: 'https://first.example/base' }) });
+  worker.api.plexAddToWatchlist = async () => ({ already: false });
+  const reply = await message(worker, { action: 'plexAddToWatchlist', data: {
+    title: 'Dune', mediaType: 'movie', tmdbId: 123, historyServer: 'https://spoofed.example/'
+  } });
+  assert.equal(reply.success, true);
+  assert.equal((await worker.api.getRecentActions())[0].server, 'https://first.example/base');
+});
