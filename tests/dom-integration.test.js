@@ -22,6 +22,7 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
   const storage = { seerrUrl: 'https://seerr.example', seerrApiKey: 'fixture', ...settings };
   const storageListeners = new Set();
   const messages = [];
+  const messageListeners = new Set();
   const urls = [];
   // The overlay reads the URL and flags from sync but asks the worker whether
   // requests are enabled, so the key is never exposed to the page.
@@ -33,7 +34,7 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
       local: { get: async () => ({}), set: async () => {}, remove: async () => {} },
       onChanged: { addListener(fn) { storageListeners.add(fn); }, removeListener(fn) { storageListeners.delete(fn); } }
     },
-    runtime: { sendMessage: async message => {
+    runtime: { onMessage: { addListener(fn) { messageListeners.add(fn); } }, sendMessage: async message => {
       messages.push(message);
       if (message.action === 'getConfigState') {
         return { success: true, data: { plexConfigured: storage.plexConfigured === true, apiConfigured: !!storage.seerrApiKey, serverUrl: storage.seerrUrl ?? null } };
@@ -62,7 +63,7 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
   for (const file of ['RatingsModel', 'RatingsConfig']) window.eval(source(`src/shared/${file}.js`));
   require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(source('src/content/seerr-integration.js').replace(/\}\)\(\);\s*$/, `window.testOverlay = { injectCardBadges, injectSortFilterControls, handleRouteChange, extractSeerrNativeRatings, loadMoreCards, scoreAllCards, injectPlexWatchlistButton }; })();`));
-  return { dom, window, messages, urls, storage, change: changes => storageListeners.forEach(listener => listener(changes, 'sync')) };
+  return { dom, window, messages, urls, storage, message: value => messageListeners.forEach(listener => listener(value)), change: changes => storageListeners.forEach(listener => listener(changes, 'sync')) };
 }
 
 test('real DOM sorting follows ratings, stays idempotent and restores original order', async t => {
@@ -1236,3 +1237,23 @@ for (const outcome of ['success', 'failure', 'rejection']) {
     });
   }
 }
+
+
+test('a missed cache clear discovered through public ratings repaints old scores', async t => {
+  const fixture = createOverlay();
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  const { window } = fixture;
+  const card = window.document.querySelector('[data-id="1"]');
+  assert.equal(card.__seerrRatings.rtCriticsScore, 30);
+  const send = window.chrome.runtime.sendMessage;
+  window.chrome.runtime.sendMessage = message => {
+    if (message.action === 'getOverlayCache') return Promise.resolve({ success: true, data: { ratingsCacheEpoch: 'new-clear-epoch' } });
+    if (message.action === 'getRottenTomatoesRatings') return Promise.resolve({ success: true, data: { rtCriticsScore: 88, confidence: 1 } });
+    return send(message);
+  };
+  fixture.message({ action: 'publicRatingsChanged' });
+  await settle();
+  assert.equal(card.__seerrRatings.rtCriticsScore, 88, 'old ratings must be refetched and repainted');
+  assert.match(card.querySelector('.seerr-card-badge').textContent, /88/);
+});

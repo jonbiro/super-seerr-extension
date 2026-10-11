@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.135]
+
+- Detect cache clears missed by an open tab when its next public-ratings read returns a different cache epoch, even if no shared scores remain.
+- Reset the tab's ratings and catalogue state through the normal clear path and repaint from fresh lookups instead of retaining pre-clear scores.
+- Add worker-backed cache and actual-overlay DOM regressions for missed notifications and successful recovery.
+
 ## [3.5.134]
 
 - Escape title-cache field delimiters and use structured keys for concurrent RT lookups, so colons and literal percent sequences cannot mix different titles or original titles.

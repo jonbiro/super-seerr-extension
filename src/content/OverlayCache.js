@@ -1,6 +1,6 @@
 // Per-tab ratings persistence, independent of DOM rendering.
 (function (root) {
-  root.createOverlayCache = function ({ Config, Model, log, getServer, getListIndex, restoreListIndex }) {
+  root.createOverlayCache = function ({ Config, Model, log, getServer, getListIndex, restoreListIndex, onCacheCleared }) {
     // key: `${mediaType}:${tmdbId}`, value: { bundle }. `pending:` keys hold the
     // in-flight promise instead, so serialisation skips them.
     const ratingsCache = new Map();
@@ -114,6 +114,13 @@
         const response = await chrome.runtime.sendMessage({ action: 'getOverlayCache' });
         if (!response?.success) throw new Error(response?.error || 'Public cache read unavailable');
         if (expected !== generation || server !== getServer()?.href) return [];
+        if ((response.data?.ratingsCacheEpoch ?? 0) !== epoch) {
+          // A tab can miss the original clear broadcast. The epoch is
+          // authoritative even when this reply contains no public entries.
+          if (typeof onCacheCleared === 'function') onCacheCleared();
+          else forgetPersistedRatings();
+          return [];
+        }
         const payload = response.data?.publicRatingsV1;
         if (payload?.matcher !== Config.matcherVersion) return [];
         const changed = [];

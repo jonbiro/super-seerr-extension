@@ -216,3 +216,20 @@ for (const publicFirst of [false, true]) {
     assert.equal(result.diagnostics.status, 'failed');
   });
 }
+
+
+test('a public refresh detects a missed cache clear before merging a new snapshot', async () => {
+  const worker = await setup(), cache = tab(worker);
+  await cache.loadPersistedRatings();
+  cache.ratingsCache.set('movie:550', entry(20, Date.now()));
+  worker.api.publicRatings.set('movie:550', publicRecord(80, Date.now()));
+  await cache.refreshPublicRatings();
+  await worker.api.clearRatingsCache();
+  worker.api.publicRatings.set('movie:551', publicRecord(95, Date.now()));
+  assert.equal((await cache.refreshPublicRatings()).length, 0);
+  assert.equal(cache.ratingsCache.size, 0, 'pre-clear server ratings must be forgotten');
+  assert.equal(cache.getPublicRating('movie:550'), null, 'pre-clear public scores must be forgotten');
+  await cache.loadPersistedRatings();
+  assert.equal(cache.getPublicRating('movie:551').bundle.rtCriticsScore, 95);
+  await cache.flushPersistedRatings();
+});

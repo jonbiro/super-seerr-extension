@@ -137,7 +137,8 @@
   const { ratingsCache, loadPersistedRatings, schedulePersistedRatingsFlush,
     flushPersistedRatings, forgetPersistedRatings, getPublicRating, refreshPublicRatings } = window.createOverlayCache({
       Config, Model, log, getServer: () => configuredServer,
-      getListIndex: projectListIndex, restoreListIndex
+      getListIndex: projectListIndex, restoreListIndex,
+      onCacheCleared: () => handleSettingsChange({ ratingsCacheEpoch: {} }, 'local')
     });
   const embeddedRatingsByTmdbId = new Map();
   const pageRatingsByTmdbId = new Map();
