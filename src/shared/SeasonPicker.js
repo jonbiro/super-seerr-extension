@@ -17,7 +17,8 @@
       backdrop.style.cssText = 'box-sizing:border-box;position:fixed;inset:0;background:#0009;z-index:2147483647;display:grid;place-items:center;padding:20px;color:#f9fafb;font:14px system-ui;';
       const dialog = el('div', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Choose TV seasons' });
       dialog.style.cssText = 'box-sizing:border-box;min-width:0;overflow-wrap:anywhere;background:#171b25;color:#f9fafb;border:1px solid #64748b;border-radius:12px;padding:20px;max-width:540px;width:100%;max-height:min(85vh, calc(100dvh - 40px));overflow:auto;';
-      dialog.append(el('h2', { textContent: options.title }), el('p', { textContent: 'Choose seasons to request. Availability is for standard quality. Specials depend on your Seerr server settings.' }));
+      const heading = el('h2', { textContent: options.title, tabindex: '-1' });
+      dialog.append(heading, el('p', { textContent: 'Choose seasons to request. Availability is for standard quality. Specials depend on your Seerr server settings.' }));
       const inputs = [];
       const confirm = el('button', { type: 'button', textContent: confirmText }); confirm.disabled = true;
       const selectAll = el('button', { type: 'button', textContent: 'Select all requestable' });
@@ -89,7 +90,9 @@
           else if (!event.shiftKey && (index < 0 || index === controls.length - 1)) { event.preventDefault(); controls[0].focus(); }
         }
       });
-      cancelButton.focus();
+      // Focusing the footer scrolls long lists past the title and instructions.
+      // Start at the heading; Tab still enters the first enabled control.
+      heading.focus({ preventScroll: true });
     });
   };
 })(typeof window !== 'undefined' ? window : globalThis);

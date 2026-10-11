@@ -80,6 +80,8 @@ test('season selection controls stay disabled when every season is unavailable t
   for (const name of ['Select all requestable', 'Clear selection', 'Request selected seasons']) {
     await expect(page.getByRole('button', { name })).toBeDisabled();
   }
+  await expect(page.getByRole('heading', { name: 'Available series' })).toBeFocused();
+  await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(page.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
