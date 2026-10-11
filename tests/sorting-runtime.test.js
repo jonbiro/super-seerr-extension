@@ -4,6 +4,7 @@ const { loadOverlay } = require('./helpers/overlay');
 
 function makeGrid(scores) {
   const grid = {
+    style: {},
     cards: [], mutations: 0,
     querySelectorAll(selector) { return selector === '[data-testid="title-card"]' ? this.cards.slice() : []; },
     appendChild(card) {

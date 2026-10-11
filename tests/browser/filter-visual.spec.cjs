@@ -359,3 +359,25 @@ test('host layout changes cannot reveal filtered cards or start an observer loop
   await page.getByRole('button', { name: 'Reset', exact: true }).click();
   await expect(card).toHaveCSS('display', 'grid');
 });
+
+for (const change of ['class', 'style', 'hidden']) {
+  test(`coverage respects a host-hidden grid (${change}) and recovers when revealed`, async ({ page }) => {
+    await showFilter(page, 390);
+    await page.addStyleTag({ content: '.host-hidden-grid, .grid[hidden] { display:none !important; }' });
+    await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored');
+    await page.locator('.grid').evaluate((grid, change) => {
+      if (change === 'class') grid.classList.add('host-hidden-grid');
+      else if (change === 'style') grid.style.display = 'none';
+      else grid.hidden = true;
+    }, change);
+    await expect(page.locator('[data-testid="title-card"]')).toBeHidden();
+    await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored · 0 visible', { timeout: 1500 });
+    await page.locator('.grid').evaluate((grid, change) => {
+      if (change === 'class') grid.classList.remove('host-hidden-grid');
+      else if (change === 'style') grid.style.removeProperty('display');
+      else grid.hidden = false;
+    }, change);
+    await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored', { timeout: 1500 });
+    await expect(page.locator('[data-testid="title-card"]')).toBeVisible();
+  });
+}

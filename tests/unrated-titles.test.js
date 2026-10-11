@@ -50,6 +50,7 @@ test('an unrated title is not sorted as though it scored zero', () => {
     querySelector: () => null
   });
   const grid = {
+    style: {},
     cards: [card(0, null), card(1, 1.2), card(2, 8.4)],
     querySelectorAll: s => s === '[data-testid="title-card"]' ? grid.cards.slice() : [],
     appendChild(c) { grid.cards.splice(grid.cards.indexOf(c), 1); grid.cards.push(c); }

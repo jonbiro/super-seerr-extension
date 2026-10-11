@@ -8,6 +8,7 @@ const { loadOverlay } = require('./helpers/overlay');
 // no IMDb card badge to parse back out of the DOM.
 function makeGrid(bundles) {
   const grid = {
+    style: {},
     cards: [], mutations: 0,
     querySelectorAll(selector) { return selector === '[data-testid="title-card"]' ? this.cards.slice() : []; },
     appendChild(card) {

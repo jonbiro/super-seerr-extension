@@ -2040,12 +2040,14 @@
     return { total: cards.length, rated };
   }
 
-  function isCardHidden(card) {
-    const item = getCardLayoutItem(card);
-    return (item === card ? [card] : [card, item]).some(node => {
-      const rendered = window.getComputedStyle?.(node);
-      return rendered ? rendered.display === 'none' : node.hidden || node.style.display === 'none';
-    });
+  function isCardHidden(card, visibility = new Map()) {
+    if (!card) return false;
+    if (visibility.has(card)) return visibility.get(card);
+    const rendered = window.getComputedStyle?.(card);
+    const hidden = (rendered ? rendered.display === 'none' : card.hidden || card.style.display === 'none') ||
+      isCardHidden(card.parentElement, visibility);
+    visibility.set(card, hidden);
+    return hidden;
   }
 
   function updateSortFilterCoverage(grid = null, bar = document.getElementById('seerr-filter-bar')) {
@@ -2055,7 +2057,8 @@
     const cards = getMediaCards(grid || bar.nextElementSibling || bar.parentElement);
     const total = cards.length;
     const scored = cards.filter(c => getCardAnyScore(c) !== null).length;
-    const hidden = cards.filter(isCardHidden).length;
+    const visibility = new Map();
+    const hidden = cards.filter(card => isCardHidden(card, visibility)).length;
     const visible = total - hidden;
     const text = `${scored}/${total} scored${hidden > 0 ? ` · ${visible} visible` : ''}`;
     if (coverageEl.textContent !== text) coverageEl.textContent = text;
@@ -2072,8 +2075,8 @@
       : order.startsWith('tmdb') ? getCardTmdbScore(card)
       : order.startsWith('imdb') ? getCardImdbScore(card)
       : order.startsWith('score') ? getCardAnyScore(card) : getCardScore(card);
-    const visible = [], hidden = [];
-    currentCards.forEach(card => (isCardHidden(card) ? hidden : visible).push(card));
+    const visible = [], hidden = [], visibility = new Map();
+    currentCards.forEach(card => (isCardHidden(card, visibility) ? hidden : visible).push(card));
     const compare = (a, b) => {
       const tie = originalIndex(a) - originalIndex(b);
       if (order === 'default') return tie;

@@ -1472,3 +1472,22 @@ test('coverage follows rendered display when host CSS overrides the hidden attri
   assert.equal(doc.querySelector('.seerr-score-coverage').textContent, '2/3 scored');
   assert.equal(doc.querySelector('#grid > li').firstElementChild.dataset.id, '2');
 });
+
+test('filter coverage includes nested host containers without rewriting their layout', async t => {
+  const f = createOverlay({ wrapped: true });
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const doc = f.window.document, grid = doc.querySelector('#grid');
+  const container = doc.createElement('section');
+  grid.replaceWith(container); container.append(grid);
+  container.style.display = 'none';
+  f.window.testOverlay.injectSortFilterControls();
+  assert.equal(doc.querySelector('.seerr-score-coverage').textContent, '2/3 scored · 0 visible');
+  doc.querySelector('.seerr-reset-sort').click();
+  assert.equal(container.style.display, 'none');
+  assert.equal(doc.querySelector('.seerr-score-coverage').textContent, '2/3 scored · 0 visible');
+  container.style.display = 'grid';
+  f.window.testOverlay.injectSortFilterControls();
+  assert.equal(doc.querySelector('.seerr-score-coverage').textContent, '2/3 scored');
+  assert.equal(container.style.display, 'grid');
+});
