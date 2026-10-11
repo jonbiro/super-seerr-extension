@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.189]
+
+- Skip empty or malformed entries in ungrouped Plex search results so one null record cannot prevent an otherwise verified movie or TV addition.
+- Report the usual no-match error when no usable candidate remains, without issuing a write.
+- Cover null entries before and after valid matches, all-null responses, and grouped-response controls through the complete add flow.
+
 ## [3.5.188]
 
 - Require a complete string TMDB GUID with a positive safe integer when verifying Plex search candidates, instead of accepting a numeric prefix or coerced array.

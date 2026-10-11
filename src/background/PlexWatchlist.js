@@ -140,6 +140,7 @@
       // Some responses return Metadata at the top level instead of grouped results.
       if (out.length === 0) {
         for (const metadata of this.asPlexList(container && container.Metadata)) {
+          if (!metadata || typeof metadata !== 'object') continue;
           const ratingKey = metadata.ratingKey || this.plexRatingKeyFromGuid(metadata.guid);
           if (!ratingKey) continue;
           out.push({
