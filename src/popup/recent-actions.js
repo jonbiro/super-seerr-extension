@@ -27,6 +27,7 @@
       status.textContent = list.children.length ? '' : 'No confirmed actions yet.';
       clear.disabled = !list.children.length;
       historyLoaded = true;
+      if (!rendered.length) return;
       const responseStatus = await chrome.runtime.sendMessage({ action: 'getRecentActionStatuses' });
       if (current !== generation) return;
       if (!responseStatus?.success || !Array.isArray(responseStatus.data)) { status.textContent = 'History loaded; current status is unavailable. Try Refresh statuses.'; return; }
@@ -50,6 +51,9 @@
     try {
       const response = await chrome.runtime.sendMessage({ action: 'clearRecentActions' });
       if (!response?.success) throw new Error();
+      // The deletion is confirmed even if a subsequent worker read fails.
+      list.replaceChildren();
+      status.textContent = 'No confirmed actions yet.';
       await load();
     } catch (_) { status.textContent = 'Could not clear history. Try again.'; clear.disabled = false; }
     finally { refresh.disabled = false; }

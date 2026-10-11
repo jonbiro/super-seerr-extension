@@ -186,3 +186,88 @@ test('an obsolete refresh cannot unlock controls while history is being cleared'
   assert.equal(refresh.disabled, false);
   assert.equal(dom.window.document.querySelectorAll('#recentActionsList li').length, 0);
 });
+
+test('successful history clearing removes visible rows even when the follow-up read fails', async t => {
+  const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
+  t.after(() => dom.window.close());
+  let cleared = false;
+  dom.window.chrome = { runtime: { sendMessage: async ({ action }) => {
+    if (action === 'clearRecentActions') { cleared = true; return { success: true }; }
+    if (cleared) throw new Error('Worker disconnected');
+    return { success: true, data: [{ kind: 'request', title: 'Cleared film', mediaType: 'movie', at: 1 }] };
+  } } };
+  dom.window.eval(fs.readFileSync('src/popup/recent-actions.js', 'utf8'));
+  await new Promise(resolve => setImmediate(resolve));
+  const doc = dom.window.document;
+  assert.equal(doc.querySelectorAll('#recentActionsList li').length, 1);
+  doc.getElementById('clearRecentActions').click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(cleared, true);
+  assert.equal(doc.querySelectorAll('#recentActionsList li').length, 0);
+  assert.equal(doc.getElementById('clearRecentActions').disabled, true);
+});
+
+test('empty history does not request statuses or replace its empty-state message with a status error', async t => {
+  const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
+  t.after(() => dom.window.close());
+  const calls = [];
+  dom.window.chrome = { runtime: { sendMessage: async ({ action }) => {
+    calls.push(action);
+    return action === 'getRecentActions' ? { success: true, data: [] } : { success: false };
+  } } };
+  dom.window.eval(fs.readFileSync('src/popup/recent-actions.js', 'utf8'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, ['getRecentActions']);
+  assert.equal(dom.window.document.getElementById('recentActionsStatus').textContent, 'No confirmed actions yet.');
+});
+
+test('recent action statuses distinguish approval, monitoring, and blocklisted media', async () => {
+  const worker = await setup();
+  worker.api.baseUrl = 'https://seerr.example';
+  await worker.api.recordRecentAction('request', { title: 'Film', mediaType: 'movie', tmdbId: 1 });
+  for (const [details, expected] of [
+    [{ status: 1, media: {} }, 'Request awaiting approval'],
+    [{ status: 2, media: {} }, 'Request approved'],
+    [{ mediaInfo: { status: 2 } }, 'Request monitoring'],
+    [{ mediaInfo: { status: 6 } }, 'Blocklisted']
+  ]) {
+    worker.api.getMediaStatus = async () => worker.api.formatMediaStatus(details, 'movie');
+    assert.equal((await worker.api.getRecentActionStatuses())[0].status, expected);
+  }
+});
+
+for (const changed of ['server', 'API key', 'settings generation']) {
+  test(`history refresh stops queued reads and rejects mixed results when ${changed} changes`, async () => {
+    const worker = await setup();
+    worker.api.baseUrl = 'https://seerr.example'; worker.api.apiKey = 'original';
+    for (let id = 1; id <= 6; id++) await worker.api.recordRecentAction('request', { title: `Film ${id}`, mediaType: 'movie', tmdbId: id });
+    const releases = [];
+    worker.api.getMediaStatus = () => new Promise(resolve => releases.push(resolve));
+    const pending = worker.api.getRecentActionStatuses();
+    const rejected = assert.rejects(pending, /changed.*Refresh history/i);
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(releases.length, 4);
+    if (changed === 'server') worker.api.baseUrl = 'https://another.example';
+    else if (changed === 'API key') worker.api.apiKey = 'replacement';
+    else worker.api.settingsLoadGeneration++;
+    // A broken batch starts the last two queued reads after these finish.
+    worker.api.getMediaStatus = async () => { releases.push(null); return { status: 'available_watch' }; };
+    releases.slice().forEach(resolve => resolve({ status: 'available_watch' }));
+    await rejected;
+    assert.equal(releases.length, 4);
+  });
+}
+
+test('history status reads do not start if settings change while stored history is loading', async () => {
+  const worker = await setup();
+  worker.api.baseUrl = 'https://seerr.example';
+  let finishHistory, calls = 0;
+  worker.api.getRecentActions = () => new Promise(resolve => { finishHistory = resolve; });
+  worker.api.getMediaStatus = async () => { calls++; return { status: 'available_watch' }; };
+  const pending = worker.api.getRecentActionStatuses();
+  const rejected = assert.rejects(pending, /changed.*Refresh history/i);
+  worker.api.settingsLoadGeneration++;
+  finishHistory([{ kind: 'request', title: 'Film', mediaType: 'movie', at: 1, server: 'https://seerr.example/', tmdbId: 1 }]);
+  await rejected;
+  assert.equal(calls, 0);
+});

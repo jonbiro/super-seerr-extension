@@ -33,24 +33,36 @@
     },
     async getRecentActionStatuses() {
       const server = this.baseUrl;
+      const apiKey = this.apiKey;
+      const generation = this.settingsLoadGeneration;
+      const assertCurrentSettings = () => {
+        if (server !== this.baseUrl || apiKey !== this.apiKey || generation !== this.settingsLoadGeneration) {
+          throw new Error('Settings changed. Refresh history.');
+        }
+      };
       const rows = await this.getRecentActions();
+      assertCurrentSettings();
       const results = new Array(rows.length); let cursor = 0;
       await Promise.all(Array.from({ length: Math.min(4, rows.length) }, async () => {
         while (cursor < rows.length) {
+          assertCurrentSettings();
           const index = cursor++, entry = rows[index];
           const result = { ...entry, status: 'Status unavailable', url: null };
           if (server && entry.server === new URL(server).href && entry.tmdbId) {
             result.url = `${server.replace(/\/$/, '')}/${entry.mediaType}/${entry.tmdbId}`;
             try {
               const state = await this.getMediaStatus({ tmdbId: entry.tmdbId, mediaType: entry.mediaType });
-              const labels = { available_watch: 'Available', available: 'Not requested', pending: 'Pending approval', requested: 'Requested', downloading: 'Processing', partial: 'Partially available', declined: 'Declined', failed: 'Failed' };
+              // The shared pending state includes approved requests and media
+              // monitoring. Preserve the formatter's more precise description.
+              const labels = { available_watch: 'Available', available: 'Not requested', pending: state.message || 'Pending', requested: 'Requested', downloading: 'Processing', partial: 'Partially available', declined: 'Declined', failed: 'Failed', blocklisted: 'Blocklisted' };
               result.status = labels[state.status] || 'Status unavailable';
             } catch (_) { /* Keep the confirmed historical action even offline. */ }
           }
+          assertCurrentSettings();
           results[index] = result;
         }
       }));
-      if (server !== this.baseUrl) throw new Error('Server changed. Refresh history.');
+      assertCurrentSettings();
       return results;
     },
     clearRecentActions() {

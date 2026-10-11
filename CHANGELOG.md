@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.67]
+
+- Remove cleared history from the popup immediately after deletion succeeds, even if reloading fails, and avoid status lookups for empty history.
+- Distinguish approved requests, pending approval, monitoring, and blocklisted titles in recent-action status labels.
+- Stop queued history status lookups and discard results when the server, API key, or settings generation changes.
+- Preserve the popup logo, status dot, and spacing when long connection messages wrap on narrow screens; add worker and Chromium regressions.
+
 ## [3.5.66]
 
 - Request host access before testing an unsaved Seerr connection, stop on denied permission or edited inputs, and clear the permission warning after a successful grant without saving settings.
