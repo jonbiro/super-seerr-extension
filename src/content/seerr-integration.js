@@ -1207,13 +1207,16 @@
     let pathname;
     try {
       const url = new URL(href, window.location.href);
-      if (url.origin !== window.location.origin) return null;
+      if (url.origin !== window.location.origin || url.username || url.password) return null;
+      const base = configuredServer?.pathname.replace(/\/+$/, '') || '';
+      if (base && !url.pathname.startsWith(`${base}/`)) return null;
       pathname = url.pathname;
+      if (base) pathname = pathname.slice(base.length);
     } catch {
       return null;
     }
-    const match = pathname.match(/^\/(movie|tv)\/(\d+)/);
-    return match ? { mediaType: match[1], tmdbId: match[2] } : null;
+    const match = pathname.match(/^\/(movie|tv)\/([1-9]\d*)(?:\/|$)/);
+    return match && Number.isSafeInteger(Number(match[2])) ? { mediaType: match[1], tmdbId: match[2] } : null;
   }
   const MEDIA_CARD_CONTAINER_SELECTOR = '[data-testid="title-card"], [class*="MediaCard"], [class*="media-item"], article, li, [class*="card"], [class*="Card"]';
   let nextCardIndex = 0;

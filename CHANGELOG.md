@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.78]
+
+- Recognize movie and TV card links beneath the configured Seerr base path, keeping parent/sibling installation links out of nested-site overlays; reject malformed IDs and links containing credentials.
+- Reject redirects during session-authenticated catalogue and ratings reads so a login page or another installation cannot populate the active site's cache.
+- Add real HTTP redirect regressions and Chromium coverage for active nested-site badges, shared public score reuse and blocked cross-installation reads.
+
 ## [3.5.77]
 
 - Keep one recent catalogue entry per movie/TV identity, replacing stale titles and posters while retaining original titles, years and other metadata omitted by partial responses; repeated lists no longer crowd other titles out of the cache.

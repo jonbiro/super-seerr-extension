@@ -223,6 +223,38 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     }, `${child}/550`);
     expect(cacheReply.success).toBe(false);
     expect(cacheReply.error).toContain('not the active');
+    // Activate the nested installation. Its own anchored cards must work,
+    // while a same-origin link to the parent must not inherit a badge.
+    await options.evaluate(async child => {
+      await chrome.runtime.sendMessage({ action: 'activateSeerrConnection', data: { id: child } });
+    }, child);
+    await seerr.goto(`${child}/discover`);
+    await seerr.evaluate(() => {
+      const card = document.querySelector('[data-testid="title-card"]');
+      card.id = 'nested-title'; card.querySelector('a').href = '/movie/movie/550';
+      const parent = document.createElement('article');
+      parent.dataset.testid = 'title-card'; parent.id = 'parent-title';
+      parent.innerHTML = '<a href="/movie/550">Fight Club</a>';
+      card.parentElement.append(parent);
+    });
+    await expect(seerr.locator('#nested-title .seerr-card-badge')).toHaveCount(2);
+    await expect(seerr.locator('#parent-title .seerr-card-badge')).toHaveCount(0);
+    await expect.poll(async () => (await cachedSites())[child]?.entries['movie:550']?.bundle.rtCriticsScore).toBe(95);
+    await seerr.route(`${child}/api/v1/movie/777/ratingscombined`, route => route.fulfill({
+      status: 302, headers: { location: `${second.origin}/api/v1/movie/777/ratingscombined` }, body: ''
+    }));
+    const redirectedRead = await options.evaluate(async pageUrl => {
+      const tab = (await chrome.tabs.query({})).find(tab => tab.url === pageUrl);
+      const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: async () => {
+        const session = window.createSeerrSession({ Config: window.RatingsConfig, Model: window.RatingsModel,
+          log() {}, getServer: () => new URL(`${location.origin}/movie`) });
+        try { await session.fetchJsonFromSeerr('/api/v1/movie/777/ratingscombined'); return { blocked: false }; }
+        catch (_) { return { blocked: true }; }
+      } });
+      return results[0].result;
+    }, `${child}/discover`);
+    expect(redirectedRead.blocked).toBe(true);
+    expect(requests.some(request => request.path === '/api/v1/movie/777/ratingscombined')).toBe(false);
     expect(requests.filter(r => r.key && ((r.site === 'Home' && !['home-key', 'initial-home-key'].includes(r.key)) || (r.site === 'Family' && r.key !== (r.path.startsWith('/movie/api/') ? 'child-key' : 'family-key'))))).toEqual([]);
     await seerr.close();
     expect(await options.evaluate(() => chrome.runtime.sendMessage({ action: 'clearRatingsCache' }))).toEqual({ success: true });

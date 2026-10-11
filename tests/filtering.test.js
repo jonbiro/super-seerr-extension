@@ -195,3 +195,15 @@ test('only links back into this Seerr count as media cards', () => {
   assert.strictEqual(mediaLinkTarget(''), null);
   assert.strictEqual(mediaLinkTarget(null), null);
 });
+
+test('media links honor the configured installation base path and exact ID boundary', async () => {
+  const { mediaLinkTarget } = loadOverlay({ pathname: '/family/discover', settings: { seerrUrl: 'https://seerr.example/family' } });
+  await new Promise(resolve => setImmediate(resolve));
+  for (const href of ['/family/movie/550', 'https://seerr.example/family/movie/550?view=details', '/family/tv/550/manage']) {
+    assert.equal(mediaLinkTarget(href)?.tmdbId, '550', href);
+  }
+  for (const href of ['/movie/550', '/tv/550', '/family-other/movie/550', '/family/movie/550extra', '/family/movie/0', '/family/movie/9007199254740992',
+    'https://user:secret@seerr.example/family/movie/550', 'https://other.example/family/movie/550']) {
+    assert.equal(mediaLinkTarget(href), null, href);
+  }
+});

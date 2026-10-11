@@ -6,6 +6,9 @@
       const url = new URL(`${basePath}${endpoint}`, window.location.origin);
       const response = await fetch(url.toString(), {
         method: 'GET',
+        // A redirect may lead to a login page or another installation on the
+        // same host. Its data must never enter this server's ratings cache.
+        redirect: 'error',
         signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(Config.requestTimeoutMs)]) : AbortSignal.timeout(Config.requestTimeoutMs),
         credentials: 'include',
         headers: { Accept: 'application/json' }
