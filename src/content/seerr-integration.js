@@ -2031,6 +2031,12 @@
     return { total: cards.length, rated };
   }
 
+  function isCardHidden(card) {
+    const item = getCardLayoutItem(card);
+    return (item === card ? [card] : [card, item]).some(node =>
+      node.hidden || node.style.display === 'none' || window.getComputedStyle?.(node)?.display === 'none');
+  }
+
   function updateSortFilterCoverage(grid = null, bar = document.getElementById('seerr-filter-bar')) {
     if (!bar) return;
     const coverageEl = bar.querySelector('.seerr-score-coverage');
@@ -2038,7 +2044,7 @@
     const cards = getMediaCards(grid || bar.nextElementSibling || bar.parentElement);
     const total = cards.length;
     const scored = cards.filter(c => getCardAnyScore(c) !== null).length;
-    const hidden = cards.filter(c => c.style.display === 'none').length;
+    const hidden = cards.filter(isCardHidden).length;
     const visible = total - hidden;
     coverageEl.textContent = `${scored}/${total} scored${hidden > 0 ? ` · ${visible} visible` : ''}`;
   }
@@ -2054,8 +2060,8 @@
       : order.startsWith('tmdb') ? getCardTmdbScore(card)
       : order.startsWith('imdb') ? getCardImdbScore(card)
       : order.startsWith('score') ? getCardAnyScore(card) : getCardScore(card);
-    const visible = currentCards.filter(c => c.style.display !== 'none');
-    const hidden = currentCards.filter(c => c.style.display === 'none');
+    const visible = [], hidden = [];
+    currentCards.forEach(card => (isCardHidden(card) ? hidden : visible).push(card));
     const compare = (a, b) => {
       const tie = originalIndex(a) - originalIndex(b);
       if (order === 'default') return tie;

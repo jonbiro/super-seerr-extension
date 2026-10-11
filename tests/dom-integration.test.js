@@ -1417,3 +1417,26 @@ for (const restore of ['Reset', 'disable overlay']) {
     });
   }
 }
+
+for (const hiding of ['inline wrapper', 'hidden attribute', 'stylesheet']) {
+  test(`coverage and sorting recognize a card hidden by its ${hiding}`, async t => {
+    const f = createOverlay({ wrapped: true });
+    t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+    await settle();
+    const doc = f.window.document;
+    const item = doc.querySelector('[data-id="2"]').parentElement;
+    if (hiding === 'inline wrapper') item.style.display = 'none';
+    else if (hiding === 'hidden attribute') item.hidden = true;
+    else {
+      item.className = 'host-hidden';
+      const style = doc.createElement('style'); style.textContent = '.host-hidden { display: none; }'; doc.head.append(style);
+    }
+    const select = doc.querySelector('.seerr-sort-select');
+    select.value = 'rt-critics-desc'; select.dispatchEvent(new f.window.Event('change'));
+    assert.equal(doc.querySelector('.seerr-score-coverage').textContent, '2/3 scored · 2 visible');
+    assert.deepEqual([...doc.querySelectorAll('#grid > li')].map(node => node.firstElementChild.dataset.id), ['1', '3', '2']);
+    doc.querySelector('.seerr-reset-sort').click();
+    assert.equal(doc.querySelector('.seerr-score-coverage').textContent, '2/3 scored · 2 visible');
+    assert.equal(f.window.getComputedStyle(item).display, 'none');
+  });
+}

@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.235]
+
+- Count and sort host-hidden titles consistently, including hidden list wrappers, HTML hidden attributes, and stylesheet display rules.
+
 ## [3.5.234]
 
 - Preserve Seerr card and list-item display styles through rating filters, Reset, and overlay cleanup instead of erasing host layout or revealing host-hidden cards.

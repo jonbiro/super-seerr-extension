@@ -271,3 +271,18 @@ test('filtering and Reset preserve host card and wrapper layout styles', async (
   expect(await card.evaluate(node => node.style.getPropertyPriority('display'))).toBe('important');
   expect(await item.evaluate(node => node.style.getPropertyPriority('display'))).toBe('important');
 });
+
+test('coverage respects a host stylesheet hiding the card wrapper, including after Reset', async ({ page }) => {
+  await showFilter(page, 390);
+  await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored');
+  await page.addStyleTag({ content: '.host-hidden { display: none; }' });
+  await page.locator('[data-testid="title-card"]').evaluate(card => {
+    const item = document.createElement('li'); item.className = 'host-hidden';
+    card.replaceWith(item); item.append(card);
+  });
+  await page.getByLabel('Sort titles', { exact: true }).selectOption('rt-critics-desc');
+  await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored · 0 visible');
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored · 0 visible');
+  await expect(page.locator('[data-testid="title-card"]')).toBeHidden();
+});

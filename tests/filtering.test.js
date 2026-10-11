@@ -114,10 +114,6 @@ test('Background worker can resolve Rotten Tomatoes scores without Seerr API con
 
 test('Seerr list sorting and reset do not use broad class contains card selectors', () => {
   assert.ok(
-    seerrIntegration.includes('const visible = currentCards.filter(c => c.style.display !== \'none\')'),
-    'Sorting should separate visible from filtered cards'
-  );
-  assert.ok(
     seerrIntegration.includes('const allCards = getMediaCards(grid);'),
     'Reset should operate on media cards only'
   );
