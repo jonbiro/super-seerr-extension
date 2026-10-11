@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.102]
+
+- Recover immediately when browser window creation or opener detachment throws, restoring Watch instead of leaving it disabled as Opening.
+- Close a newly created playback window when opener detachment fails, show a clear browser-opening warning, and allow the user to retry.
+- Ignore opening failures from an obsolete view and add window-error, opener-error, retry and title-change regressions.
+
 ## [3.5.101]
 
 - Mark a public ratings snapshot as notified only after its notification operation succeeds, allowing a later flush to retry when querying tabs temporarily fails.

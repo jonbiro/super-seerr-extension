@@ -621,8 +621,21 @@ class BaseIntegration {
     }
     // Open while the click gesture is still active, not from a timer. Keep the
     // window handle for popup-blocker detection, then detach its opener.
-    const opened = window.open(destination.href, '_blank');
-    if (opened) opened.opener = null;
+    let opened;
+    try {
+      opened = window.open(destination.href, '_blank');
+      if (opened) opened.opener = null;
+    } catch (_) {
+      // A browser policy error must not leave Watch disabled as Opening….
+      // If detaching failed, close the window we just created when possible.
+      try { opened?.close(); } catch (_) {}
+      if (!view.isCurrent()) return;
+      this.currentStatusData ??= this.getErrorStatus(new Error('Could not open playback. Retry the status lookup.'));
+      this.updateUIFromStatus(this.currentStatusData);
+      this.ui.createNotification('Could Not Open Media Server',
+        'The browser could not open playback. Try again or check this site’s popup permissions.', 'warning', 4000);
+      return;
+    }
     if (!opened) {
       this.ui.createNotification('Popup Blocked',
         `Allow popups for this site to open "${view.media.title}"`, 'warning', 4000);

@@ -245,3 +245,45 @@ for (const [name, reply, configured, expected] of [
     assert.equal(integration.uiElements.plexButton.disabled, expected);
   });
 }
+
+for (const failure of ['window creation', 'opener detachment']) {
+  test(`playback ${failure} failure restores Watch and permits a retry`, async t => {
+    const f = fixture(t), integration = f.integration;
+    integration.uiElements.button = integration.ui.createRequestButton({ text: 'Watch' });
+    f.page.window.document.body.append(integration.uiElements.button);
+    integration.setUILoading = f.page.window.BaseIntegration.prototype.setUILoading;
+    integration.currentStatusData = { status: 'available_watch', buttonClass: 'watch', buttonText: 'Watch', watchUrl: 'https://media.example/watch/1' };
+    integration.updateUIFromStatus(integration.currentStatusData);
+    let attempts = 0, closed = 0;
+    f.page.window.open = () => {
+      if (++attempts > 1) return {};
+      if (failure === 'window creation') throw new Error('Browser policy prevented opening');
+      return Object.defineProperty({ close: () => { closed++; } }, 'opener', { set() { throw new Error('Could not detach opener'); } });
+    };
+    await integration.handleRequest();
+    assert.equal(integration.uiElements.button.disabled, false);
+    assert.equal(integration.uiElements.button.querySelector('span').textContent, 'Watch');
+    assert.equal(integration._requestInFlight, false);
+    assert.ok(f.notices.some(note => note[0] === 'Could Not Open Media Server'));
+    assert.ok(!f.notices.some(note => note[0] === 'Opening media server'));
+    assert.equal(closed, failure === 'opener detachment' ? 1 : 0);
+    await integration.handleRequest();
+    assert.equal(attempts, 2);
+    assert.ok(f.notices.some(note => note[0] === 'Opening media server'));
+  });
+}
+
+test('a playback error after a view change cannot alter the new title controls', async t => {
+  const f = fixture(t);
+  f.integration.currentStatusData = { status: 'available_watch', watchUrl: 'https://media.example/watch/1' };
+  let renders = 0;
+  f.integration.updateUIFromStatus = () => { renders++; };
+  f.page.window.open = () => {
+    f.integration.cleanupUI(); f.show('New');
+    throw new Error('Old browser operation failed');
+  };
+  await f.integration.handleWatchButtonClick();
+  assert.equal(renders, 0);
+  assert.equal(f.notices.length, 0);
+  assert.equal(f.integration.mediaData.title, 'New');
+});
