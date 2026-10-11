@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.193]
+
+- Prevent an older pending saved-match write from restoring a forgotten choice or overwriting a newer confirmed choice after delayed candidate validation.
+- Scope cancellation to older changes for the same match; unrelated saves, newer pending choices, and failed-change recovery remain available.
+- Cover movie and TV save races, persistence after restart, both completion orders, unrelated matches, and failed mutations.
+
 ## [3.5.192]
 
 - Discard pending remembered-title lookups when a saved match is forgotten or replaced, so a confirmed change cannot be undone by an older storage or candidate reply.
