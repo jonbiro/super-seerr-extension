@@ -16,7 +16,11 @@
     };
     function drain() {
       scheduled = false;
-      pending.sort((a, b) => priority(a.node) - priority(b.node));
+      if (running.size >= limit || !pending.length) return;
+      // Layout reads are expensive on large grids. Snapshot each distance once
+      // per dispatch pass; the next pass still sees scrolling and DOM changes.
+      for (const job of pending) job.priority = priority(job.node);
+      pending.sort((a, b) => a.priority - b.priority);
       while (running.size < limit && pending.length) {
         const job = pending.shift();
         if (!job.node.isConnected) { job.resolve(null); continue; }

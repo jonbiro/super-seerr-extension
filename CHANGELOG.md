@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.141]
+
+- Measure each queued card once per dispatch pass when prioritizing ratings, instead of repeatedly reading layout inside the sort comparator.
+- Skip layout work while every queue slot is occupied; recalculate priorities when work can start so scrolling and moved cards remain respected.
+- Add a large-grid layout-read budget regression and a changing-position check alongside existing cancellation and concurrency coverage.
+
 ## [3.5.140]
 
 - Verify that freshly fetched season details identify the intended TV title before presenting availability or approving a season request.

@@ -100,3 +100,48 @@ test('clearing already running work keeps the concurrency slot until that work s
   assert.equal(await old, null);
   assert.equal(await next, 80);
 });
+
+test('prioritizing a large grid keeps layout measurements bounded', async t => {
+  const f = fixture(t);
+  let measurements = 0;
+  const count = 80;
+  const jobs = Array.from({ length: count }, (_, index) => {
+    // Permuted distances exercise a real sort rather than an already sorted
+    // list. Measuring rectangles repeatedly makes big grids expensive.
+    const distance = (index * 37) % count;
+    const job = f.add(String(distance), { top: f.page.window.innerHeight + distance * 20,
+      bottom: f.page.window.innerHeight + distance * 20 + 10, left: 0, right: 20 });
+    const rect = job.node.getBoundingClientRect;
+    job.node.getBoundingClientRect = () => { measurements++; return rect(); };
+    return job;
+  });
+  await tick();
+  try {
+    t.diagnostic(`${measurements} layout reads for ${count} queued cards`);
+    assert.deepEqual(f.starts, ['0'], 'nearest card still starts first');
+    assert.ok(measurements <= count * 2, `layout read budget exceeded: ${measurements} for ${count} cards`);
+  } finally {
+    f.queue.clear(); f.releases.forEach(resolve => resolve());
+    await Promise.all(jobs.map(job => job.promise));
+  }
+});
+
+test('pending priorities refresh after the viewport or card positions change', async t => {
+  const f = fixture(t);
+  const rect = { top: 0, bottom: 10, left: 0, right: 20 };
+  const first = f.add('first', rect);
+  await tick();
+  const farther = f.add('farther', { top: 5000, bottom: 5010, left: 0, right: 20 });
+  const closer = f.add('closer', { top: 1000, bottom: 1010, left: 0, right: 20 });
+  await tick();
+  farther.node.getBoundingClientRect = () => rect;
+  f.queue.reprioritize();
+  await tick();
+  try {
+    f.releases[0](); await tick();
+    assert.deepEqual(f.starts, ['first', 'farther']);
+  } finally {
+    f.queue.clear(); f.releases.forEach(resolve => resolve());
+    await Promise.all([first.promise, farther.promise, closer.promise]);
+  }
+});
