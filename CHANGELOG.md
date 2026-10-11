@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.95]
+
+- Stop canceled rating reads before cache access and after asynchronous prerequisites, including cached reads that would otherwise enqueue background refreshes.
+- Prevent abandoned card work from restarting with a fresh queue signal after navigation or queue clearing, while retaining the existing cached score.
+- Add regressions for cancellation before lookup, during cache loading and during availability loading.
+
 ## [3.5.94]
 
 - Preserve confirmed Plex watchlist membership when restoring Seerr controls after loading, so a watchlisted title continues to show a disabled On Plex Watchlist button.

@@ -1053,8 +1053,13 @@
   }
 
   async function getRatings(tmdbId, title, year, mediaType = null, options = {}) {
+    // Cached reads can enqueue background work too. Stop abandoned callers
+    // before cache access and after each asynchronous prerequisite.
+    if (options.signal?.aborted) return null;
     await loadPersistedRatings();
+    if (options.signal?.aborted) return null;
     await loadRatingsAvailability();
+    if (options.signal?.aborted) return null;
 
     // Resolve a heading's year before the cache fast path as well as before
     // provider lookup. A cached public result must respect known identity data.

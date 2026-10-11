@@ -143,3 +143,25 @@ test('an explicit refresh supersedes an ordinary lookup but coalesces other refr
     assert.equal(overlay.ratingsCache.get('movie:550').bundle.rtCriticsScore, 80);
   } finally { releases.forEach(resolve => resolve(null)); await Promise.all([old, fresh, duplicate]); }
 });
+
+for (const timing of ['before lookup', 'during cache loading', 'during availability loading']) {
+  test(`a cached card read canceled ${timing} cannot enqueue a fresh background lookup`, async () => {
+    const overlay = loadOverlay();
+    const bundle = overlay.Model.createRatingsBundle({ rtCriticsScore: 80, confidence: 1 });
+    overlay.ratingsCache.set('movie:550', { bundle, cachedAt: 1, retryAt: 1 });
+    let calls = 0;
+    overlay.setResolver(async () => { calls++; return bundle; });
+    const controller = new AbortController();
+    await settle();
+    if (timing === 'before lookup') controller.abort();
+    const node = { isConnected: true, getBoundingClientRect: () => ({ left: 0, right: 100, top: 0, bottom: 100 }) };
+    const read = overlay.getRatings(550, 'Fight Club', 1999, 'movie', { signal: controller.signal, queueNode: node });
+    if (timing === 'during availability loading') await Promise.resolve();
+    controller.abort();
+    const result = await read;
+    await settle();
+    assert.equal(calls, 0, 'abandoned reads must not resurrect queued background refreshes');
+    assert.equal(result, null);
+    assert.equal(overlay.ratingsCache.get('movie:550').bundle.rtCriticsScore, 80);
+  });
+}
