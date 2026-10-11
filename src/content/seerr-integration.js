@@ -2466,6 +2466,7 @@
       const score = getCardScore(card);
       titles.push({
         title: mediaInfo?.title || 'Unknown Title',
+        year: mediaInfo?.year ?? null,
         tmdbId: mediaInfo?.tmdbId || null,
         mediaType: mediaInfo?.mediaType || 'movie',
         score
@@ -2617,7 +2618,7 @@
         try {
           const response = await chrome.runtime.sendMessage({
             action: 'requestMedia', connectionToken,
-            data: { title: t.title, mediaType: t.mediaType, tmdbId: tmdbIdNum, ...(t.mediaType === 'tv' ? { seasons: t.seasons, seasonServer: t.seasonServer } : {}) }
+            data: { title: t.title, year: t.year, mediaType: t.mediaType, tmdbId: tmdbIdNum, ...(t.mediaType === 'tv' ? { seasons: t.seasons, seasonServer: t.seasonServer } : {}) }
           });
           if (response && response.success) {
             succeeded++;

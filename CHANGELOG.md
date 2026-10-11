@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.174]
+
+- Preserve the selected card's catalogue release year in bulk season reviews and requests, allowing the worker's existing same-name remake checks to use that evidence.
+- Add movie and TV regressions using actual catalogue hydration and bulk controls; both failed before the fix because the year was omitted.
+
 ## [3.5.173]
 
 - Keep bulk failure results visible until dismissed, including partial failures, and list each failed title with its reported reason or a useful fallback.

@@ -1285,3 +1285,39 @@ test('a cache write rejected after a missed clear resets and repaints the tab', 
   assert.equal(writes.at(-1).epoch, 'new-write-epoch');
   assert.equal(writes.at(-1).entries['movie:1'].bundle.rtCriticsScore, 88);
 });
+
+for (const mediaType of ['movie', 'tv']) test(`bulk ${mediaType} retains the catalogue year for identity checks`, async t => {
+  const f = createOverlay({ posters: true, listItems: [
+    { id: 1, mediaType, title: 'Low', posterPath: '/poster1.jpg', releaseDate: '2021-01-01' }
+  ] });
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const original = f.window.chrome.runtime.sendMessage, reads = [], writes = [];
+  f.window.chrome.runtime.sendMessage = async message => {
+    if (message.action === 'getSeasonOptions') {
+      reads.push(message.data);
+      return { success: true, data: { title: 'Low', tmdbId: 1, server: 'https://seerr.example', seasons: [
+        { number: 1, name: 'Season 1', episodeCount: 8, availability: 'Not available', requestable: true }
+      ] } };
+    }
+    if (message.action === 'requestMedia') { writes.push(message.data); return { success: true }; }
+    return original(message);
+  };
+  const doc = f.window.document;
+  doc.querySelector('.seerr-toggle-select').click();
+  doc.querySelector('[data-id="1"] .seerr-select-checkbox').click();
+  doc.querySelector('.seerr-bulk-review').click();
+  const modal = doc.querySelector('.seerr-confirmation-modal');
+  if (mediaType === 'tv') {
+    modal.querySelector('[data-season-index]').click(); await settle();
+    assert.equal(reads[0].year, 2021, 'season availability must use the selected release year');
+    const picker = doc.querySelector('.seerr-season-picker');
+    picker.querySelector('input').click();
+    [...picker.querySelectorAll('button')].find(button => button.textContent === 'Use selected seasons').click(); await settle();
+  }
+  modal.querySelector('.confirm-btn').click(); await settle();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].year, 2021, 'the worker needs the year to reject a same-name remake');
+  assert.equal(writes[0].tmdbId, 1);
+  assert.equal(writes[0].mediaType, mediaType);
+});
