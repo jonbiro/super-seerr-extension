@@ -64,7 +64,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
   window.chrome.runtime.sendMessage = message => ['getOverlayCache', 'putOverlayCache'].includes(message.action) ? cacheMessage(message) : send(message);
   require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(fs.readFileSync('src/content/seerr-integration.js', 'utf8').replace(/\}\)\(\);\s*$/, `window.testOverlay = {
-    injectCardBadges, injectPlexCardButtons, hydrateCardsFromListItems, getRatings,
+    injectCardBadges, injectPlexCardButtons, injectSortFilterControls, hydrateCardsFromListItems, getRatings,
     flushPersistedRatings, projectListIndex, detectRoute, handleObservedApiResponse, handleRouteChange,
     toggleBulkMode, notifyResult, listItemCount: () => lastListItems.length
   }; })();`));
@@ -646,3 +646,88 @@ for (const mediaType of ['movie', 'tv']) {
     });
   }
 }
+
+const observeCatalogue = (fixture, item) => fixture.window.testOverlay.handleObservedApiResponse({
+  source: fixture.window, origin: fixture.window.location.origin,
+  data: { channel: 'super-seerr:api', url: 'https://seerr.example/api/v1/discover/movies', items: [item] }
+});
+
+test('anchored cards receive catalogue metadata by exact type and ID, ignoring a misleading poster', async t => {
+  const fixture = openGrid({ local: seedBlob({ index: [INDEX_ENTRY,
+    { tmdbId: '456', mediaType: 'movie', title: 'Arrival', year: 2016, posterPath: '/p456.jpg' },
+    { tmdbId: '456', mediaType: 'tv', title: 'Other Series', year: 2024, posterPath: '/tv.jpg' }
+  ] }) });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
+  const card = fixture.window.document.querySelector('[data-testid="title-card"]');
+  card.innerHTML = '<a href="/movie/456"><img src="https://image.tmdb.org/t/p/w300/p123.jpg" alt="Arrival"></a>';
+  await flush(fixture.window);
+  assert.equal(card.__seerrMediaInfo.tmdbId, '456');
+  assert.equal(card.__seerrMediaInfo.year, 2016);
+  assert.equal(card.__seerrMediaInfo.title, 'Arrival');
+});
+
+test('live catalogue metadata refreshes card actions while keeping the same identity selected', async t => {
+  const fixture = openGrid({ local: seedBlob({ entries: { 'movie:123': { bundle: BUNDLE, cachedAt: Date.now() } } }), plexConfigured: true, apiConfigured: true });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
+  await flush(fixture.window);
+  fixture.window.testOverlay.toggleBulkMode(true);
+  const card = fixture.window.document.querySelector('[data-testid="title-card"]');
+  card.querySelector('.seerr-select-checkbox').click();
+  observeCatalogue(fixture, { id: 123, mediaType: 'movie', title: 'Updated Dune', releaseDate: '2022-01-01', posterPath: '/p123.jpg' });
+  fixture.window.testOverlay.injectCardBadges();
+  fixture.window.testOverlay.injectPlexCardButtons();
+  fixture.window.testOverlay.injectSortFilterControls();
+  await flush(fixture.window);
+  assert.equal(card.__seerrListMediaInfo.year, 2022);
+  assert.equal(card.__seerrListMediaInfo.title, 'Updated Dune');
+  assert.equal(card.querySelector('.seerr-select-checkbox').getAttribute('aria-checked'), 'true');
+  fixture.window.testOverlay.toggleBulkMode();
+  assert.equal(card.querySelector('.seerr-plex-card-button').getAttribute('aria-label'), 'Add Updated Dune to Plex Watchlist');
+});
+
+test('a late rating for older same-ID metadata cannot repaint the updated card', async t => {
+  const fixture = openGrid({ local: seedBlob() });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
+  const send = fixture.window.chrome.runtime.sendMessage;
+  let finishOld;
+  fixture.window.chrome.runtime.sendMessage = message => {
+    if (message.action !== 'getRottenTomatoesRatings') return send(message);
+    if (message.data.year === 2021) return new Promise(resolve => { finishOld = resolve; });
+    return Promise.resolve({ success: true, data: { rtCriticsScore: 20, rtAudienceScore: 30, confidence: 1 } });
+  };
+  await flush(fixture.window);
+  assert.equal(typeof finishOld, 'function');
+  observeCatalogue(fixture, { id: 123, mediaType: 'movie', title: 'Updated Dune', releaseDate: '2022-01-01', posterPath: '/p123.jpg' });
+  fixture.window.testOverlay.injectCardBadges();
+  await flush(fixture.window);
+  const card = fixture.window.document.querySelector('[data-testid="title-card"]');
+  assert.equal(card.__seerrRatings.rtCriticsScore, 20);
+  finishOld({ success: true, data: { rtCriticsScore: 99, rtAudienceScore: 98, confidence: 1 } });
+  await flush(fixture.window);
+  assert.equal(card.__seerrRatings.rtCriticsScore, 20);
+  assert.equal((await fixture.window.testOverlay.getRatings(123, 'Updated Dune', 2022, 'movie')).rtCriticsScore, 20);
+});
+
+test('enriching a newly added duplicate card keeps the existing shared lookup', async t => {
+  const fixture = openGrid({ local: seedBlob() });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
+  const send = fixture.window.chrome.runtime.sendMessage;
+  let finish, calls = 0;
+  fixture.window.chrome.runtime.sendMessage = message => {
+    if (message.action !== 'getRottenTomatoesRatings') return send(message);
+    calls++;
+    return new Promise(resolve => { finish = resolve; });
+  };
+  await flush(fixture.window);
+  const duplicate = fixture.window.document.createElement('article');
+  duplicate.dataset.testid = 'title-card';
+  duplicate.innerHTML = '<a href="/movie/123"><h2>Dune</h2></a>';
+  fixture.window.document.getElementById('grid').append(duplicate);
+  fixture.window.testOverlay.injectCardBadges();
+  await flush(fixture.window);
+  assert.equal(calls, 1, 'metadata enrichment must not cancel another card\'s correct lookup');
+  finish({ success: true, data: { rtCriticsScore: 80, rtAudienceScore: 90, confidence: 1 } });
+  await flush(fixture.window);
+  assert.equal(duplicate.__seerrRatings.rtCriticsScore, 80);
+  assert.equal(duplicate.__seerrMediaInfo.year, 2021);
+});

@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.90]
+
+- Enrich anchored cards using catalogue metadata keyed by exact media type and TMDB ID, so known years reach rating lookups even when a card already has a link.
+- Update live card titles, years and dependent actions when catalogue metadata changes; preserve selection for the unchanged identity and reject late lookups started with older metadata.
+- Keep newly added duplicate cards on the existing shared ratings lookup instead of discarding another card's correct pending work.
+- Add anchored-card, misleading-poster, movie/TV ID overlap, metadata-refresh, selection and late-response regressions.
+
 ## [3.5.89]
 
 - Pass known catalogue years into card rating lookups, preventing public scores with contradictory release years from overwriting a server-specific cached bundle.

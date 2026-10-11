@@ -613,6 +613,7 @@
     if (listLookupIndex && listLookupIndex.items === lastListItems) return listLookupIndex;
     const byPosterFile = new Map();
     const byTitle = new Map();
+    const byIdentity = new Map();
     for (const item of lastListItems) {
       const poster = item && (item.posterPath || item.poster_path);
       if (typeof poster === 'string' && poster.length > 1) {
@@ -623,13 +624,14 @@
         }
       }
       const info = mediaInfoFromListItem(item);
+      if (info) byIdentity.set(ratingKey(info.tmdbId, info.mediaType), info);
       const title = info && info.title.trim().toLowerCase();
       if (title) {
         if (!byTitle.has(title)) byTitle.set(title, []);
         byTitle.get(title).push(item);
       }
     }
-    listLookupIndex = { items: lastListItems, byPosterFile, byTitle };
+    listLookupIndex = { items: lastListItems, byPosterFile, byTitle, byIdentity };
     return listLookupIndex;
   }
 
@@ -1342,6 +1344,25 @@
     selectedCards.delete(card);
   }
 
+  function refreshCardCatalogueMetadata(card, info) {
+    const catalogue = indexedListItems().byIdentity.get(ratingKey(info.tmdbId, info.mediaType));
+    if (!catalogue) return info;
+    const title = catalogue.title || info.title;
+    const year = catalogue.year ?? info.year ?? null;
+    if (title === info.title && year === (info.year ?? null)) return info;
+    // Metadata can arrive after links/badges. Rebuild dependent controls and
+    // drop the old lookup's ownership, without deselecting this same identity.
+    const selected = selectedCards.has(card);
+    const resolving = card.__seerrBadgesResolving;
+    clearCardIdentity(card);
+    if (selected) selectedCards.add(card);
+    if (resolving) ratingsCache.delete(`pending:${ratingsCacheKey(info.tmdbId, info.title, info.year, info.mediaType)}`);
+    Object.assign(info, { title, year });
+    card[info.link ? '__seerrMediaInfo' : '__seerrListMediaInfo'] = info;
+    rememberCardIdentityEvidence(card);
+    return info;
+  }
+
   function getCardMediaInfo(card) {
     const cached = card.__seerrMediaInfo || card.__seerrListMediaInfo;
     const links = card.matches?.('a[href]') ? [card] : Array.from(card.querySelectorAll('a[href]'));
@@ -1356,7 +1377,7 @@
         return null;
       }
       if (cached) rememberCardIdentityEvidence(card);
-      return cached || null;
+      return cached ? refreshCardCatalogueMetadata(card, cached) : null;
     }
 
     const href = link.getAttribute('href') || '';
@@ -1364,7 +1385,7 @@
     if (!target) return null;
     if (cached && String(cached.tmdbId) === String(target.tmdbId) && cached.mediaType === target.mediaType) {
       rememberCardIdentityEvidence(card);
-      return cached;
+      return refreshCardCatalogueMetadata(card, cached);
     }
     if (cached) clearCardIdentity(card);
 
@@ -1380,7 +1401,7 @@
       title: title.trim()
     };
     rememberCardIdentityEvidence(card);
-    return card.__seerrMediaInfo;
+    return refreshCardCatalogueMetadata(card, card.__seerrMediaInfo);
   }
 
   function getMediaCards(root = document) {
