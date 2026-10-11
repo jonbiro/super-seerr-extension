@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.144]
+
+- Compare the full saved rating snapshot before deleting it from a site's cache, protecting concurrent score, retry and diagnostic changes even when timestamps are unchanged.
+- Canonicalize deletion snapshots through the storage bridge so valid deletions still work after null fields and bounded values have been normalized.
+- Add two-tab regressions for same-time score updates and failed-refresh backoff, including deletion of the matching current snapshot.
+
 ## [3.5.143]
 
 - Restore keyboard focus when dismissing request and connection notifications, with another notification as a fallback when the initiating control is gone.

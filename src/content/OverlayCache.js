@@ -198,7 +198,7 @@
           const removed = [...persistedEntries].filter(([key]) => !snapshot.has(key))
             .map(([key, value]) => {
               const entry = JSON.parse(value);
-              return { key, cachedAt: entry.cachedAt, publicCheckedAt: entry.publicCheckedAt ?? null };
+              return { key, cachedAt: entry.cachedAt, publicCheckedAt: entry.publicCheckedAt ?? null, expected: entry };
             });
           const indexSnapshot = new Map(index.map(item => [indexKey(item), indexFingerprint(item)]));
           const indexChanges = index.filter(item => indexSnapshot.get(indexKey(item)) !== persistedIndex.get(indexKey(item)));

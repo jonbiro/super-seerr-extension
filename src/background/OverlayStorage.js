@@ -119,9 +119,18 @@
     },
     mergeOverlayCache(previous, incoming, removed) {
       const entries = previous?.matcher === incoming.matcher ? { ...previous.entries } : {};
-      for (const item of (Array.isArray(removed) ? removed : []).slice(-root.RatingsConfig.overlayCacheMaxEntries)) {
+      const removals = (Array.isArray(removed) ? removed : []).slice(-root.RatingsConfig.overlayCacheMaxEntries);
+      // Compare canonical records: the bridge sanitizes saved values, while
+      // the tab's snapshot can omit null fields added during sanitization.
+      const expected = this.sanitizeOverlayCache({ ...incoming, index: [], entries: Object.fromEntries(
+        removals.filter(item => item?.expected).map(item => [item.key, item.expected])) }, incoming.server, incoming.epoch).entries;
+      for (const item of removals) {
         if (item && entries[item.key] && entries[item.key].cachedAt === item.cachedAt &&
-            (entries[item.key].publicCheckedAt ?? null) === (item.publicCheckedAt ?? null)) delete entries[item.key];
+            (entries[item.key].publicCheckedAt ?? null) === (item.publicCheckedAt ?? null) &&
+            // Older clients send timestamps only. New clients also protect
+            // same-time score changes and retry/diagnostic updates.
+            (!Object.hasOwn(item, 'expected') || (expected[item.key] &&
+              JSON.stringify(entries[item.key]) === JSON.stringify(expected[item.key])))) delete entries[item.key];
       }
       for (const [key, entry] of Object.entries(incoming.entries)) {
         entries[key] = this.mergeOverlayRating(entries[key], entry);

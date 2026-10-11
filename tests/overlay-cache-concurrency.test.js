@@ -233,3 +233,25 @@ test('a public refresh detects a missed cache clear before merging a new snapsho
   assert.equal(cache.getPublicRating('movie:551').bundle.rtCriticsScore, 95);
   await cache.flushPersistedRatings();
 });
+
+for (const change of ['same-time score', 'retry backoff']) {
+  test(`forgetting a snapshot preserves another tab's ${change} update`, async () => {
+    const worker = await setup();
+    const seed = tab(worker); await seed.loadPersistedRatings();
+    seed.ratingsCache.set('movie:1', entry(20, 100)); await seed.flushPersistedRatings();
+    const a = tab(worker), b = tab(worker);
+    await Promise.all([a.loadPersistedRatings(), b.loadPersistedRatings()]);
+    const updated = change === 'same-time score' ? entry(95, 100)
+      : { ...a.ratingsCache.get('movie:1'), retryAt: Date.now() + Config.inconclusiveRetryMs,
+        diagnostics: { status: 'failed', checkedAt: Date.now(), source: 'rotten-tomatoes' } };
+    a.ratingsCache.set('movie:1', updated); await a.flushPersistedRatings();
+    b.ratingsCache.delete('movie:1'); await b.flushPersistedRatings();
+    const result = stored(worker).entries['movie:1'];
+    assert.ok(result, 'a changed entry must survive deletion of an older snapshot');
+    if (change === 'same-time score') assert.equal(result.bundle.rtCriticsScore, 95);
+    else { assert.equal(result.retryAt, updated.retryAt); assert.equal(result.diagnostics.status, 'failed'); }
+    const current = tab(worker); await current.loadPersistedRatings();
+    current.ratingsCache.delete('movie:1'); await current.flushPersistedRatings();
+    assert.equal(stored(worker).entries['movie:1'], undefined, 'the matching current snapshot remains removable');
+  });
+}
