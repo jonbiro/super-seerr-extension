@@ -485,3 +485,61 @@ for (const mediaType of ['movie', 'tv']) for (const posterFirst of [true, false]
     assert.equal(stored(worker).index[0].posterPath, '/new.jpg');
   });
 }
+
+for (const mediaType of ['movie', 'tv']) for (const baseline of ['absent', 'unrated']) for (const imdbFirst of [true, false]) {
+  test(`first ${mediaType} native discoveries retain complementary scores (${baseline}, IMDb first: ${imdbFirst})`, async () => {
+    const worker = await setup();
+    const at = Date.now();
+    const key = `${mediaType}:1`;
+    if (baseline === 'unrated') {
+      const seed = tab(worker); await seed.loadPersistedRatings();
+      seed.ratingsCache.set(key, { bundle: null, cachedAt: at - 1000, retryAt: at + Config.unratedRetryMs,
+        diagnostics: { status: 'unrated', checkedAt: at - 1000, source: 'seerr-ratings-api' } });
+      await seed.flushPersistedRatings();
+    }
+    const imdb = tab(worker), tmdb = tab(worker);
+    await Promise.all([imdb.loadPersistedRatings(), tmdb.loadPersistedRatings()]);
+    const discovered = (field, score, checkedAt) => ({
+      bundle: Model.createRatingsBundle({ [field]: score, rtCriticsScore: 90, rtAudienceScore: 80, confidence: 1 }),
+      cachedAt: checkedAt, retryAt: checkedAt + Config.partialRatingsRetryMs,
+      diagnostics: { status: 'partial', checkedAt, source: 'seerr-ratings-api' }
+    });
+    imdb.ratingsCache.set(key, discovered('imdbRating', 8, at));
+    tmdb.ratingsCache.set(key, discovered('tmdbRating', 9, at + 1));
+    for (const cache of imdbFirst ? [imdb, tmdb] : [tmdb, imdb]) await cache.flushPersistedRatings();
+    const result = stored(worker).entries[key];
+    assert.equal(result.bundle.imdbRating, 8);
+    assert.equal(result.bundle.tmdbRating, 9);
+    assert.equal(result.cachedAt, at + 1);
+    assert.equal(result.diagnostics.status, 'rated');
+    const restarted = await setup(worker.localStore);
+    const reloaded = tab(restarted); await reloaded.loadPersistedRatings();
+    assert.equal(reloaded.ratingsCache.get(key).bundle.imdbRating, 8);
+    assert.equal(reloaded.ratingsCache.get(key).bundle.tmdbRating, 9);
+  });
+}
+
+for (const field of ['imdbRating', 'tmdbRating']) test(`a cold ${field} discovery respects a persisted explicit removal`, async () => {
+  const worker = await setup();
+  const at = Date.now();
+  let activeWorker = worker;
+  const cold = tab(worker, { send: async message => ({ success: true, data: message.action === 'getOverlayCache'
+    ? await activeWorker.api.getOverlayCache(sender) : await activeWorker.api.putOverlayCache(message.data, sender) }) });
+  const current = tab(worker);
+  await Promise.all([cold.loadPersistedRatings(), current.loadPersistedRatings()]);
+  const original = { ...entry(90, at), bundle: Model.createRatingsBundle({ rtCriticsScore: 90, [field]: 7, confidence: 1 }) };
+  current.ratingsCache.set('movie:1', original); await current.flushPersistedRatings();
+  current.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, [field]: null }, cachedAt: at + 2 });
+  await current.flushPersistedRatings();
+  activeWorker = await setup(worker.localStore);
+  cold.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, [field]: 8 }, cachedAt: at + 1 });
+  await cold.flushPersistedRatings();
+  assert.equal(stored(activeWorker).entries['movie:1'].bundle[field], null);
+  assert.equal(stored(activeWorker).entries['movie:1'].nativeRemovedAt[field], at + 2);
+  const reloaded = tab(activeWorker); await reloaded.loadPersistedRatings();
+  assert.equal(reloaded.ratingsCache.get('movie:1').bundle[field], null);
+  cold.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, [field]: 9 }, cachedAt: at + 3 });
+  await cold.flushPersistedRatings();
+  assert.equal(stored(activeWorker).entries['movie:1'].bundle[field], 9);
+  assert.equal(stored(activeWorker).entries['movie:1'].nativeRemovedAt, undefined);
+});

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.201]
+
+- Preserve complementary IMDb and TMDB scores when separate tabs first discover the same title, including after a saved unrated result.
+- Keep explicit native-score removals authoritative over delayed cold discoveries across worker restarts.
+- Cover movie and TV discoveries, both write orders, persisted reloads, and removal boundaries.
+
 ## [3.5.200]
 
 - Keep the popup connection-check button and label owned by the newest diagnostic check, including when switching Seerr sites during a manual check.

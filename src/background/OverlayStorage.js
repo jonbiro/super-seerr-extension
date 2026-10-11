@@ -124,12 +124,13 @@
       }
       const other = newerServer === incoming ? previous : incoming;
       // Two tabs can discover different missing native scores. An unchanged
-      // absence in their common snapshot is not a deletion of the other
-      // tab's contribution. Explicit changes from a known score stay ordered
-      // by the server timestamp, including intentional removals.
-      if (expected?.bundle && newerServer.bundle && other.bundle) {
+      // absence in their common snapshot (including a cold or unrated load)
+      // is not a deletion of the other tab's contribution. Explicit changes
+      // from a known score stay ordered by the server timestamp, including
+      // intentional removals.
+      if (newerServer.bundle && other.bundle) {
         const additions = Object.fromEntries(['imdbRating', 'tmdbRating'].filter(field =>
-          expected.bundle[field] == null && newerServer.bundle[field] == null && other.bundle[field] != null &&
+          expected?.bundle?.[field] == null && newerServer.bundle[field] == null && other.bundle[field] != null &&
           (other.cachedAt ?? 0) > (removals[field] ?? -1)
         ).map(field => [field, other.bundle[field]]));
         if (Object.keys(additions).length) {
