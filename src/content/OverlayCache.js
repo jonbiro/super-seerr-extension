@@ -30,7 +30,8 @@
     const indexFingerprint = item => JSON.stringify([String(item.tmdbId), item.mediaType, item.title || '',
       item.originalTitle || '', item.year ?? null, item.posterPath || null, item.releaseDate || '', item.firstAirDate || '']);
     const storedEntry = value => ({ bundle: value.bundle ?? null, cachedAt: value.cachedAt ?? null,
-      retryAt: value.retryAt ?? null, ...(typeof value.publicCheckedAt === 'number' ? { publicCheckedAt: value.publicCheckedAt } : {}), diagnostics: value.diagnostics ?? null });
+      retryAt: value.retryAt ?? null, ...(typeof value.publicCheckedAt === 'number' ? { publicCheckedAt: value.publicCheckedAt } : {}), diagnostics: value.diagnostics ?? null,
+      ...(value.nativeRemovedAt ? { nativeRemovedAt: value.nativeRemovedAt } : {}) });
 
     function loadPersistedRatings() {
       const expected = generation;
@@ -79,6 +80,7 @@
             const loaded = { bundle: bundle ? Model.createRatingsBundle(bundle) : null, cachedAt,
               ...(typeof entry.retryAt === 'number' ? { retryAt: entry.retryAt } : {}),
               ...(typeof entry.publicCheckedAt === 'number' ? { publicCheckedAt: entry.publicCheckedAt } : {}),
+              ...(entry.nativeRemovedAt ? { nativeRemovedAt: entry.nativeRemovedAt } : {}),
               ...(entry.diagnostics && typeof entry.diagnostics === 'object' ? { diagnostics: entry.diagnostics } : {}) };
             persistedEntries.set(key, JSON.stringify(storedEntry(loaded)));
             if (ratingsCache.has(key)) continue;

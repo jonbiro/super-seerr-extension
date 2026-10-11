@@ -299,3 +299,74 @@ test('a same-time refresh that changes native and public scores still applies it
   assert.equal(result.bundle.imdbRating, 8, 'an actual native change must not be classified as a public-only reconciliation');
   assert.equal(result.bundle.rtCriticsScore, 95);
 });
+
+for (const mediaType of ['movie', 'tv']) for (const imdbFirst of [true, false]) test(`complementary native ${mediaType} refreshes retain both scores (${imdbFirst ? 'IMDb' : 'TMDB'} first)`, async () => {
+  const worker = await setup();
+  const seed = tab(worker); await seed.loadPersistedRatings();
+  const at = Date.now();
+  const key = `${mediaType}:1`;
+  const original = { ...entry(90, at - 1000), bundle: Model.createRatingsBundle({ rtCriticsScore: 90, rtAudienceScore: 80, confidence: 1 }), retryAt: at + Config.partialRatingsRetryMs,
+    diagnostics: { status: 'partial', checkedAt: at - 1000, source: 'seerr-ratings-api' } };
+  seed.ratingsCache.set(key, original); await seed.flushPersistedRatings();
+  const imdb = tab(worker), tmdb = tab(worker);
+  await Promise.all([imdb.loadPersistedRatings(), tmdb.loadPersistedRatings()]);
+  imdb.ratingsCache.set(key, { ...original, bundle: { ...original.bundle, imdbRating: 8 }, cachedAt: at });
+  tmdb.ratingsCache.set(key, { ...original, bundle: { ...original.bundle, tmdbRating: 9 }, cachedAt: at + 1 });
+  for (const cache of imdbFirst ? [imdb, tmdb] : [tmdb, imdb]) await cache.flushPersistedRatings();
+  const result = stored(worker).entries[key];
+  assert.equal(result.bundle.imdbRating, 8, 'the other tab did not find IMDb; it must not erase the score');
+  assert.equal(result.bundle.tmdbRating, 9);
+  assert.equal(result.cachedAt, at + 1);
+  assert.equal(result.bundle.rtCriticsScore, 90);
+  assert.equal(result.diagnostics.status, 'rated', 'the combined bundle is complete');
+  const reloaded = tab(worker); await reloaded.loadPersistedRatings();
+  assert.equal(reloaded.ratingsCache.get(key).bundle.imdbRating, 8);
+  assert.equal(reloaded.ratingsCache.get(key).bundle.tmdbRating, 9);
+});
+
+for (const field of ['imdbRating', 'tmdbRating']) for (const removeFirst of [true, false]) {
+  test(`an explicit ${field} removal stays authoritative (${removeFirst ? 'removal' : 'update'} first)`, async () => {
+    const worker = await setup();
+    const seed = tab(worker); await seed.loadPersistedRatings();
+    const at = Date.now();
+    const original = { ...entry(90, at - 1000), bundle: Model.createRatingsBundle({ rtCriticsScore: 90, [field]: 7, confidence: 1 }) };
+    seed.ratingsCache.set('movie:1', original); await seed.flushPersistedRatings();
+    const update = tab(worker), remove = tab(worker);
+    await Promise.all([update.loadPersistedRatings(), remove.loadPersistedRatings()]);
+    update.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, [field]: 8 }, cachedAt: at });
+    remove.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, [field]: null }, cachedAt: at + 1 });
+    for (const cache of removeFirst ? [remove, update] : [update, remove]) await cache.flushPersistedRatings();
+    assert.equal(stored(worker).entries['movie:1'].bundle[field], null);
+    assert.equal(stored(worker).entries['movie:1'].cachedAt, at + 1);
+  });
+}
+
+for (const field of ['imdbRating', 'tmdbRating']) test(`a delayed ${field} discovery cannot undo a subsequent explicit removal`, async () => {
+  const worker = await setup();
+  const at = Date.now();
+  const seed = tab(worker); await seed.loadPersistedRatings();
+  const original = entry(90, at - 1000);
+  seed.ratingsCache.set('movie:1', original); await seed.flushPersistedRatings();
+  let activeWorker = worker;
+  const delayed = tab(worker, { send: async message => ({ success: true, data: message.action === 'getOverlayCache'
+    ? await activeWorker.api.getOverlayCache(sender) : await activeWorker.api.putOverlayCache(message.data, sender) }) });
+  const current = tab(worker);
+  await Promise.all([delayed.loadPersistedRatings(), current.loadPersistedRatings()]);
+  current.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, [field]: 7 }, cachedAt: at });
+  await current.flushPersistedRatings();
+  current.ratingsCache.set('movie:1', { ...original, cachedAt: at + 2 });
+  await current.flushPersistedRatings();
+  // Restart the worker to prove the deletion boundary survives persistence.
+  const restarted = await setup(worker.localStore);
+  const resumed = tab(restarted);
+  await resumed.loadPersistedRatings();
+  // The old tab's delta carries the original missing-field snapshot.
+  activeWorker = restarted;
+  delayed.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, [field]: 8 }, cachedAt: at + 1 });
+  await delayed.flushPersistedRatings();
+  assert.equal(stored(restarted).entries['movie:1'].bundle[field], null);
+  resumed.ratingsCache.set('movie:1', { ...original, bundle: { ...original.bundle, [field]: 9 }, cachedAt: at + 3 });
+  await resumed.flushPersistedRatings();
+  assert.equal(stored(restarted).entries['movie:1'].bundle[field], 9, 'a genuinely newer discovery still applies');
+  assert.equal(stored(restarted).entries['movie:1'].nativeRemovedAt, undefined, 'a new discovery retires the removal marker');
+});

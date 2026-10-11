@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.166]
+
+- Merge complementary IMDb/TMDB discoveries from overlapping tabs instead of letting an unchanged missing field erase the other tab's score.
+- Preserve explicit native removals across worker restarts so delayed discoveries cannot resurrect them; update diagnostics when merged ratings become complete.
+- Add movie/TV concurrency and reload regressions for both write orders, plus explicit-removal controls.
+
 ## [3.5.165]
 
 - Protect settings fields during the initial storage read and bind submit handling before that read, preventing lost edits and native form navigation during startup.

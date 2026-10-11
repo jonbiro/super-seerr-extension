@@ -47,8 +47,11 @@
         const diagnostics = ['rated', 'partial', 'unrated', 'failed', 'uncertain'].includes(entry.diagnostics?.status) ? {
           status: entry.diagnostics.status, checkedAt: number(entry.diagnostics.checkedAt, Date.now() + 60000), source: text(entry.diagnostics.source, 100)
         } : null;
+        const nativeRemovedAt = Object.fromEntries(['imdbRating', 'tmdbRating'].filter(field =>
+          number(entry.nativeRemovedAt?.[field], Date.now() + 60000) !== null
+        ).map(field => [field, entry.nativeRemovedAt[field]]));
         entries[key] = { bundle, cachedAt: number(entry.cachedAt, Date.now() + 60000), retryAt: number(entry.retryAt, Date.now() + root.RatingsConfig.ratingsFreshMs),
-          ...(number(entry.publicCheckedAt, Date.now() + 60000) !== null ? { publicCheckedAt: entry.publicCheckedAt } : {}), diagnostics };
+          ...(number(entry.publicCheckedAt, Date.now() + 60000) !== null ? { publicCheckedAt: entry.publicCheckedAt } : {}), diagnostics, ...(Object.keys(nativeRemovedAt).length ? { nativeRemovedAt } : {}) };
       }
       const index = (Array.isArray(value.index) ? value.index : []).slice(-root.RatingsConfig.listIndexMaxEntries).filter(item =>
         item && /^(movie|tv)$/.test(item.mediaType) && /^[1-9]\d*$/.test(String(item.tmdbId)) && Number.isSafeInteger(Number(item.tmdbId))
@@ -92,6 +95,22 @@
     },
     mergeOverlayRating(previous, incoming, expected = null) {
       if (!previous) return incoming;
+      // Persist native deletions so an older discovery cannot fill them back
+      // in after a worker restart. A newer scored value retires its marker.
+      const removals = {};
+      for (const field of ['imdbRating', 'tmdbRating']) {
+        const removedAt = Math.max(previous.nativeRemovedAt?.[field] ?? 0, incoming.nativeRemovedAt?.[field] ?? 0);
+        if (removedAt) removals[field] = removedAt;
+        if (expected?.bundle?.[field] != null && incoming.bundle?.[field] == null &&
+            (incoming.cachedAt ?? 0) >= (previous.cachedAt ?? 0)) {
+          removals[field] = Math.max(removedAt, incoming.cachedAt ?? 0);
+        }
+      }
+      const finish = entry => {
+        const nativeRemovedAt = Object.fromEntries(Object.entries(removals).filter(([field]) => entry.bundle?.[field] == null));
+        const { nativeRemovedAt: ignored, ...value } = entry;
+        return { ...value, ...(Object.keys(nativeRemovedAt).length ? { nativeRemovedAt } : {}) };
+      };
       let newerServer = (incoming.cachedAt ?? 0) >= (previous.cachedAt ?? 0) ? incoming : previous;
       // Millisecond timestamps can tie across tabs. A public reconciliation
       // still carries its original native snapshot: it must not undo native
@@ -104,11 +123,32 @@
         newerServer = previous;
       }
       const other = newerServer === incoming ? previous : incoming;
+      // Two tabs can discover different missing native scores. An unchanged
+      // absence in their common snapshot is not a deletion of the other
+      // tab's contribution. Explicit changes from a known score stay ordered
+      // by the server timestamp, including intentional removals.
+      if (expected?.bundle && newerServer.bundle && other.bundle) {
+        const additions = Object.fromEntries(['imdbRating', 'tmdbRating'].filter(field =>
+          expected.bundle[field] == null && newerServer.bundle[field] == null && other.bundle[field] != null &&
+          (other.cachedAt ?? 0) > (removals[field] ?? -1)
+        ).map(field => [field, other.bundle[field]]));
+        if (Object.keys(additions).length) {
+          const bundle = { ...newerServer.bundle, ...additions };
+          const verifiedRt = bundle.confidence >= root.RatingsConfig.confidenceThreshold &&
+            ['rtCriticsScore', 'rtAudienceScore'].some(field => bundle[field] != null);
+          const complete = ['rtCriticsScore', 'rtAudienceScore', 'imdbRating', 'tmdbRating'].every(field => bundle[field] != null);
+          const status = newerServer.diagnostics?.status === 'failed' ? 'failed'
+            : newerServer.diagnostics?.status === 'uncertain' && !verifiedRt ? 'uncertain'
+            : complete && verifiedRt ? 'rated' : 'partial';
+          newerServer = { ...newerServer, bundle,
+            ...(newerServer.diagnostics ? { diagnostics: { ...newerServer.diagnostics, status } } : {}) };
+        }
+      }
       // Public RT can advance without refreshing this server's IMDb/TMDB.
       // Compare its own timestamp instead of replacing the entire bundle.
       const rtFields = ['rtCriticsScore', 'rtAudienceScore'];
       if (!other.bundle || !rtFields.some(field => other.bundle[field] !== null) ||
-          !(other.publicCheckedAt > (newerServer.publicCheckedAt ?? newerServer.cachedAt ?? 0))) return newerServer;
+          !(other.publicCheckedAt > (newerServer.publicCheckedAt ?? newerServer.cachedAt ?? 0))) return finish(newerServer);
       const contributors = rtFields.map(field => other.bundle[field] !== null ? other.bundle : newerServer.bundle)
         .filter((bundle, index) => bundle?.[rtFields[index]] != null);
       const bundle = { ...newerServer.bundle,
@@ -127,10 +167,10 @@
       const diagnosticStatus = newerServer.diagnostics?.status === 'failed' ? 'failed'
         : newerServer.diagnostics?.status === 'uncertain' && !verifiedRt ? 'uncertain'
         : complete && verifiedRt ? 'rated' : 'partial';
-      return { ...newerServer, bundle, publicCheckedAt: other.publicCheckedAt,
+      return finish({ ...newerServer, bundle, publicCheckedAt: other.publicCheckedAt,
         // An already expired fallback must not defeat a failed-read backoff.
         ...(publicExpiresAt > Date.now() ? { retryAt: Math.min(nativeRetryAt, publicExpiresAt) } : {}),
-        ...(newerServer.diagnostics ? { diagnostics: { ...newerServer.diagnostics, status: diagnosticStatus, source: bundle.source } } : {}) };
+        ...(newerServer.diagnostics ? { diagnostics: { ...newerServer.diagnostics, status: diagnosticStatus, source: bundle.source } } : {}) });
     },
     mergeOverlayCache(previous, incoming, removed, expectedEntries = {}) {
       const entries = previous?.matcher === incoming.matcher ? { ...previous.entries } : {};
