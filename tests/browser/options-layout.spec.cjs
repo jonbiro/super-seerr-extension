@@ -165,3 +165,46 @@ for (const [success, destination] of [[true, 'search'], [true, 'outside'], [true
         : page.getByRole('searchbox', { name: 'Search saved matches' });
   await expect(focused).toBeFocused();
 });
+
+test('removing a site does not reveal the active site key in a previously revealed field', async ({ page }) => {
+  await page.evaluate(async () => {
+    window.profiles = { revision: 1, activeId: 'home', sites: [
+      { id: 'home', name: 'Home', url: 'https://home.example', apiKey: 'home-fixture-key' },
+      { id: 'family', name: 'Family', url: 'https://family.example', apiKey: 'family-fixture-key' }
+    ] };
+    chrome.storage.local.get = async () => ({ seerrConnectionsV1: profiles });
+    chrome.runtime.sendMessage = async ({ action, data }) => {
+      if (action === 'removeSeerrConnection') profiles = { ...profiles, revision: 2, sites: profiles.sites.filter(site => site.id !== data.id) };
+      return { success: true, data: profiles };
+    };
+    await optionsManager.loadSettings(); await optionsManager.loadConnectionChoices();
+  });
+  await page.locator('#savedSeerrSites').selectOption('family');
+  await expect(page.locator('#apiKey')).toHaveValue('family-fixture-key');
+  await page.getByRole('button', { name: 'Show Seerr API key', exact: true }).click();
+  await expect(page.locator('#apiKey')).toHaveAttribute('type', 'text');
+  await page.locator('#removeSeerrSite').click();
+  await expect(page.locator('#apiKey')).toHaveValue('home-fixture-key');
+  await expect(page.locator('#apiKey')).toHaveAttribute('type', 'password');
+  await expect(page.getByRole('button', { name: 'Show Seerr API key', exact: true })).toHaveText('Show');
+});
+
+for (const [id, name, storageKey] of [['apiKey', 'Seerr API key', 'seerrApiKey'], ['plexToken', 'Plex token', 'plexToken']]) {
+  test(`reloading a changed ${name} conceals it but an unchanged credential stays revealed`, async ({ page }) => {
+    await page.evaluate(async storageKey => {
+      window.credentials = { [storageKey]: 'first-fixture-secret' };
+      chrome.storage.local.get = async () => credentials;
+      await optionsManager.loadSettings();
+    }, storageKey);
+    const field = page.locator(`#${id}`);
+    await page.getByRole('button', { name: `Show ${name}`, exact: true }).click();
+    await page.evaluate(() => optionsManager.loadSettings());
+    await expect(field).toHaveAttribute('type', 'text');
+    await page.evaluate(async storageKey => {
+      credentials[storageKey] = 'second-fixture-secret'; await optionsManager.loadSettings();
+    }, storageKey);
+    await expect(field).toHaveValue('second-fixture-secret');
+    await expect(field).toHaveAttribute('type', 'password');
+    await expect(page.getByRole('button', { name: `Show ${name}`, exact: true })).toHaveText('Show');
+  });
+}

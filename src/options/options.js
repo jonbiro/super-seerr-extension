@@ -188,15 +188,24 @@ class OptionsManager {
 
       const connections = local.seerrConnectionsV1;
       const active = connections?.sites.find(site => site.id === connections.activeId);
+      const serverUrl = active?.url || settings.seerrUrl || '';
+      const connectionId = active?.id ?? (!connections && settings.seerrUrl
+        ? new URL(settings.seerrUrl).href.replace(/\/+$/, '') : undefined);
+      const apiKey = active ? active.apiKey : local.seerrApiKey || '';
+      // Revealing one credential does not authorize revealing its replacement
+      // after a site removal, activation, or settings reload.
+      if (this.apiKeyInput.type !== 'password' && (this.connectionId !== connectionId ||
+          this.serverUrlInput.value !== serverUrl || this.apiKeyInput.value !== apiKey)) this.toggleApiKeyVisibility();
       this.connectionMode = !!connections;
-      this.connectionId = active?.id;
-      this.serverUrlInput.value = active?.url || settings.seerrUrl || '';
-      if (!connections && settings.seerrUrl) {
-        this.connectionId = new URL(settings.seerrUrl).href.replace(/\/+$/, '');
-      }
-      this.apiKeyInput.value = active ? active.apiKey : local.seerrApiKey || '';
+      this.connectionId = connectionId;
+      this.serverUrlInput.value = serverUrl;
+      this.apiKeyInput.value = apiKey;
       if (document.getElementById('seerrSiteName')) document.getElementById('seerrSiteName').value = active?.name || '';
-      if (this.plexTokenInput) this.plexTokenInput.value = local.plexToken || '';
+      if (this.plexTokenInput) {
+        const token = local.plexToken || '';
+        if (this.plexTokenInput.type !== 'password' && this.plexTokenInput.value !== token) this.togglePlexTokenVisibility();
+        this.plexTokenInput.value = token;
+      }
       if (this.debugLoggingInput) this.debugLoggingInput.checked = local.debugLogging === true;
       document.querySelectorAll('[data-overlay-feature]').forEach(input => {
         input.checked = settings.overlayFeatures?.[input.dataset.overlayFeature] !== false;

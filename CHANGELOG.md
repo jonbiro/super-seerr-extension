@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.151]
+
+- Conceal a revealed Seerr API key before a settings reload replaces its site or credential, preventing site removal from revealing the active site's key.
+- Conceal changed Plex tokens on reload while preserving the user's reveal choice for unchanged credentials.
+- Add browser regressions for saved-site removal and changed versus unchanged Seerr/Plex credentials.
+
 ## [3.5.150]
 
 - Reject contradictory or malformed title IDs in Seerr detail responses before using their scores; retain valid ratings from other endpoints and retry incomplete lookups.
