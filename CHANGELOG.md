@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.226]
+
+- Stop ratings work waiting for cache initialization when its page is retired by navigation, site changes, or a cache clear.
+
 ## [3.5.225]
 
 - Report the actual active site when another Settings window switches sites before a pending activation finishes refreshing.

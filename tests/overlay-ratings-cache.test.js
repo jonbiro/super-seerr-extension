@@ -209,6 +209,39 @@ test('clearing the cache from Settings empties an open tab', async () => {
   assert.equal(resolved.timesFor(550), 2, 'after clearing, the rating must be resolved again');
 });
 
+for (const retiredBy of ['navigation', 'cache clear', 'site change']) test(`a rating waiting for cache loading cannot start after ${retiredBy}`, async () => {
+  const currentSettings = { ...settings };
+  const overlay = loadOverlay({ pathname: '/discover', settings: currentSettings });
+  let releaseRead, reads = 0;
+  const send = overlay.context.chrome.runtime.sendMessage;
+  overlay.context.chrome.runtime.sendMessage = message => {
+    if (message.action === 'getOverlayCache' && reads++ === 0) {
+      return new Promise(resolve => { releaseRead = resolve; });
+    }
+    return send(message);
+  };
+  const resolved = withResolver(overlay, scored);
+  const abandoned = overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(typeof releaseRead, 'function');
+  if (retiredBy === 'navigation') overlay.cleanupOverlay();
+  else if (retiredBy === 'site change') {
+    currentSettings.seerrUrl = 'https://other.example/';
+    overlay.notifyState({ action: 'seerrStateChanged' });
+  }
+  else overlay.changeLocal({ ratingsCacheEpoch: { newValue: 'cleared' } });
+  releaseRead({ success: true, data: { ratingsCacheEpoch: 0 } });
+  assert.equal(await abandoned, null);
+  assert.equal(resolved.timesFor(550), 0, 'abandoned work must not start a provider lookup');
+  assert.equal(overlay.ratingsCache.has('movie:550'), false);
+  if (retiredBy === 'site change') {
+    assert.equal(overlay.isSeerrPage(), false, 'the inactive site must not restart its overlay');
+    return;
+  }
+  assert.equal((await overlay.getRatings(550, 'Fight Club', 1999, 'movie')).rtCriticsScore, 80);
+  assert.equal(resolved.timesFor(550), 1, 'a new request can still resolve the title');
+});
+
 test('the overlay\'s own writes do not wipe its cache', async () => {
   const overlay = loadOverlay({ settings });
   const resolved = withResolver(overlay, scored);

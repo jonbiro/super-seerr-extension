@@ -1077,11 +1077,12 @@
   async function getRatings(tmdbId, title, year, mediaType = null, options = {}) {
     // Cached reads can enqueue background work too. Stop abandoned callers
     // before cache access and after each asynchronous prerequisite.
+    const generation = routeGeneration;
     if (options.signal?.aborted) return null;
     await loadPersistedRatings();
-    if (options.signal?.aborted) return null;
+    if (generation !== routeGeneration || options.signal?.aborted) return null;
     await loadRatingsAvailability();
-    if (options.signal?.aborted) return null;
+    if (generation !== routeGeneration || options.signal?.aborted) return null;
 
     // Resolve all known year evidence before the cache fast path as well as
     // provider lookup. Callers without a visible year still have catalogue

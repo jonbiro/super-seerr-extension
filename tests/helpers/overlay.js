@@ -49,6 +49,7 @@ class Element {
 function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local = {}, apiConfigured = true, sendMessage = async () => ({ success: false }), fetch = async () => ({ ok: false }) } = {}) {
   const localStore = { ...local };
   let storageListener = null;
+  let runtimeListener = null;
   const timers = [];
   const container = new Element();
   const title = container.appendChild(new Element('h1'));
@@ -82,7 +83,7 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local
         onChanged: { addListener(fn) { storageListener = fn; } }
       },
       // Answered here so a test's sendMessage only ever sees ratings traffic.
-      runtime: { sendMessage: message => message?.action === 'getConfigState'
+      runtime: { onMessage: { addListener(fn) { runtimeListener = fn; } }, sendMessage: message => message?.action === 'getConfigState'
         ? Promise.resolve({ success: true, data: { apiConfigured, serverUrl: settings.seerrUrl ?? null } })
         : sendMessage(message) }
     },
@@ -106,6 +107,7 @@ function loadOverlay({ pathname = '/movie/1', scripts = [], settings = {}, local
     ...context.overlay, context, container, Model, localStore,
     // Simulate a write from elsewhere, e.g. Settings clearing the cache.
     changeLocal: changes => storageListener?.(changes, 'local'),
+    notifyState: message => runtimeListener?.(message),
     // Fire timers scheduled at or under `maxDelay`, newest batch first drained.
     runTimers: (maxDelay = Infinity) => {
       const due = timers.filter(timer => timer.fn && timer.delay <= maxDelay);
