@@ -21,7 +21,12 @@
         const job = pending.shift();
         if (!job.node.isConnected) { job.resolve(null); continue; }
         running.add(job);
-        Promise.resolve().then(() => job.work(job.controller.signal)).then(job.resolve, job.reject)
+        Promise.resolve().then(() => {
+          // Dispatch and execution occupy separate microtasks. A clear or
+          // detached card between them must not start abandoned work.
+          if (job.controller.signal.aborted || !job.node.isConnected) return null;
+          return job.work(job.controller.signal);
+        }).then(job.resolve, job.reject)
           .finally(() => { running.delete(job); schedule(); });
       }
     }

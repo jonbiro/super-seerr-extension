@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.96]
+
+- Recheck cancellation and card attachment immediately before executing a dispatched ratings job, preventing abandoned callbacks from starting between queue dispatch and execution.
+- Release skipped jobs normally so current cards continue scoring, while keeping genuinely running work within the concurrency limit until it settles.
+- Add dispatch-clear, dispatch-detach and running-concurrency regressions.
+
 ## [3.5.95]
 
 - Stop canceled rating reads before cache access and after asynchronous prerequisites, including cached reads that would otherwise enqueue background refreshes.

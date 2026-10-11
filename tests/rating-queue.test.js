@@ -58,3 +58,45 @@ test('filtered cards can still resolve once visible work is finished', async t =
     assert.deepEqual(f.starts, ['visible', 'filtered'], 'hidden unrated cards must still get a chance to pass a score filter');
   } finally { f.queue.clear(); f.releases.forEach(resolve => resolve()); await Promise.all([hidden.promise, visible.promise]); }
 });
+
+for (const action of ['clear', 'detach']) {
+  test(`${action} between queue dispatch and execution prevents abandoned work from starting`, async t => {
+    const f = fixture(t);
+    const node = f.page.window.document.createElement('div');
+    f.page.window.document.body.append(node);
+    let starts = 0;
+    const old = f.queue.add(node, () => { starts++; return 99; });
+    // Drain dispatches the job in one microtask and invokes its work in the
+    // next. Navigation can clear the queue or remove its card in between.
+    await Promise.resolve();
+    if (action === 'clear') f.queue.clear();
+    else node.remove();
+    assert.equal(await old, null);
+    assert.equal(starts, 0);
+    const next = f.page.window.document.createElement('div');
+    f.page.window.document.body.append(next);
+    assert.equal(await f.queue.add(next, () => 80), 80, 'abandoned dispatch must release its queue slot');
+  });
+}
+
+test('clearing already running work keeps the concurrency slot until that work settles', async t => {
+  const f = fixture(t);
+  const node = f.page.window.document.createElement('div');
+  f.page.window.document.body.append(node);
+  let release, signal;
+  const old = f.queue.add(node, currentSignal => {
+    signal = currentSignal;
+    return new Promise(resolve => { release = resolve; });
+  });
+  await tick();
+  f.queue.clear();
+  let starts = 0;
+  const next = f.queue.add(node, () => { starts++; return 80; });
+  await tick();
+  try {
+    assert.equal(signal.aborted, true);
+    assert.equal(starts, 0, 'clearing must not exceed the limit while an uncancelable provider still runs');
+  } finally { release(null); }
+  assert.equal(await old, null);
+  assert.equal(await next, 80);
+});
