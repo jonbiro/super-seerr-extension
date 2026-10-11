@@ -1,6 +1,13 @@
 // The configured Seerr page can exchange only its bounded ratings cache.
 (function (root) {
   const KEY = 'overlayRatingsV1';
+  const SITES_KEY = 'overlayRatingsByServerV1';
+  const serverKey = value => {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('Invalid cache server');
+    return url.href.replace(/\/+$/, '');
+  };
+  const bytes = value => new TextEncoder().encode(JSON.stringify(value)).length;
   const text = (value, max = 300) => typeof value === 'string' ? value.slice(0, max) : '';
   const number = (value, max = Infinity) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max ? value : null;
   root.OverlayStorage = {
@@ -48,25 +55,72 @@
         year: number(item.year, 9999), posterPath: text(item.posterPath, 500) || null, releaseDate: text(item.releaseDate, 20), firstAirDate: text(item.firstAirDate, 20) }));
       return { server, epoch, matcher: number(value.matcher), entries, index };
     },
+    boundedOverlayCache(value) {
+      // Ten sites use at most roughly 6 MB, leaving room for shared RT data
+      // and settings. Retain the most recently checked titles and list items.
+      const entries = {};
+      let remaining = 400_000;
+      for (const [key, entry] of Object.entries(value.entries).sort((a, b) => (b[1].cachedAt || 0) - (a[1].cachedAt || 0))) {
+        const size = bytes({ [key]: entry });
+        if (size > remaining) continue;
+        entries[key] = entry; remaining -= size;
+      }
+      const index = [];
+      remaining = 200_000;
+      for (const item of [...value.index].reverse()) {
+        const size = bytes(item) + 1;
+        if (size > remaining) continue;
+        index.push(item); remaining -= size;
+      }
+      return { ...value, entries, index: index.reverse() };
+    },
+    overlayCachesFromStorage(local, epoch) {
+      const caches = {};
+      const records = local[SITES_KEY];
+      const candidates = records && typeof records === 'object' && !Array.isArray(records) ? Object.values(records) : [];
+      // A legacy cache is migrated even when a different site is active.
+      if (local[KEY]) candidates.unshift(local[KEY]);
+      for (const value of candidates) {
+        try {
+          const key = serverKey(value.server);
+          const clean = this.sanitizeOverlayCache(value, value.server, epoch);
+          if (clean) caches[key] = this.boundedOverlayCache(clean);
+        } catch (_) { /* Invalid generated cache records can be refetched. */ }
+      }
+      return Object.fromEntries(Object.entries(caches).slice(-10));
+    },
     async getOverlayCache(sender) {
       const server = this.overlayStorageServer(sender);
       await this.cacheClearPending;
       return this.queueOverlayStorage(async () => {
         if (server !== this.overlayStorageServer(sender)) throw new Error('Server changed');
-        const local = await chrome.storage.local.get([KEY, 'ratingsCacheEpoch']);
+        const local = await chrome.storage.local.get([KEY, SITES_KEY, 'ratingsCacheEpoch']);
+        if (server !== this.overlayStorageServer(sender)) throw new Error('Server changed');
         const epoch = local.ratingsCacheEpoch ?? 0;
-        return { ratingsCacheEpoch: epoch, [KEY]: this.sanitizeOverlayCache(local[KEY], server, epoch) };
+        const caches = this.overlayCachesFromStorage(local, epoch);
+        if (local[KEY]) {
+          // Retire the legacy payload atomically without signaling a cache
+          // clear to older open tabs (which observe removal/undefined).
+          await chrome.storage.local.set({ [SITES_KEY]: caches, [KEY]: null });
+          if (server !== this.overlayStorageServer(sender)) throw new Error('Server changed');
+        }
+        const cached = caches[serverKey(server)];
+        return { ratingsCacheEpoch: epoch, [KEY]: cached ? { ...cached, server } : null };
       });
     },
     async putOverlayCache(value, sender) {
       const server = this.overlayStorageServer(sender);
       await this.cacheClearPending;
       return this.queueOverlayStorage(async () => {
-        const local = await chrome.storage.local.get('ratingsCacheEpoch');
+        const local = await chrome.storage.local.get([KEY, SITES_KEY, 'ratingsCacheEpoch']);
         if (server !== this.overlayStorageServer(sender)) throw new Error('Server changed');
         const clean = this.sanitizeOverlayCache(value, server, local.ratingsCacheEpoch ?? 0);
         if (!clean) return { stored: false };
-        await chrome.storage.local.set({ [KEY]: clean });
+        const caches = this.overlayCachesFromStorage(local, local.ratingsCacheEpoch ?? 0);
+        const key = serverKey(server);
+        delete caches[key];
+        caches[key] = this.boundedOverlayCache(clean);
+        await chrome.storage.local.set({ [SITES_KEY]: Object.fromEntries(Object.entries(caches).slice(-10)), [KEY]: null });
         return { stored: true };
       });
     },

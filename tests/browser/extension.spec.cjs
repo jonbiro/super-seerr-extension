@@ -196,12 +196,12 @@ test('old ratings render immediately and update after the background refresh', a
   const Config = require('../../src/shared/RatingsConfig');
   await options.evaluate(async ({ origin, matcher }) => {
     const { ratingsCacheEpoch } = await chrome.storage.local.get('ratingsCacheEpoch');
-    await chrome.storage.local.set({ overlayRatingsV1: {
+    await chrome.storage.local.set({ overlayRatingsByServerV1: { [origin]: {
       server: `${origin}/`, epoch: ratingsCacheEpoch ?? 0, matcher, entries: { 'movie:550': {
         bundle: { rtCriticsScore: 10, rtAudienceScore: 20, imdbRating: 3, tmdbRating: 4, confidence: 1, source: 'cached' },
         cachedAt: Date.now() - 2 * 86400000
       } }
-    } });
+    } } });
   }, { origin, matcher: Config.matcherVersion });
   const page = await context.newPage();
   let release;

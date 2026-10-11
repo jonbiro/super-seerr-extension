@@ -103,7 +103,7 @@ test('forgetting a title also drops it from storage', async () => {
   withResolver(overlay, () => ({ rtCriticsScore: 80 }));
   await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
   await overlay.flushPersistedRatings();
-  assert.ok(overlay.localStore[CACHE_KEY].entries['movie:550']);
+  assert.ok(overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'].entries['movie:550']);
 
   // Drain the write already pending from the lookup above, so what follows
   // measures only what forgetting schedules. Without this the stale timer
@@ -114,7 +114,7 @@ test('forgetting a title also drops it from storage', async () => {
   overlay.forgetRatings([{ tmdbId: 550, mediaType: 'movie' }]);
   assert.equal(overlay.runTimers(600), 1, 'forgetting must schedule a write of its own');
   await new Promise(resolve => setImmediate(resolve));
-  assert.ok(!overlay.localStore[CACHE_KEY].entries['movie:550'], 'a forgotten title must not survive in storage');
+  assert.ok(!overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'].entries['movie:550'], 'a forgotten title must not survive in storage');
 });
 
 // ── Staleness ──
@@ -126,7 +126,7 @@ test('entries record when they were cached, and it survives a reload', async () 
   await first.getRatings(550, 'Fight Club', 1999, 'movie');
   await first.flushPersistedRatings();
 
-  const entry = first.localStore[CACHE_KEY].entries['movie:550'];
+  const entry = first.localStore.overlayRatingsByServerV1?.['https://seerr.example'].entries['movie:550'];
   assert.ok(entry.cachedAt >= before, 'the entry should record when it was resolved');
   assert.equal(entry.bundle.rtCriticsScore, 80);
 

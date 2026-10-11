@@ -48,6 +48,7 @@ test('stale epochs and oversized data cannot overwrite cleared or current cache'
   await api.clearRatingsCache();
   assert.equal((await api.putOverlayCache(blob(), sender)).stored, false);
   assert.equal(localStore.overlayRatingsV1, undefined);
+  assert.equal(localStore.overlayRatingsByServerV1, undefined);
   await assert.rejects(api.putOverlayCache(blob({ epoch: localStore.ratingsCacheEpoch, extra: 'x'.repeat(3_000_001) }), sender), /size limit/);
 });
 
@@ -58,7 +59,7 @@ test('cache clearing waits for an in-flight write and remains cleared after it c
   const gate = new Promise(resolve => { release = resolve; });
   const original = worker.context.chrome.storage.local.set;
   worker.context.chrome.storage.local.set = async value => {
-    if (value.overlayRatingsV1) { announce(); await gate; }
+    if (value.overlayRatingsByServerV1) { announce(); await gate; }
     await original(value);
   };
   const writing = worker.api.putOverlayCache(blob(), sender);
@@ -66,7 +67,89 @@ test('cache clearing waits for an in-flight write and remains cleared after it c
   const clearing = worker.api.clearRatingsCache();
   release(); await Promise.all([writing, clearing]);
   assert.equal(worker.localStore.overlayRatingsV1, undefined);
+  assert.equal(worker.localStore.overlayRatingsByServerV1, undefined);
   assert.notEqual(worker.localStore.ratingsCacheEpoch, 0);
+});
+
+test('each site retains its own ratings and title index across switches and worker restarts', async () => {
+  const worker = await setup();
+  const sites = [server, 'https://seerr.example:8443/base/', 'https://seerr.example/other/', 'https://other.example/'];
+  for (const [i, url] of sites.entries()) {
+    worker.api.baseUrl = url;
+    const entry = blob({ server: url, index: [{ tmdbId: String(i + 1), mediaType: 'movie', title: `Site ${i}` }] });
+    entry.entries['movie:1'].bundle.rtCriticsScore = i * 20;
+    await worker.api.putOverlayCache(entry, { ...sender, url: `${url}discover` });
+  }
+  const restarted = await setup(worker.localStore);
+  for (const [i, url] of sites.entries()) {
+    restarted.api.baseUrl = url;
+    const cached = (await restarted.api.getOverlayCache({ ...sender, url: `${url}discover` })).overlayRatingsV1;
+    assert.equal(cached.entries['movie:1'].bundle.rtCriticsScore, i * 20);
+    assert.equal(cached.index[0].title, `Site ${i}`);
+  }
+  assert.equal(Object.keys(worker.localStore.overlayRatingsByServerV1).length, 4);
+  await restarted.api.clearRatingsCache();
+  assert.equal(restarted.localStore.overlayRatingsByServerV1, undefined);
+  assert.equal((await restarted.api.getOverlayCache({ ...sender, url: `${sites.at(-1)}discover` })).overlayRatingsV1, null);
+});
+
+test('legacy cache migrates without losing it when another site writes first', async () => {
+  const worker = await setup({ overlayRatingsV1: blob() });
+  worker.api.baseUrl = 'https://other.example/';
+  const other = { ...sender, url: 'https://other.example/discover' };
+  await worker.api.putOverlayCache(blob({ server: worker.api.baseUrl, entries: {} }), other);
+  assert.equal(worker.localStore.overlayRatingsV1, null);
+  worker.api.baseUrl = server.replace(/\/$/, '');
+  const cached = (await worker.api.getOverlayCache(sender)).overlayRatingsV1;
+  assert.equal(cached.server, worker.api.baseUrl);
+  assert.equal(cached.entries['movie:1'].bundle.rtCriticsScore, 75);
+});
+
+test('reading migrates the legacy cache and keeps newer per-site data authoritative', async () => {
+  const worker = await setup({ overlayRatingsV1: blob() });
+  assert.equal((await worker.api.getOverlayCache(sender)).overlayRatingsV1.entries['movie:1'].bundle.rtCriticsScore, 75);
+  assert.equal(worker.localStore.overlayRatingsV1, null);
+  worker.localStore.overlayRatingsV1 = blob({ entries: {} });
+  assert.equal((await worker.api.getOverlayCache(sender)).overlayRatingsV1.entries['movie:1'].bundle.rtCriticsScore, 75);
+});
+
+test('multi-site writes are serialized and inactive pages cannot replace another cache', async () => {
+  const worker = await setup();
+  const second = 'https://other.example/';
+  const other = { ...sender, url: second + 'discover' };
+  let release, announce;
+  const entered = new Promise(resolve => { announce = resolve; });
+  const gate = new Promise(resolve => { release = resolve; });
+  const original = worker.context.chrome.storage.local.set;
+  worker.context.chrome.storage.local.set = async value => { announce(); await gate; await original(value); };
+  const firstWrite = worker.api.putOverlayCache(blob(), sender);
+  await entered;
+  worker.api.baseUrl = second;
+  const secondWrite = worker.api.putOverlayCache(blob({ server: second }), other);
+  release(); await Promise.all([firstWrite, secondWrite]);
+  assert.equal(Object.keys(worker.localStore.overlayRatingsByServerV1).length, 2);
+  await assert.rejects(worker.api.putOverlayCache(blob(), sender));
+  await assert.rejects(worker.api.getOverlayCache(sender));
+});
+
+test('cache byte budgets retain recent data for all ten sites', async () => {
+  const worker = await setup();
+  const entries = Object.fromEntries(Array.from({ length: 2200 }, (_, i) => [`movie:${i + 1}`, {
+    bundle: { rtCriticsScore: 75, source: '評'.repeat(100) }, cachedAt: i
+  }]));
+  const index = Array.from({ length: 1200 }, (_, i) => ({ tmdbId: String(i + 1), mediaType: 'movie', title: '影'.repeat(250) }));
+  for (let i = 0; i < 10; i++) {
+    const url = `https://site${i}.example/`;
+    worker.api.baseUrl = url;
+    await worker.api.putOverlayCache(blob({ server: url, entries, index }), { ...sender, url });
+  }
+  const caches = worker.localStore.overlayRatingsByServerV1;
+  assert.equal(Object.keys(caches).length, 10);
+  assert.ok(Buffer.byteLength(JSON.stringify(caches)) < 6_100_000);
+  for (const cache of Object.values(caches)) {
+    assert.ok(cache.entries['movie:2200']);
+    assert.equal(cache.index.at(-1).tmdbId, '1200');
+  }
 });
 
 test('local storage uses trusted access when available and preserves unsupported-browser behavior', async () => {

@@ -56,6 +56,8 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     const seerr = await context.newPage();
     await seerr.goto(`${second.origin}/discover`);
     await expect(seerr.locator('.seerr-card-badge')).toHaveCount(2);
+    const cachedSites = () => options.evaluate(async () => (await chrome.storage.local.get('overlayRatingsByServerV1')).overlayRatingsByServerV1 || {});
+    await expect.poll(async () => Object.keys((await cachedSites())[second.origin]?.entries || {})).toContain('movie:550');
     expect(await options.locator('.connection-options').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
     await options.locator('.connection-options').screenshot({ path: '/tmp/super-seerr-multiple-sites-settings.png' });
 
@@ -78,6 +80,18 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     expect(result.success).toBe(true);
     expect(requests.filter(r => r.path === '/api/v1/auth/me').at(-1)).toMatchObject({ site: 'Home', key: 'home-key' });
     await expect(seerr.locator('.seerr-card-badge')).toHaveCount(0);
+    const homePage = await context.newPage();
+    await homePage.goto(`${first.origin}/discover`);
+    await expect(homePage.locator('.seerr-card-badge')).toHaveCount(2);
+    await expect.poll(async () => Object.keys((await cachedSites())[first.origin]?.entries || {})).toContain('movie:550');
+    await homePage.close();
+    expect(Object.keys(await cachedSites()).sort()).toEqual([first.origin, second.origin].sort());
+    const cdp = await context.newCDPSession(options);
+    await cdp.send('ServiceWorker.enable');
+    await cdp.send('ServiceWorker.stopAllWorkers');
+    await options.evaluate(() => chrome.runtime.sendMessage({ action: 'getConfigState' }));
+    await cdp.detach();
+    expect(Object.keys(await cachedSites()).sort()).toEqual([first.origin, second.origin].sort());
     const homeRequest = await popup.evaluate(async () => chrome.runtime.sendMessage({ action: 'requestMedia', data: { tmdbId: 550, mediaType: 'movie', title: 'Fight Club' } }));
     expect(homeRequest.success).toBe(true);
     await popup.screenshot({ path: '/tmp/super-seerr-multiple-sites-popup.png' });
@@ -89,6 +103,9 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await expect(options.locator('#apiKey')).toHaveValue('family-key');
     await options.getByRole('button', { name: 'Use selected site', exact: true }).click();
     await expect(options.locator('#activeSeerrSite')).toContainText('Active site: Family');
+    await expect(seerr.locator('.seerr-card-badge')).toHaveCount(2);
+    expect((await cachedSites())[first.origin].entries['movie:550']).toBeTruthy();
+    expect((await cachedSites())[second.origin].entries['movie:550']).toBeTruthy();
     await expect(popup.locator('#activeSeerrSite')).toHaveValue(second.origin);
     await expect(popup.locator('#activeSeerrSite')).toHaveAttribute('title', second.origin);
     await expect(popup.locator('#serverUrl')).toContainText(new URL(second.origin).host);
@@ -120,6 +137,9 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     expect(cacheReply.success).toBe(false);
     expect(cacheReply.error).toContain('not the active');
     expect(requests.filter(r => r.key && ((r.site === 'Home' && !['home-key', 'initial-home-key'].includes(r.key)) || (r.site === 'Family' && r.key !== (r.path.startsWith('/movie/api/') ? 'child-key' : 'family-key'))))).toEqual([]);
+    await seerr.close();
+    expect(await options.evaluate(() => chrome.runtime.sendMessage({ action: 'clearRatingsCache' }))).toEqual({ success: true });
+    expect(await cachedSites()).toEqual({});
   } finally {
     await context?.close();
     await Promise.all([new Promise(resolve => first.server.close(resolve)), new Promise(resolve => second.server.close(resolve))]);

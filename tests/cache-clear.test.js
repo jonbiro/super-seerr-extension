@@ -6,7 +6,7 @@ const Config = require('../src/shared/RatingsConfig');
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
 test('one clear operation invalidates worker memory, persisted layers and endpoint availability', async () => {
-  const worker = loadWorker({ local: { rtCacheV1: {}, overlayRatingsV1: {}, seerrRatingsUnavailableV1: {} } });
+  const worker = loadWorker({ local: { rtCacheV1: {}, overlayRatingsV1: {}, overlayRatingsByServerV1: {}, seerrRatingsUnavailableV1: {} } });
   await worker.ready;
   worker.api.cacheRottenTomatoesResult('movie:Old:', { rtCriticsScore: 1 }, Config.rtCacheTtlMs);
   const denied = await new Promise(resolve => worker.listeners.message({ action: 'clearRatingsCache' }, { url: 'https://seerr.example/discover', tab: { id: 1 } }, resolve));
@@ -16,7 +16,7 @@ test('one clear operation invalidates worker memory, persisted layers and endpoi
   assert.equal(reply.success, true);
   assert.equal(worker.api.rtCache.size, 0);
   assert.equal(worker.api.rtCacheFlushTimer, null);
-  for (const key of ['rtCacheV1', 'overlayRatingsV1', 'seerrRatingsUnavailableV1']) assert.equal(worker.localStore[key], undefined);
+  for (const key of ['rtCacheV1', 'overlayRatingsV1', 'overlayRatingsByServerV1', 'seerrRatingsUnavailableV1']) assert.equal(worker.localStore[key], undefined);
   assert.ok(worker.localStore.ratingsCacheEpoch);
 });
 

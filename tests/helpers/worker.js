@@ -39,7 +39,7 @@ function loadWorker({
       log: (...args) => logs.log.push(args),
       warn: (...args) => logs.warn.push(args),
       error: (...args) => logs.error.push(args)
-    }, URL, fetch, AbortSignal, RatingsConfig: Config,
+    }, URL, fetch, AbortSignal, TextEncoder, RatingsConfig: Config,
     setTimeout, clearTimeout,
     chrome: {
       storage: {

@@ -45,7 +45,7 @@ function openOptions({ granted = true, synced = {}, local = {} } = {}) {
     },
     runtime: { sendMessage: async message => {
       if (message.action === 'clearRatingsCache') {
-        await window.chrome.storage.local.remove(['rtCacheV1', 'seerrRatingsUnavailableV1', 'overlayRatingsV1']);
+        await window.chrome.storage.local.remove(['rtCacheV1', 'seerrRatingsUnavailableV1', 'overlayRatingsV1', 'overlayRatingsByServerV1']);
       }
       return { success: true };
     } }
@@ -165,9 +165,20 @@ test('Settings reports how many ratings are cached and clears them', async t => 
   // Flatten: the arrays come from the page realm.
   // The record of endpoints this server does not serve goes with the cache:
   // clearing is the user saying "try again", which includes those.
-  assert.deepEqual(ctx.localRemovals.map(keys => [...keys]), [['rtCacheV1', 'seerrRatingsUnavailableV1', 'overlayRatingsV1']]);
+  assert.deepEqual(ctx.localRemovals.map(keys => [...keys]), [['rtCacheV1', 'seerrRatingsUnavailableV1', 'overlayRatingsV1', 'overlayRatingsByServerV1']]);
   assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /No ratings cached/);
   assert.equal(ctx.window.document.getElementById('clearRatingsCache').disabled, true, 'nothing left to clear');
+});
+
+test('Settings counts and clears ratings held for multiple Seerr sites', async t => {
+  const ctx = openOptions({ local: { overlayRatingsByServerV1: {
+    'https://home.example': { entries: { 'movie:1': {}, 'tv:2': {} } },
+    'https://family.example': { entries: { 'movie:1': {} } }
+  } } });
+  t.after(() => ctx.window.close()); await flush();
+  assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /3 titles cached/);
+  ctx.window.document.getElementById('clearRatingsCache').click(); await flush();
+  assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /No ratings cached/);
 });
 
 test('an empty or missing ratings cache disables the clear button', async t => {

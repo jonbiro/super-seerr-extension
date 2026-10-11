@@ -15,7 +15,7 @@
       this.cacheClearPending = this.queueOverlayStorage(async () => {
         // Let any storage write already in progress finish before removal.
         await this.rtCacheFlushing;
-        await chrome.storage.local.remove(['rtCacheV1', 'seerrRatingsUnavailableV1', 'overlayRatingsV1']);
+        await chrome.storage.local.remove(['rtCacheV1', 'seerrRatingsUnavailableV1', 'overlayRatingsV1', 'overlayRatingsByServerV1']);
         // A marker also reaches tabs whose persisted cache was already absent.
         await chrome.storage.local.set({ ratingsCacheEpoch: `${Date.now()}:${Math.random()}` });
       }).finally(() => { this.cacheClearPending = null; void this.notifyContentState(true).catch(() => {}); });

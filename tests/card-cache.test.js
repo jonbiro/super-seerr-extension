@@ -126,7 +126,7 @@ test('unloading flushes pending resolutions to disk', async t => {
   fixture.window.dispatchEvent(new fixture.window.Event('pagehide'));
   for (let i = 0; i < 40; i++) await new Promise(resolve => setImmediate(resolve));
 
-  const stored = fixture.localStore[CACHE_KEY];
+  const stored = fixture.localStore.overlayRatingsByServerV1?.['https://seerr.example'];
   assert.ok(stored, 'pagehide flushes instead of losing the resolutions');
   assert.equal(stored.entries['movie:999'].bundle.rtCriticsScore, 88);
   assert.ok(Array.isArray(stored.index), 'the title index rides along in the same write');

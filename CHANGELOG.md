@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.71]
+
+- Persist separate ratings and title indexes for up to ten Seerr sites, preserving each cache when switching sites or restarting the browser.
+- Migrate the previous single-site cache automatically and isolate sites by server address, port, and base path.
+- Bound each site's persisted data to roughly 600 KB, keeping recent ratings and list entries; serialize writes so sites do not overwrite each other.
+- Count all site caches in Settings and clear them together with shared ratings when Clear ratings cache is used.
+- Verify migration, multi-site isolation, storage budgets, clearing, concurrent writes, and two-site cache persistence across a real Chromium worker restart.
+
 ## [3.5.70]
 
 - Keep the site being edited aligned with its URL and API key when another window changes the active site, including during initial loading and saving a renamed site.

@@ -2,6 +2,7 @@
 
 // Written by the Seerr overlay; see src/content/seerr-integration.js.
 const RATINGS_CACHE_KEY = 'overlayRatingsV1';
+const SITE_RATINGS_CACHE_KEY = 'overlayRatingsByServerV1';
 // The overlay's record of which ratings endpoints this server does not serve.
 // Clearing the cache means "ask again", so this goes with it.
 const RATINGS_UNAVAILABLE_KEY = 'seerrRatingsUnavailableV1';
@@ -75,8 +76,9 @@ class OptionsManager {
     if (!this.cacheCount) return;
     let held = 0;
     try {
-      const stored = await chrome.storage.local.get([RATINGS_CACHE_KEY, RT_CACHE_KEY, RATINGS_UNAVAILABLE_KEY]);
+      const stored = await chrome.storage.local.get([RATINGS_CACHE_KEY, SITE_RATINGS_CACHE_KEY, RT_CACHE_KEY, RATINGS_UNAVAILABLE_KEY]);
       held = Object.keys(stored[RATINGS_CACHE_KEY]?.entries || {}).length +
+        Object.values(stored[SITE_RATINGS_CACHE_KEY] || {}).reduce((count, cache) => count + Object.keys(cache?.entries || {}).length, 0) +
         Object.keys(stored[RT_CACHE_KEY]?.entries || {}).length;
       this.hasRatingsAvailability = !!stored[RATINGS_UNAVAILABLE_KEY];
     } catch (_) {

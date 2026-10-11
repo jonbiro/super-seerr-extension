@@ -32,7 +32,7 @@ test('a resolved bundle is written to local storage', async () => {
   await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
   await overlay.flushPersistedRatings();
 
-  const stored = overlay.localStore[CACHE_KEY];
+  const stored = overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'];
   assert.ok(stored, 'the cache should be persisted');
   assert.equal(stored.server, SERVER, 'entries record which server they came from');
   // Entries wrap the bundle so they can record when it was resolved.
@@ -77,7 +77,7 @@ test('a title nothing knows about is remembered, so the next visit stops asking'
   assert.equal(resolved.timesFor(550), 1, 'the second visit must not ask again');
 
   await overlay.flushPersistedRatings();
-  const entry = overlay.localStore[CACHE_KEY].entries['movie:550'];
+  const entry = overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'].entries['movie:550'];
   assert.equal(entry.bundle, null, 'stored as an absence, not as a score');
   assert.equal(typeof entry.cachedAt, 'number', 'and only with the timestamp that lets it expire');
 });
@@ -147,7 +147,7 @@ test('a partial bundle is still persisted', async () => {
   await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
   await overlay.flushPersistedRatings();
 
-  assert.equal(overlay.localStore[CACHE_KEY].entries['movie:550'].bundle.rtCriticsScore, 80);
+  assert.equal(overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'].entries['movie:550'].bundle.rtCriticsScore, 80);
 });
 
 test('the cache stays within its entry cap', async () => {
@@ -160,7 +160,7 @@ test('the cache stays within its entry cap', async () => {
   await overlay.flushPersistedRatings();
 
   assert.ok(overlay.ratingsCache.size <= Config.overlayCacheMaxEntries, `in-memory cache grew to ${overlay.ratingsCache.size}`);
-  assert.ok(Object.keys(overlay.localStore[CACHE_KEY].entries).length <= Config.overlayCacheMaxEntries);
+  assert.ok(Object.keys(overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'].entries).length <= Config.overlayCacheMaxEntries);
 });
 
 test('the cap evicts least recently used, not merely oldest', async () => {
@@ -185,9 +185,10 @@ test('clearing the cache from Settings empties an open tab', async () => {
   await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
   assert.equal(resolved.timesFor(550), 1);
 
-  // Settings removes the key; the overlay sees it through storage.onChanged.
-  delete overlay.localStore[CACHE_KEY];
-  overlay.changeLocal({ [CACHE_KEY]: { oldValue: { server: SERVER, entries: {} } } });
+  // Settings removes all site caches and advances the clear epoch.
+  delete overlay.localStore.overlayRatingsByServerV1;
+  overlay.localStore.ratingsCacheEpoch = "cleared";
+  overlay.changeLocal({ ratingsCacheEpoch: { newValue: "cleared" } });
 
   await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
   assert.equal(resolved.timesFor(550), 2, 'after clearing, the rating must be resolved again');
@@ -234,13 +235,13 @@ test('storing a bundle schedules the write on its own', async () => {
   withResolver(overlay, scored);
 
   await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
-  assert.ok(!overlay.localStore[CACHE_KEY], 'the write is debounced, not immediate');
+  assert.ok(!overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'], 'the write is debounced, not immediate');
 
   overlay.runTimers(600);
   await new Promise(resolve => setImmediate(resolve));
 
-  assert.ok(overlay.localStore[CACHE_KEY], 'the debounced write must fire without being called by hand');
-  assert.equal(overlay.localStore[CACHE_KEY].entries['movie:550'].bundle.rtCriticsScore, 80);
+  assert.ok(overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'], 'the debounced write must fire without being called by hand');
+  assert.equal(overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'].entries['movie:550'].bundle.rtCriticsScore, 80);
 });
 
 test('a lookup that could not complete is not remembered as unrated', async () => {
@@ -259,7 +260,7 @@ test('a lookup that could not complete is not remembered as unrated', async () =
   // Held briefly so the page stops re-asking on every pass, but marked as the
   // non-verdict it is: never written to disk, and gone again in minutes.
   assert.equal(overlay.ratingsCache.get('movie:550').provisional, true, 'held only provisionally');
-  const stored = overlay.localStore[CACHE_KEY];
+  const stored = overlay.localStore.overlayRatingsByServerV1?.['https://seerr.example'];
   assert.ok(!stored?.entries?.['movie:550'], 'a failure is never persisted');
 });
 
