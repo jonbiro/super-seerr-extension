@@ -2528,7 +2528,13 @@
     document.body.appendChild(modal);
 
     const previousFocus = document.activeElement;
-    const closeModal = () => { activeBulkSeasonController?.abort(); activeBulkSeasonController = null; modal.remove(); previousFocus?.focus(); };
+    const closeModal = () => {
+      const restoreFocus = modal.contains(document.activeElement) || document.activeElement === document.body;
+      activeBulkSeasonController?.abort(); activeBulkSeasonController = null;
+      modal.remove();
+      if (restoreFocus && previousFocus?.isConnected) previousFocus.focus();
+      return restoreFocus;
+    };
     const confirmButton = modal.querySelector('.confirm-btn');
     const refreshSeasonReadiness = () => {
       confirmButton.disabled = !readyTitles.length || !!activeBulkSeasonController || readyTitles.some(t => t.mediaType === 'tv' && !t.seasons?.length);
@@ -2620,7 +2626,7 @@
       }
 
       if (!modal.isConnected || generation !== routeGeneration) return;
-      closeModal();
+      const restoreFocus = closeModal();
       hideBulkActionBar();
 
       const resultKind = failed === 0 ? 'success' : succeeded === 0 ? 'error' : 'warning';
@@ -2628,7 +2634,9 @@
       notifyResult(resultTitle, `${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}`, resultKind);
 
       if (bulkMode) toggleBulkMode();
-      document.querySelector('.seerr-toggle-select')?.focus();
+      // Preserve an unrelated control the user chose while requests ran.
+      // If cleanup removed their selected-card control, offer its replacement.
+      if (restoreFocus || document.activeElement === document.body) document.querySelector('.seerr-toggle-select')?.focus();
     });
   }
 

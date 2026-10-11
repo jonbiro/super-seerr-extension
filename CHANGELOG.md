@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.171]
+
+- Preserve focus on unrelated page controls when delayed bulk requests finish successfully or fail.
+- Restore the selection control when the dialog owns focus, or when completion removes the focused card-selection control.
+- Add browser regressions for success/failure with focus inside the dialog, elsewhere on the page, and on a control removed during cleanup.
+
 ## [3.5.170]
 
 - Keep title-match explanations and bulk-review summaries visible on opening by focusing their headings instead of their footer Cancel buttons.

@@ -114,3 +114,30 @@ test('bulk review uses a singular title count for one selected title', async ({ 
   await expect(dialog.getByRole('button', { name: 'Request 1 title', exact: true })).toBeDisabled();
   expect(await page.evaluate(() => window.writes)).toEqual([]);
 });
+
+for (const success of [true, false]) for (const focus of ['dialog', 'outside', 'removed']) {
+  test(`bulk completion preserves focus ownership (${success ? 'success' : 'failure'}, ${focus})`, async ({ page }) => {
+    const dialog = page.getByRole('dialog', { name: 'Review your bulk request' });
+    await dialog.getByRole('button', { name: 'Choose seasons' }).click();
+    const picker = page.getByRole('dialog', { name: 'Choose TV seasons' });
+    await picker.getByRole('checkbox').check();
+    await picker.getByRole('button', { name: 'Use selected seasons' }).click();
+    await page.evaluate(() => {
+      const original = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = message => {
+        if (message.action !== 'requestMedia') return original(message);
+        window.writes.push(message);
+        return new Promise(resolve => { window.finishRequest = resolve; });
+      };
+    });
+    await dialog.getByRole('button', { name: 'Request 1 title', exact: true }).click();
+    await page.waitForFunction(() => typeof window.finishRequest === 'function');
+    if (focus === 'outside') await page.locator('#outside').focus();
+    if (focus === 'removed') await page.locator('.seerr-select-checkbox').focus();
+    await page.evaluate(success => window.finishRequest({ success, error: success ? undefined : 'Request rejected' }), success);
+    await expect(dialog).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Select titles', exact: true })).toBeVisible();
+    await expect(focus === 'outside' ? page.locator('#outside') : page.getByRole('button', { name: 'Select titles', exact: true })).toBeFocused();
+    expect(await page.evaluate(() => window.writes.length)).toBe(1);
+  });
+}
