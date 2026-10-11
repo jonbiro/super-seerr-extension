@@ -122,10 +122,18 @@
             if (size > remaining) continue;
             payload[key] = entry; remaining -= size;
           }
+          const publicPayload = this.publicRatingsPayload();
           await chrome.storage.local.set({
             [RT_CACHE_STORAGE_KEY]: { matcher: RatingsConfig.matcherVersion, entries: payload },
-            publicRatingsV1: this.publicRatingsPayload()
+            publicRatingsV1: publicPayload
           });
+          const fingerprint = JSON.stringify(publicPayload);
+          if (generation === this.rtCacheGeneration && fingerprint !== this.publicRatingsNotified) {
+            this.publicRatingsNotified = fingerprint;
+            // No scores, catalogue data or credentials are broadcast. Each
+            // authorized Seerr tab reads the public tier through its bridge.
+            void this.notifyContentState(false, true).catch(() => {});
+          }
         } catch (error) {
           console.error('Could not persist the Rotten Tomatoes cache:', error);
         }

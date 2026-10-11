@@ -101,6 +101,44 @@
       return persistedRatingsReady;
     }
 
+    // Refresh only the public tier. Reloading the full cache here would also
+    // replay a server's stored catalogue over live observations.
+    async function refreshPublicRatings() {
+      const expected = generation;
+      const server = getServer()?.href;
+      try {
+        await loadPersistedRatings();
+        if (expected !== generation || !server || server !== getServer()?.href) return [];
+        const response = await chrome.runtime.sendMessage({ action: 'getOverlayCache' });
+        if (!response?.success) throw new Error(response?.error || 'Public cache read unavailable');
+        if (expected !== generation || server !== getServer()?.href) return [];
+        const payload = response.data?.publicRatingsV1;
+        if (payload?.matcher !== Config.matcherVersion) return [];
+        const changed = [];
+        for (const [key, entry] of publicRatings) {
+          if (entry.expiresAt <= Date.now()) publicRatings.delete(key);
+        }
+        // Responses can arrive out of order. Merge by provider check time,
+        // leaving newer records and this server's native cache untouched.
+        for (const [key, entry] of Object.entries(payload.entries || {})) {
+          if (entry.expiresAt <= Date.now()) continue;
+          const previous = publicRatings.get(key);
+          if (previous && previous.checkedAt >= entry.checkedAt) continue;
+          publicRatings.set(key, { ...entry,
+            bundle: Model.createRatingsBundle({ ...entry.value, lastUpdated: entry.checkedAt }) });
+          changed.push(key);
+        }
+        if (publicRatings.size > Config.rtCacheMaxEntries) {
+          const oldest = [...publicRatings].sort((a, b) => a[1].checkedAt - b[1].checkedAt);
+          for (const [key] of oldest.slice(0, publicRatings.size - Config.rtCacheMaxEntries)) publicRatings.delete(key);
+        }
+        return changed.filter(key => publicRatings.has(key));
+      } catch (error) {
+        log('Could not refresh public ratings:', error);
+        return [];
+      }
+    }
+
     function schedulePersistedRatingsFlush() {
       if (persistedRatingsFlushTimer !== null) return;
       persistedRatingsFlushTimer = setTimeout(() => {
@@ -190,6 +228,6 @@
       return entry && entry.expiresAt > Date.now() && (!year || Number(year) === entry.value.matchedYear) ? entry : null;
     }
 
-    return { ratingsCache, getPublicRating, loadPersistedRatings, schedulePersistedRatingsFlush, flushPersistedRatings, forgetPersistedRatings };
+    return { ratingsCache, getPublicRating, refreshPublicRatings, loadPersistedRatings, schedulePersistedRatingsFlush, flushPersistedRatings, forgetPersistedRatings };
   };
 })(typeof window !== 'undefined' ? window : globalThis);

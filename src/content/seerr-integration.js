@@ -115,6 +115,18 @@
   }
   chrome.storage.onChanged.addListener(handleSettingsChange);
   chrome.runtime.onMessage?.addListener(message => {
+    if (message?.action === 'publicRatingsChanged') {
+      if (!isSeerrPage()) return;
+      const generation = routeGeneration;
+      void refreshPublicRatings().then(keys => {
+        if (generation !== routeGeneration || !isSeerrPage()) return;
+        for (const key of keys) {
+          const [type, id] = key.split(':');
+          repaintRatingTitle(id, type);
+        }
+      });
+      return;
+    }
     if (message?.action !== 'seerrStateChanged') return;
     if (message.cacheCleared) handleSettingsChange({ ratingsCacheEpoch: {} }, 'local');
     else checkApiConfig().then(current => { if (current) { cleanupOverlay(); injectOverlay(); } });
@@ -122,7 +134,7 @@
 
   const PERSISTED_RATINGS_KEY = 'overlayRatingsV1';
   const { ratingsCache, loadPersistedRatings, schedulePersistedRatingsFlush,
-    flushPersistedRatings, forgetPersistedRatings, getPublicRating } = window.createOverlayCache({
+    flushPersistedRatings, forgetPersistedRatings, getPublicRating, refreshPublicRatings } = window.createOverlayCache({
       Config, Model, log, getServer: () => configuredServer,
       getListIndex: projectListIndex, restoreListIndex
     });

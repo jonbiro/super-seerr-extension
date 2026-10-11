@@ -158,3 +158,41 @@ test('forgetting an old rating cannot remove a fresher result saved by another t
   b.ratingsCache.delete('movie:1'); await b.flushPersistedRatings();
   assert.equal(stored(worker).entries['movie:1'].bundle.rtCriticsScore, 95);
 });
+
+const publicRecord = (score, checkedAt) => ({ source: 'rotten-tomatoes', checkedAt, expiresAt: checkedAt + Config.rtCacheTtlMs,
+  value: { rtCriticsScore: score, rtAudienceScore: 90, confidence: 1, source: 'rotten-tomatoes',
+    matchedYear: 1999, matchedTitle: 'Fight Club', url: 'https://www.rottentomatoes.com/m/fight_club' } });
+
+test('public tier refresh preserves native ratings and accepts only newer public records', async () => {
+  const worker = await setup(), cache = tab(worker);
+  await cache.loadPersistedRatings();
+  cache.ratingsCache.set('movie:550', { ...entry(20, 100), bundle: { ...entry(20, 100).bundle, imdbRating: 7 } });
+  const now = Date.now();
+  worker.api.publicRatings.set('movie:550', publicRecord(95, now));
+  assert.deepEqual(Array.from(await cache.refreshPublicRatings()), ['movie:550']);
+  assert.equal(cache.getPublicRating('movie:550', 1999).bundle.rtCriticsScore, 95);
+  assert.equal(cache.ratingsCache.get('movie:550').bundle.imdbRating, 7);
+  assert.equal(cache.ratingsCache.get('movie:550').cachedAt, 100);
+  worker.api.publicRatings.set('movie:550', publicRecord(12, now - 1000));
+  assert.equal((await cache.refreshPublicRatings()).length, 0);
+  assert.equal(cache.getPublicRating('movie:550', 1999).bundle.rtCriticsScore, 95);
+});
+
+test('a public tier reply cannot survive a cache clear while its read is pending', async () => {
+  const worker = await setup();
+  let release;
+  let delayed = false;
+  const cache = tab(worker, { send: async message => {
+    if (delayed) return new Promise(resolve => { release = resolve; });
+    return { success: true, data: await worker.api.getOverlayCache(sender) };
+  } });
+  await cache.loadPersistedRatings();
+  delayed = true;
+  const pending = cache.refreshPublicRatings();
+  await new Promise(resolve => setImmediate(resolve));
+  cache.forgetPersistedRatings();
+  const now = Date.now();
+  release({ success: true, data: { publicRatingsV1: { matcher: Config.matcherVersion, entries: { 'movie:550': publicRecord(99, now) } } } });
+  assert.equal((await pending).length, 0);
+  assert.equal(cache.getPublicRating('movie:550'), null);
+});

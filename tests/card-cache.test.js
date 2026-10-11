@@ -30,6 +30,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
   const localStore = { ...local };
   const syncStore = { ...(serverUrl ? { seerrUrl: serverUrl } : {}) };
   let changeListener = null;
+  let messageListener = null;
   const messages = [];
   window.chrome = {
     storage: {
@@ -45,7 +46,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
       },
       onChanged: { addListener(fn) { changeListener = fn; } }
     },
-    runtime: { sendMessage: async message => {
+    runtime: { onMessage: { addListener: fn => { messageListener = fn; } }, sendMessage: async message => {
       messages.push(message);
       if (message.action === 'getConfigState') {
         return { success: true, data: configForPage ? await configForPage(window.location) : { apiConfigured, serverUrl: syncStore.seerrUrl || null, plexConfigured } };
@@ -70,6 +71,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
   }; })();`));
   return {
     dom, window, messages, localStore,
+    notify: message => messageListener?.(message),
     saveServerUrl: url => {
       syncStore.seerrUrl = url;
       return changeListener?.({ seerrUrl: { newValue: url } }, 'sync');
@@ -730,4 +732,33 @@ test('enriching a newly added duplicate card keeps the existing shared lookup', 
   await flush(fixture.window);
   assert.equal(duplicate.__seerrRatings.rtCriticsScore, 80);
   assert.equal(duplicate.__seerrMediaInfo.year, 2021);
+});
+
+for (const year of [2021, 1984]) test(`live public rating notification respects the card year (${year}) and preserves native scores`, async t => {
+  const checkedAt = Date.now() - 10000;
+  const fixture = openGrid({ local: { overlayRatingsV1: {
+    server: SERVER, epoch: 0, matcher: Config.matcherVersion, index: [INDEX_ENTRY],
+    entries: { 'movie:123': { bundle: BUNDLE, cachedAt: checkedAt, retryAt: Date.now() + 100000 } }
+  } } });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
+  await flush(fixture.window);
+  const card = fixture.window.document.querySelector('article');
+  assert.equal(card.__seerrRatings.rtCriticsScore, 90);
+  const send = fixture.window.chrome.runtime.sendMessage;
+  fixture.window.chrome.runtime.sendMessage = async message => {
+    const reply = await send(message);
+    if (message.action === 'getOverlayCache') reply.data.publicRatingsV1 = { matcher: Config.matcherVersion, entries: {
+      'movie:123': { source: 'rotten-tomatoes', checkedAt: checkedAt + 1000, expiresAt: checkedAt + Config.rtCacheTtlMs,
+        value: { rtCriticsScore: 99, rtAudienceScore: 85, confidence: 1, source: 'rotten-tomatoes',
+          matchedTitle: 'Dune', matchedYear: year, url: 'https://www.rottentomatoes.com/m/dune' } }
+    } };
+    return reply;
+  };
+  fixture.notify({ action: 'publicRatingsChanged' });
+  await flush(fixture.window);
+  assert.equal(card.__seerrRatings.rtCriticsScore, year === 2021 ? 99 : 90);
+  assert.equal(card.__seerrRatings.imdbRating, 7);
+  assert.equal(card.__seerrRatings.tmdbRating, 7.5);
+  assert.equal(fixture.window.testOverlay.listItemCount(), 1);
+  assert.equal(fixture.messages.filter(message => message.action === 'getRottenTomatoesRatings').length, 0);
 });

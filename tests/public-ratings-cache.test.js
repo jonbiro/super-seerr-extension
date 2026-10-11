@@ -289,3 +289,33 @@ for (const native of [true, false]) test(`a previously reconciled contradictory 
   await tick();
   assert.equal(overlay.ratingsCache.get('movie:550').bundle.rtCriticsScore, 12, 'the contradictory fields are refetched');
 });
+
+test('persisting a changed public rating notifies open tabs without broadcasting scores or secrets', async () => {
+  const worker = await seed(), messages = [];
+  worker.context.chrome.tabs = {
+    query: async () => [{ id: 1 }, { id: 2 }, {}],
+    sendMessage: async (id, message) => { messages.push({ id, message }); }
+  };
+  provider(worker, { critics: 95 });
+  await worker.api.getRottenTomatoesRatings({ ...input, refresh: true });
+  await worker.api.flushRtCache(); await tick();
+  assert.deepEqual(messages.map(item => item.id), [1, 2]);
+  assert.ok(messages.every(item => JSON.stringify(item.message) === '{"action":"publicRatingsChanged"}'));
+  await worker.api.flushRtCache(); await tick();
+  assert.equal(messages.length, 2, 'unchanged public snapshots do not notify again');
+});
+
+test('a failed public-cache write can notify tabs after persistence recovers', async () => {
+  const worker = await seed(), messages = [];
+  worker.context.chrome.tabs = { query: async () => [{ id: 1 }], sendMessage: async (id, message) => { messages.push(message); } };
+  provider(worker, { critics: 95 });
+  await worker.api.getRottenTomatoesRatings({ ...input, refresh: true });
+  const set = worker.context.chrome.storage.local.set;
+  worker.context.chrome.storage.local.set = async () => { throw new Error('Storage unavailable'); };
+  await worker.api.flushRtCache(); await tick();
+  assert.equal(messages.length, 0);
+  worker.context.chrome.storage.local.set = set;
+  await worker.api.flushRtCache(); await tick();
+  assert.equal(messages.length, 1);
+  assert.equal(messages[0].action, 'publicRatingsChanged');
+});

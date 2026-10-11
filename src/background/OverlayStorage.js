@@ -163,11 +163,11 @@
         return { stored: true };
       });
     },
-    async notifyContentState(cacheCleared = false) {
+    async notifyContentState(cacheCleared = false, publicRatingsChanged = false) {
       if (!chrome.tabs?.query || !chrome.tabs?.sendMessage) return;
       const tabs = await chrome.tabs.query({});
       await Promise.allSettled(tabs.filter(tab => Number.isInteger(tab.id)).map(tab =>
-        chrome.tabs.sendMessage(tab.id, { action: 'seerrStateChanged', cacheCleared })
+        chrome.tabs.sendMessage(tab.id, publicRatingsChanged ? { action: 'publicRatingsChanged' } : { action: 'seerrStateChanged', cacheCleared })
       ));
     }
   };

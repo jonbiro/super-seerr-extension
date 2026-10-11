@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.97]
+
+- Notify open Seerr pages when a changed verified public ratings snapshot has been persisted, without broadcasting scores, catalogue data or credentials.
+- Refresh only the public cache tier and repaint affected titles without reloading the page or replacing server-specific IMDb/TMDB scores and live catalogue observations.
+- Reject older public snapshots and replies crossing cache clears or server changes; bound refreshed public snapshots and preserve state through read failures.
+- Add worker notification, write-recovery, public-refresh, contradictory-year and real Chromium two-open-page regressions using deterministic provider transport.
+
 ## [3.5.96]
 
 - Recheck cancellation and card attachment immediately before executing a dispatched ratings job, preventing abandoned callbacks from starting between queue dispatch and execution.
