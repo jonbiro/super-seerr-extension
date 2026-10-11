@@ -22,7 +22,14 @@
         title.textContent = `${labels[entry.kind]}: ${entry.title} (${entry.mediaType === 'tv' ? 'TV' : 'Movie'})`;
         const time = document.createElement('time');
         time.dateTime = new Date(entry.at).toISOString(); time.textContent = new Date(entry.at).toLocaleString();
-        item.append(title, time); list.appendChild(item);
+        item.append(title);
+        // The worker supplies the sanitized historical destination, independent
+        // of whichever site is active when the popup opens.
+        if (entry.kind !== 'plex-watchlist' && typeof entry.server === 'string' && entry.server) {
+          const server = document.createElement('span'); server.className = 'recent-action-server';
+          server.textContent = `Seerr: ${entry.server.replace(/\/+$/, '')}`; item.append(server);
+        }
+        item.append(time); list.appendChild(item);
         rendered.push({ entry, item });
       }
       status.textContent = list.children.length ? '' : 'No confirmed actions yet.';

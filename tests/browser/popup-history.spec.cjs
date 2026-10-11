@@ -102,3 +102,39 @@ for (const success of [true, false]) for (const moved of [false, true]) test(`si
   await expect(select).toHaveValue(success ? 'family' : 'home');
   await expect(page.locator(moved ? '#openOptions' : '#activeSeerrSite')).toBeFocused();
 });
+
+for (const basePath of ['/home', '/family']) test(`the popup identifies a Seerr installation by its base path (${basePath})`, async ({ page }) => {
+  await page.evaluate(basePath => {
+    window.chrome = { runtime: { sendMessage: async () => ({ success: true, data: {
+      serverUrl: `https://seerr.example:8443${basePath}/`, checks: {
+        seerr: { state: 'ok', message: 'Reachable' }, permission: { state: 'ok', message: 'Granted' },
+        apiKey: { state: 'ok', message: 'Accepted' }, plex: { state: 'warning', message: 'Optional' }
+      }
+    } }) } };
+  }, basePath);
+  await page.addScriptTag({ path: path.resolve('src/popup/popup.js') });
+  await expect(page.locator('#serverUrl')).toHaveText(`seerr.example:8443${basePath}`);
+  await expect(page.locator('#serverUrl')).toHaveAttribute('title', `https://seerr.example:8443${basePath}/`);
+});
+
+test('history distinguishes same-title actions on different Seerr sites within a narrow popup', async ({ page }) => {
+  await page.evaluate(() => {
+    const row = { kind: 'request', title: 'Same film', mediaType: 'movie', tmdbId: 42, at: 1 };
+    const entries = [
+      { ...row, server: 'https://seerr.example:8443/home/' },
+      { ...row, server: `https://seerr.example:8443/family/${'long-path-'.repeat(18)}/` },
+      { ...row, kind: 'plex-watchlist', server: 'https://seerr.example:8443/home/' },
+      { ...row }
+    ];
+    window.chrome = { runtime: { sendMessage: async ({ action }) => ({ success: true, data: action === 'getRecentActions' ? entries : [] }) } };
+  });
+  await page.addScriptTag({ path: path.resolve('src/popup/recent-actions.js') });
+  const rows = page.locator('#recentActionsList li');
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(0).locator('.recent-action-server')).toHaveText('Seerr: https://seerr.example:8443/home');
+  await expect(rows.nth(1).locator('.recent-action-server')).toContainText('Seerr: https://seerr.example:8443/family/long-path-');
+  await expect(rows.nth(2).locator('.recent-action-server')).toHaveCount(0);
+  await expect(rows.nth(3).locator('.recent-action-server')).toHaveCount(0);
+  expect(await page.locator('#recentActionsList').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.locator('.recent-actions').screenshot({ path: '/tmp/super-seerr-3.5.157-history-sites.png' });
+});

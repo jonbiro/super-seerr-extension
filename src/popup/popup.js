@@ -42,6 +42,7 @@ class PopupManager {
       if (!serverUrl) this.showNotConfiguredState();
       else {
         this.serverUrlSpan.textContent = this.formatServerUrl(serverUrl);
+        this.serverUrlSpan.title = serverUrl;
         this.describeConfigured(checks.apiKey.state === 'ok');
         this.showConfiguredState();
         const issues = checks.seerr.state !== 'ok' || checks.permission.state !== 'ok' || Object.values(checks).some(check => check.state === 'error');
@@ -131,8 +132,8 @@ class PopupManager {
   formatServerUrl(url) {
     try {
       const urlObj = new URL(url);
-      // Host, not hostname: self-hosted servers often differ only by port.
-      return urlObj.host;
+      // Preserve the port and installation path: saved sites can share a host.
+      return urlObj.host + urlObj.pathname.replace(/\/+$/, '');
     } catch (error) {
       return url;
     }

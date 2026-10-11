@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.157]
+
+- Include the Seerr installation path alongside its host and port in the popup connection summary, with the full URL available as a tooltip.
+- Label confirmed Seerr history entries with their historical destination so identical titles requested on different sites remain distinguishable.
+- Keep Plex and legacy history labels accurate; add browser coverage for shared-host installations and long destination URLs in a narrow popup.
+
 ## [3.5.156]
 
 - Refuse equally strong Rotten Tomatoes matches to distinct provider entries even when their localized/original titles differ, preventing search order from choosing a score to share across sites.
