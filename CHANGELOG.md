@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.177]
+
+- Compare catalogue updates with each tab's previous snapshot, so changing a poster cannot replay an unchanged stale title, year, or date over another tab's correction.
+- Keep deliberate later corrections writable and retain compatibility with older clients that omit catalogue snapshots.
+- Add movie and TV concurrency regressions in both write orders, including a later correction from the stale tab; all four failed before the fix.
+
 ## [3.5.176]
 
 - Preserve complementary title, original-title, poster, release-date, and year metadata when tabs write partial catalogue updates to the same server's cache.

@@ -27,8 +27,9 @@
     let persistedEntries = new Map();
     let persistedIndex = new Map();
     const indexKey = item => `${item.mediaType}:${item.tmdbId}`;
-    const indexFingerprint = item => JSON.stringify([String(item.tmdbId), item.mediaType, item.title || '',
-      item.originalTitle || '', item.year ?? null, item.posterPath || null, item.releaseDate || '', item.firstAirDate || '']);
+    const indexFingerprint = item => JSON.stringify({ tmdbId: String(item.tmdbId), mediaType: item.mediaType,
+      title: item.title || '', originalTitle: item.originalTitle || '', year: item.year ?? null,
+      posterPath: item.posterPath || null, releaseDate: item.releaseDate || '', firstAirDate: item.firstAirDate || '' });
     const storedEntry = value => ({ bundle: value.bundle ?? null, cachedAt: value.cachedAt ?? null,
       retryAt: value.retryAt ?? null, ...(typeof value.publicCheckedAt === 'number' ? { publicCheckedAt: value.publicCheckedAt } : {}), diagnostics: value.diagnostics ?? null,
       ...(value.nativeRemovedAt ? { nativeRemovedAt: value.nativeRemovedAt } : {}) });
@@ -206,8 +207,10 @@
             });
           const indexSnapshot = new Map(index.map(item => [indexKey(item), indexFingerprint(item)]));
           const indexChanges = index.filter(item => indexSnapshot.get(indexKey(item)) !== persistedIndex.get(indexKey(item)));
+          const expectedIndex = indexChanges.filter(item => persistedIndex.has(indexKey(item)))
+            .map(item => JSON.parse(persistedIndex.get(indexKey(item))));
           const reply = await chrome.runtime.sendMessage({ action: 'putOverlayCache',
-            data: { server, epoch: writeEpoch, matcher: Config.matcherVersion, delta: true, entries: changed, expectedEntries, removed, index: indexChanges }
+            data: { server, epoch: writeEpoch, matcher: Config.matcherVersion, delta: true, entries: changed, expectedEntries, removed, index: indexChanges, expectedIndex }
           });
           if (!reply?.success) throw new Error(reply?.error || 'Cache write unavailable');
           if (expected !== generation) return;

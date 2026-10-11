@@ -456,3 +456,32 @@ for (const mediaType of ['movie', 'tv']) for (const posterFirst of [true, false]
     assert.equal(corrected.firstAirDate, '2022-01-01');
   });
 }
+
+for (const mediaType of ['movie', 'tv']) for (const posterFirst of [true, false]) {
+  test(`stale ${mediaType} catalogue snapshots cannot undo another tab's correction (poster first: ${posterFirst})`, async () => {
+    const worker = await setup();
+    const base = { tmdbId: '1', mediaType, title: 'Old title', originalTitle: 'Old original', year: 2020,
+      posterPath: '/old.jpg', releaseDate: '2020-01-01', firstAirDate: '2020-01-01' };
+    const seed = tab(worker, { index: [base] }); await seed.loadPersistedRatings(); await seed.flushPersistedRatings();
+    const identity = [{ ...base }], poster = [{ ...base }];
+    const a = tab(worker, { index: identity }), b = tab(worker, { index: poster });
+    await Promise.all([a.loadPersistedRatings(), b.loadPersistedRatings()]);
+    Object.assign(identity[0], { title: 'Corrected title', originalTitle: 'Corrected original', year: 2021,
+      releaseDate: '2021-01-01', firstAirDate: '2021-01-01' });
+    poster[0].posterPath = '/new.jpg';
+    for (const cache of posterFirst ? [b, a] : [a, b]) await cache.flushPersistedRatings();
+    const result = stored(worker).index[0];
+    assert.equal(result.title, 'Corrected title');
+    assert.equal(result.originalTitle, 'Corrected original');
+    assert.equal(result.year, 2021);
+    assert.equal(result.releaseDate, '2021-01-01');
+    assert.equal(result.firstAirDate, '2021-01-01');
+    assert.equal(result.posterPath, '/new.jpg');
+    // The stale tab can still make a deliberate subsequent correction.
+    poster[0].year = 2022;
+    await b.flushPersistedRatings();
+    assert.equal(stored(worker).index[0].year, 2022);
+    assert.equal(stored(worker).index[0].title, 'Corrected title');
+    assert.equal(stored(worker).index[0].posterPath, '/new.jpg');
+  });
+}

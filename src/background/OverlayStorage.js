@@ -172,7 +172,7 @@
         ...(publicExpiresAt > Date.now() ? { retryAt: Math.min(nativeRetryAt, publicExpiresAt) } : {}),
         ...(newerServer.diagnostics ? { diagnostics: { ...newerServer.diagnostics, status: diagnosticStatus, source: bundle.source } } : {}) });
     },
-    mergeOverlayCache(previous, incoming, removed, expectedEntries = {}) {
+    mergeOverlayCache(previous, incoming, removed, expectedEntries = {}, expectedIndex = []) {
       const entries = previous?.matcher === incoming.matcher ? { ...previous.entries } : {};
       const removals = (Array.isArray(removed) ? removed : []).slice(-root.RatingsConfig.overlayCacheMaxEntries);
       // Compare canonical records: the bridge sanitizes saved values, while
@@ -195,6 +195,8 @@
       for (const [key, entry] of Object.entries(incoming.entries)) {
         entries[key] = this.mergeOverlayRating(entries[key], entry, bases[key]);
       }
+      const indexBases = this.sanitizeOverlayCache({ ...incoming, entries: {}, index: expectedIndex }, incoming.server, incoming.epoch).index;
+      const indexExpected = new Map(indexBases.map(item => [`${item.mediaType}:${item.tmdbId}`, item]));
       const index = new Map((previous?.index || []).map(item => [`${item.mediaType}:${item.tmdbId}`, item]));
       for (const item of incoming.index) {
         const key = `${item.mediaType}:${item.tmdbId}`;
@@ -202,7 +204,13 @@
         // with a title but no poster). Match the tab's gap-filling policy so
         // another tab's complementary metadata survives the shared write.
         const previousItem = index.get(key);
+        const base = indexExpected.get(key);
         const merged = { ...item };
+        // A changed poster must not replay an unchanged stale title/year over
+        // another tab's correction. Explicitly changed fields still win.
+        for (const field of ['title', 'originalTitle', 'posterPath', 'releaseDate', 'firstAirDate', 'year']) {
+          if (previousItem && base && item[field] === base[field]) merged[field] = previousItem[field];
+        }
         for (const field of ['title', 'originalTitle', 'posterPath', 'releaseDate', 'firstAirDate']) {
           if (!merged[field] && previousItem?.[field]) merged[field] = previousItem[field];
         }
@@ -241,7 +249,7 @@
         if (!clean) return { stored: false };
         const caches = this.overlayCachesFromStorage(local, local.ratingsCacheEpoch ?? 0);
         const key = serverKey(server);
-        const merged = value.delta === true ? this.mergeOverlayCache(caches[key], clean, value.removed, value.expectedEntries) : clean;
+        const merged = value.delta === true ? this.mergeOverlayCache(caches[key], clean, value.removed, value.expectedEntries, value.expectedIndex) : clean;
         const bounded = this.boundedOverlayCache(merged);
         // Validate the server and clear epoch above even for empty deltas.
         // Identical results need no write, but legacy payloads still need
