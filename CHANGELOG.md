@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.94]
+
+- Preserve confirmed Plex watchlist membership when restoring Seerr controls after loading, so a watchlisted title continues to show a disabled On Plex Watchlist button.
+- Record membership after successful Plex adds and refresh it from current status reads without allowing late replies to cross a view change; retain confirmed state through unavailable reads, but clear it after confirmed removal or account disconnection.
+- Clear membership when the title or connection changes, including collapsed-panel metadata refreshes and explicit title choices; add lookup, successful-add and identity-change regressions.
+
 ## [3.5.93]
 
 - Validate playback destinations before opening them: accept absolute HTTP/HTTPS URLs and reject relative, malformed, executable or credential-bearing URLs.

@@ -38,6 +38,7 @@ class BaseIntegration {
     this.navigationListener = null;
     this.currentStatusData = null; // Cache current status data for performance
     this.plexConfigured = false;
+    this.plexOnWatchlist = false;
     this._pendingRetries = new Set();
 
     this.log('BaseIntegration initialized for', this.siteName);
@@ -207,10 +208,11 @@ class BaseIntegration {
       if (mediaData && mediaData.title) {
         // A same-page retry must not replace the identity behind an open panel
         // while its status lookup is still using that identity.
-        if (this.isFlyoutExpanded() && this.mediaData
-          && this._mediaConnectionToken === connectionToken
-          && ['title', 'mediaType', 'tmdbId', 'imdbId', 'year'].every(key => this.mediaData[key] === mediaData[key])) return;
+        const sameIdentity = this.mediaData && this._mediaConnectionToken === connectionToken
+          && ['title', 'mediaType', 'tmdbId', 'imdbId', 'year'].every(key => this.mediaData[key] === mediaData[key]);
+        if (this.isFlyoutExpanded() && sameIdentity) return;
         if (this.isFlyoutExpanded()) this.cleanupUI();
+        if (!sameIdentity) this.plexOnWatchlist = false;
         this.mediaData = mediaData;
         this._mediaConnectionToken = connectionToken;
         this.client.connectionToken = connectionToken;
@@ -379,6 +381,7 @@ class BaseIntegration {
         return;
       }
       this.plexConfigured = plexConfigured;
+      if (!plexConfigured) this.plexOnWatchlist = false;
       this.client.connectionToken = connectionToken;
       const panel = this.uiElements.panel;
       if (panel && serverUrl) {
@@ -407,7 +410,7 @@ class BaseIntegration {
       // Cache status data for instant access during button clicks
       this.currentStatusData = statusData;
 
-      const plexOnWatchlist = false;
+      const plexOnWatchlist = this.plexOnWatchlist;
 
       // Update UI based on theme
       if (this.uiTheme === 'flyout') {
@@ -427,9 +430,13 @@ class BaseIntegration {
         void plexStatePromise.then(plexState => {
           if (!isCurrent() || this.currentStatusData !== statusData) return;
           // Update only the Plex control; a late read must not reset Seerr UI.
+          // An unavailable read cannot contradict previously confirmed state.
+          if (typeof plexState?.onWatchlist === 'boolean' && plexState.unknown !== true) {
+            this.plexOnWatchlist = plexState.onWatchlist;
+          }
           this.ui.updatePlexWatchlistStatus(elements, statusData, {
             plexConfigured: this.plexConfigured,
-            plexOnWatchlist: plexState?.onWatchlist === true
+            plexOnWatchlist: this.plexOnWatchlist
           });
         }).catch(err => this.log('Plex state update failed:', err));
       } else {
@@ -538,6 +545,7 @@ class BaseIntegration {
         if (!view.isCurrent()) return;
         if (!saved?.success) throw new Error(saved?.error || 'Could not remember this match');
       }
+      this.plexOnWatchlist = false;
       this.mediaData = { ...view.media, title: selected.title, tmdbId: selected.tmdbId, mediaType: selected.mediaType, year: selected.year };
       const heading = view.elements.flyout?.querySelector('.seerr-title');
       if (heading) heading.textContent = selected.title;
@@ -730,6 +738,7 @@ class BaseIntegration {
       const result = await this.client.plexAddToWatchlist(view.media);
       if (!view.isCurrent()) return;
       added = true;
+      this.plexOnWatchlist = true;
       this.ui.createNotification(
         result && result.already ? 'Already on Plex Watchlist' : 'Added to Plex Watchlist',
         result && result.already
@@ -777,7 +786,9 @@ class BaseIntegration {
    */
   updateUIFromStatus(statusData) {
     if (this.uiTheme === 'flyout') {
-      this.ui.updateFlyoutStatus(this.uiElements, statusData, { plexConfigured: this.plexConfigured });
+      this.ui.updateFlyoutStatus(this.uiElements, statusData, {
+        plexConfigured: this.plexConfigured, plexOnWatchlist: this.plexOnWatchlist
+      });
     } else {
       this.ui.updateButtonStatus(this.uiElements.button, statusData);
     }
@@ -984,6 +995,7 @@ class BaseIntegration {
     this.mediaData = null;
     delete this._mediaConnectionToken;
     this.currentStatusData = null;
+    this.plexOnWatchlist = false;
     // A request in flight belongs to the old page: navigating mid-request
     // must not wedge the new page's button shut forever.
     this._requestInFlight = false;

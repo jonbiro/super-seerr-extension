@@ -177,3 +177,71 @@ test('valid local playback URLs preserve their path and detach the discovery pag
   assert.equal(popup.opener, null);
   assert.ok(f.notices.some(note => note[0] === 'Opening media server'));
 });
+
+for (const source of ['lookup', 'successful add']) {
+  test(`Plex membership from ${source} survives a Seerr UI reset but not a title change`, async t => {
+    const f = fixture(t), integration = f.integration;
+    integration.uiTheme = 'flyout';
+    integration.ui.updateTabIcon = () => {};
+    integration.plexConfigured = true;
+    integration.uiElements = integration.ui.createFlyoutContent(integration.mediaData, f.page.window.document.body);
+    integration.currentStatusData = { status: 'available_watch', buttonClass: 'watch', buttonText: 'Watch' };
+    if (source === 'lookup') {
+      integration.client.sendMessage = async () => ({ success: true, data: { plexConfigured: true } });
+      integration.client.getMediaStatus = async () => integration.currentStatusData;
+      integration.client.plexWatchlistState = async () => ({ onWatchlist: true });
+      await integration.updateStatus();
+      await new Promise(resolve => setImmediate(resolve));
+    } else {
+      integration.client.plexAddToWatchlist = async () => ({ already: false });
+      await integration.handlePlexWatchlistClick();
+    }
+    assert.equal(integration.uiElements.plexButton.disabled, true);
+    integration.setUILoading('Opening...', 'Opening...');
+    integration.updateUIFromStatus(integration.currentStatusData);
+    assert.equal(integration.uiElements.plexButton.disabled, true, 'restoring Seerr status must retain known Plex membership');
+    assert.match(integration.uiElements.plexButton.textContent, /On Plex Watchlist/);
+    integration.cleanupUI(); f.show('New');
+    integration.uiElements = integration.ui.createFlyoutContent(integration.mediaData, f.page.window.document.body);
+    integration.updateUIFromStatus({ status: 'available', buttonClass: 'request' });
+    assert.equal(integration.uiElements.plexButton.disabled, false, 'membership must not carry to a different title or connection');
+  });
+}
+
+for (const change of ['title', 'connection']) {
+  test(`collapsed panel extraction clears Plex membership on ${change} changes`, async t => {
+    const f = fixture(t), integration = f.integration;
+    integration.plexOnWatchlist = true;
+    integration._mediaConnectionToken = 'old-site';
+    const nextMedia = change === 'title' ? { title: 'New', mediaType: 'movie', tmdbId: 2 } : { ...integration.mediaData };
+    integration.extractMediaData = async () => nextMedia;
+    integration.client.sendMessage = async message => ({ success: true, data: message.action === 'getConfigState'
+      ? { connectionToken: change === 'connection' ? 'new-site' : 'old-site' } : null });
+    let renderedMembership;
+    integration.setupUI = async () => { renderedMembership = integration.plexOnWatchlist; };
+    await integration.extractAndSetup();
+    assert.equal(renderedMembership, false);
+  });
+}
+
+for (const [name, reply, configured, expected] of [
+  ['unavailable read', null, true, true],
+  ['unknown read', { onWatchlist: false, unknown: true }, true, true],
+  ['confirmed removal', { onWatchlist: false }, true, false],
+  ['disconnected Plex account', null, false, false]
+]) {
+  test(`Plex membership handles ${name} without guessing`, async t => {
+    const f = fixture(t), integration = f.integration;
+    integration.uiTheme = 'flyout';
+    integration.ui.updateTabIcon = () => {};
+    integration.uiElements = integration.ui.createFlyoutContent(integration.mediaData, f.page.window.document.body);
+    integration.plexOnWatchlist = true;
+    integration.client.sendMessage = async () => ({ success: true, data: { plexConfigured: configured } });
+    integration.client.getMediaStatus = async () => ({ status: 'available', buttonClass: 'request' });
+    integration.client.plexWatchlistState = async () => reply;
+    await integration.updateStatus();
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(integration.plexOnWatchlist, expected);
+    assert.equal(integration.uiElements.plexButton.disabled, expected);
+  });
+}
