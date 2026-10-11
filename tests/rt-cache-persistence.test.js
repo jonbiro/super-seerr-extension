@@ -381,3 +381,44 @@ for (const stage of ['storage', 'search', 'detail']) {
     assert.equal(api.publicRatings.size, 0);
   });
 }
+
+for (const stage of ['search', 'detail']) {
+  test(`a retired ${stage} failure cannot affect a fresh lookup after clearing`, async () => {
+    const worker = loadWorker(); await worker.ready;
+    const api = worker.api;
+    let rejectOld, announce;
+    const gate = new Promise((resolve, reject) => { rejectOld = reject; });
+    const started = new Promise(resolve => { announce = resolve; });
+    const match = { href: '/m/example', title: 'Example', year: 2020, confidence: 1, rtCriticsScore: 80 };
+    let first = true;
+    api.rtBestMatchFor = async () => {
+      if (stage === 'search' && first) { first = false; announce(); return gate; }
+      return match;
+    };
+    api.fetchRtHtml = async () => {
+      if (stage === 'detail' && first) { first = false; announce(); return gate; }
+      return '';
+    };
+    api.parseRtScorecard = () => ({ rtAudienceScore: 90 });
+    const input = { title: 'Example', year: 2020, mediaType: 'movie', tmdbId: 1 };
+    const old = api.getRottenTomatoesRatings(input);
+    await started;
+    await api.clearRatingsCache();
+    const fresh = await api.getRottenTomatoesRatings(input);
+    assert.equal(fresh.rtAudienceScore, 90);
+    // Model a more recent provider pause; retired work must not count its
+    // failure against new requests or replace the newly verified cache entry.
+    api.rtTransportFailures = Config.rtFailureLimit;
+    api.rtBackoffUntil = Date.now() + Config.rtBackoffMs;
+    const backoff = api.rtBackoffUntil;
+    rejectOld(new Error('Old request failed'));
+    assert.equal(await old, null);
+    assert.equal(api.rtTransportFailures, Config.rtFailureLimit);
+    assert.equal(api.rtBackoffUntil, backoff);
+    assert.equal(api.rtCache.get('movie:Example:2020').diagnostic, 'rated');
+    assert.equal(api.publicRatings.get('movie:1').value.rtAudienceScore, 90);
+    assert.equal(api.rtPending.size, 0);
+    await api.flushRtCache();
+    assert.equal(worker.localStore.publicRatingsV1.entries['movie:1'].value.rtAudienceScore, 90);
+  });
+}
