@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.153]
+
+- Treat a conflicting release year as evidence against a page-supplied TMDB ID even when a remake has the same title, triggering a fresh match before status lookups or writes.
+- Preserve localized-title handling and the one-year release-date tolerance; require another season review if a TV request resolves to a different identity.
+- Add movie/TV request, watchlist, status, season-review and unmatched-remake regressions.
+
 ## [3.5.152]
 
 - Report successful site activation/removal separately from a failed Settings reload, preserving the error instead of replacing it with a success message.

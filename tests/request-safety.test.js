@@ -198,3 +198,53 @@ test('a different non-Latin title cannot authorize a request after its marks are
   await assert.rejects(api.requestMedia({ title: 'ハ', year: 2020, mediaType: 'movie' }), /No unambiguous match/);
   assert.equal(posts, 0);
 });
+
+for (const mediaType of ['movie', 'tv']) for (const method of ['requestMedia', 'addToWatchlist', 'getMediaStatus', ...(mediaType === 'tv' ? ['getSeasonOptions'] : [])]) {
+  test(`${method} resolves a same-title ${mediaType} remake instead of trusting the wrong year`, async () => {
+    const { api, ready } = loadWorker(CONFIGURED); await ready;
+    const title = 'Dune';
+    const detail = (id, year) => ({ id, title, name: title, releaseDate: `${year}-01-01`, firstAirDate: `${year}-01-01`,
+      seasons: [{ seasonNumber: 1, episodeCount: 8 }], mediaInfo: { status: 1 } });
+    const posts = []; let searches = 0;
+    api.makeAPIRequest = async (verb, endpoint, body) => {
+      if (verb === 'POST') { posts.push(body); return { id: 50, type: mediaType, status: 1 }; }
+      if (endpoint.startsWith('/api/v1/request?')) return { results: [] };
+      return endpoint.endsWith('/1') ? detail(1, 1984) : detail(2, 2021);
+    };
+    api.sendAPIRequest = async () => detail(2, 2021);
+    api.searchMedia = async () => { searches++; return [film(1, title, 1984, mediaType), film(2, title, 2021, mediaType)]; };
+    const input = { title, year: 2021, mediaType, tmdbId: 1, ...(mediaType === 'tv' ? { seasons: [1] } : {}) };
+    if (mediaType === 'tv' && method === 'requestMedia') {
+      await assert.rejects(api[method](input), /Title changed.*Review seasons again/);
+      assert.ok(searches > 0);
+      assert.equal(posts.length, 0, 'seasons chosen for the old identity need another review');
+      return;
+    }
+    const result = await api[method](input);
+    assert.ok(searches > 0, 'a title-text match cannot override a contradictory release year');
+    assert.equal(result.tmdbId, 2);
+    if (method === 'getMediaStatus' || method === 'getSeasonOptions') assert.equal(posts.length, 0);
+    else {
+      assert.equal(posts.length, 1);
+      assert.equal(method === 'requestMedia' ? posts[0].mediaId : posts[0].tmdbId, 2);
+    }
+  });
+}
+
+test('a same-title remake with no corroborated search match cannot be requested', async () => {
+  const { api, ready } = loadWorker(CONFIGURED); await ready;
+  let posts = 0;
+  api.makeAPIRequest = async verb => {
+    if (verb === 'POST') { posts++; return { id: 50 }; }
+    return { id: 1, title: 'Dune', releaseDate: '1984-01-01' };
+  };
+  api.searchMedia = async () => [film(1, 'Dune', 1984)];
+  await assert.rejects(api.requestMedia({ title: 'Dune', year: 2021, mediaType: 'movie', tmdbId: 1 }), /No unambiguous match/);
+  assert.equal(posts, 0);
+});
+
+test('a matching page title retains the one-year release-date tolerance', async () => {
+  const { api, ready } = loadWorker(CONFIGURED); await ready;
+  api.makeAPIRequest = async () => ({ id: 1, title: 'Dune', releaseDate: '2020-12-31' });
+  assert.equal(await api.tmdbIdentityMatches({ title: 'Dune', year: 2021, mediaType: 'movie', tmdbId: 1 }), true);
+});

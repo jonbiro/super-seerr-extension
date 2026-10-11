@@ -117,9 +117,10 @@
 
     // A page-supplied TMDB id is trusted only while nothing contradicts it.
     // External pages resolve the id from whichever link comes first, which is
-    // occasionally another title's. Distrust needs positive evidence: an
-    // unrelated title with a different year. A translated title keeps its
-    // year, so this never punishes localisation, and an id Seerr cannot look
+    // occasionally another title's. Conflicting known release years are
+    // positive evidence even when a remake has exactly the same title.
+    // A translated title keeps its year, so this does not punish localisation,
+    // and an id Seerr cannot look
     // up stays trusted — Seerr itself judges the write.
     async tmdbIdentityMatches(mediaData) {
       if (!mediaData || !mediaData.title || !mediaData.tmdbId) return true;
@@ -138,7 +139,6 @@
       if (!details || typeof details !== 'object') return true;
       const known = [details.title, details.originalTitle, details.name, details.originalName]
         .filter(title => typeof title === 'string' && title.trim());
-      if (known.some(title => this.areTitlesSimilar(title, mediaData.title))) return true;
       const detailYear = parseInt(String(details.releaseDate || details.firstAirDate || '').slice(0, 4), 10);
       if (!mediaData.year || !Number.isFinite(detailYear) || Math.abs(detailYear - mediaData.year) <= 1) return true;
       this.log('TMDB id names a different title; resolving by search instead:', {
