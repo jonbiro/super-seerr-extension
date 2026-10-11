@@ -21,10 +21,11 @@ const INDEX_ENTRY = {
 const CARDS = `<article data-testid="title-card"><div><img src="https://image.tmdb.org/t/p/w300/p123.jpg" alt=""></div></article>
   <article data-testid="title-card"><div><img src="https://image.tmdb.org/t/p/w300/unknown.jpg" alt=""></div></article>`;
 
-function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverUrl = 'https://seerr.example', apiConfigured = false } = {}) {
+function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverUrl = 'https://seerr.example', apiConfigured = false,
+  configForPage = null, pageUrl = 'https://seerr.example/discover' } = {}) {
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM(`<main><div id="grid">${CARDS}</div></main>`,
-    { url: 'https://seerr.example/discover', runScripts: 'outside-only' });
+    { url: pageUrl, runScripts: 'outside-only' });
   const { window } = dom;
   const localStore = { ...local };
   const syncStore = { ...(serverUrl ? { seerrUrl: serverUrl } : {}) };
@@ -47,7 +48,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
     runtime: { sendMessage: async message => {
       messages.push(message);
       if (message.action === 'getConfigState') {
-        return { success: true, data: { apiConfigured, serverUrl: syncStore.seerrUrl || null, plexConfigured } };
+        return { success: true, data: configForPage ? await configForPage(window.location) : { apiConfigured, serverUrl: syncStore.seerrUrl || null, plexConfigured } };
       }
       if (message.action === 'getRottenTomatoesRatings') return { success: true, data: rtScores };
       if (message.action === 'plexAddToWatchlist') return { success: true, data: { ratingKey: 'rk', already: false } };
@@ -64,7 +65,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
   require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(fs.readFileSync('src/content/seerr-integration.js', 'utf8').replace(/\}\)\(\);\s*$/, `window.testOverlay = {
     injectCardBadges, injectPlexCardButtons, hydrateCardsFromListItems, getRatings,
-    flushPersistedRatings, projectListIndex, detectRoute, handleObservedApiResponse,
+    flushPersistedRatings, projectListIndex, detectRoute, handleObservedApiResponse, handleRouteChange,
     toggleBulkMode, notifyResult, listItemCount: () => lastListItems.length
   }; })();`));
   return {
@@ -79,6 +80,101 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
 const flush = async (window, rounds = 40) => {
   for (let i = 0; i < rounds; i++) await new Promise(resolve => setImmediate(resolve));
 };
+
+for (const url of ['https://other.example/api/v1/discover/movies', '/nested/api/v1/discover/movies',
+  '/api/v1/auth/me', '/api/v1/settings/discover', 'https://user:secret@seerr.example/api/v1/discover/movies', 'not a URL']) {
+  test(`observations from ${url} cannot seed this server's catalogue or scores`, async t => {
+    const fixture = openGrid();
+    t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+    await flush(fixture.window);
+    fixture.window.testOverlay.handleObservedApiResponse({ source: fixture.window, origin: fixture.window.location.origin,
+      data: { channel: 'super-seerr:api', url, items: [{ id: 123, mediaType: 'movie', title: 'Wrong server', posterPath: '/p123.jpg', rtCriticsScore: 99 }] } });
+    await flush(fixture.window);
+    assert.equal(fixture.window.testOverlay.listItemCount(), 0);
+    assert.equal(fixture.window.document.querySelectorAll('.seerr-card-badge').length, 0);
+    await fixture.window.testOverlay.flushPersistedRatings();
+    assert.equal(Object.keys(fixture.localStore.overlayRatingsByServerV1?.['https://seerr.example']?.entries || {}).length, 0);
+  });
+}
+
+test('a base-path site accepts its own title API and rejects the parent installation', async t => {
+  const fixture = openGrid({ serverUrl: 'https://seerr.example/base', pageUrl: 'https://seerr.example/base/discover' });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  const observe = url => fixture.window.testOverlay.handleObservedApiResponse({ source: fixture.window, origin: fixture.window.location.origin,
+    data: { channel: 'super-seerr:api', url, items: [{ id: 123, mediaType: 'movie', title: 'Dune', posterPath: '/p123.jpg', ...BUNDLE }] } });
+  observe('/api/v1/discover/movies');
+  assert.equal(fixture.window.testOverlay.listItemCount(), 0);
+  observe('/base/api/v1/discover/movies?page=1');
+  assert.equal(fixture.window.testOverlay.listItemCount(), 1);
+  const bundle = await fixture.window.testOverlay.getRatings(123, 'Dune', 2021, 'movie');
+  assert.equal(bundle.rtCriticsScore, 90); assert.equal(bundle.imdbRating, 7);
+  await fixture.window.testOverlay.flushPersistedRatings();
+  assert.equal(fixture.localStore.overlayRatingsByServerV1['https://seerr.example/base'].entries['movie:123'].bundle.rtCriticsScore, 90);
+  assert.equal(fixture.localStore.overlayRatingsByServerV1['https://seerr.example/base'].index[0].tmdbId, '123');
+  const reloaded = openGrid({ local: fixture.localStore, serverUrl: 'https://seerr.example/base', pageUrl: 'https://seerr.example/base/discover' });
+  t.after(() => { reloaded.window.dispatchEvent(new reloaded.window.Event('pagehide')); reloaded.dom.window.close(); });
+  await flush(reloaded.window);
+  assert.equal(reloaded.window.document.querySelectorAll('.seerr-card-badge').length, 2);
+  assert.equal(reloaded.messages.filter(message => message.action === 'getRottenTomatoesRatings').length, 0);
+});
+
+test('SPA navigation into an inactive nested site removes the parent overlay and returning restores it', async t => {
+  const fixture = openGrid({ local: seedBlob({ entries: { 'movie:123': { bundle: BUNDLE, cachedAt: Date.now() } } }),
+    configForPage: location => ({ apiConfigured: false,
+      serverUrl: location.pathname.startsWith('/nested/') ? null : 'https://seerr.example' }) });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  assert.equal(fixture.window.document.querySelectorAll('.seerr-card-badge').length, 2);
+  fixture.window.history.pushState({}, '', '/nested/discover');
+  fixture.window.testOverlay.handleRouteChange(); await flush(fixture.window);
+  assert.equal(fixture.window.document.querySelectorAll('[data-seerr-overlay=true]').length, 0);
+  fixture.window.history.pushState({}, '', '/discover');
+  fixture.window.testOverlay.handleRouteChange(); await flush(fixture.window);
+  assert.equal(fixture.window.document.querySelectorAll('.seerr-card-badge').length, 2);
+});
+
+test('same-server SPA navigation preserves identities for linkless cards', async t => {
+  const fixture = openGrid({ local: seedBlob({ entries: { 'movie:123': { bundle: BUNDLE, cachedAt: Date.now() } } }) });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  fixture.window.history.pushState({}, '', '/search?query=Dune');
+  fixture.window.testOverlay.handleRouteChange(); await flush(fixture.window);
+  assert.equal(fixture.window.document.querySelectorAll('.seerr-card-badge').length, 2);
+});
+
+test('a retained TV catalogue identity does not become a movie after SPA navigation', async t => {
+  const fixture = openGrid({ pageUrl: 'https://seerr.example/discover/tv' });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  fixture.window.testOverlay.handleObservedApiResponse({ source: fixture.window, origin: fixture.window.location.origin,
+    data: { channel: 'super-seerr:api', url: '/api/v1/discover/tv',
+      items: [{ id: 123, title: 'Example Series', posterPath: '/p123.jpg', ...BUNDLE }] } });
+  await fixture.window.testOverlay.getRatings(123, 'Example Series', null, 'tv');
+  fixture.window.history.pushState({}, '', '/discover/movies');
+  fixture.window.testOverlay.handleRouteChange(); await flush(fixture.window);
+  await fixture.window.testOverlay.flushPersistedRatings();
+  const cache = fixture.localStore.overlayRatingsByServerV1['https://seerr.example'];
+  assert.equal(cache.index[0].mediaType, 'tv');
+  assert.ok(cache.entries['tv:123']); assert.equal(cache.entries['movie:123'], undefined);
+});
+
+test('a slow inactive-site verdict cannot suppress the overlay after rapid SPA navigation back', async t => {
+  let finish;
+  const fixture = openGrid({ local: seedBlob({ entries: { 'movie:123': { bundle: BUNDLE, cachedAt: Date.now() } } }),
+    configForPage: location => location.pathname.startsWith('/nested/') ? new Promise(resolve => { finish = resolve; })
+      : { apiConfigured: false, serverUrl: 'https://seerr.example' } });
+  t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
+  await flush(fixture.window);
+  fixture.window.history.pushState({}, '', '/nested/discover');
+  fixture.window.testOverlay.handleRouteChange(); await flush(fixture.window);
+  assert.equal(fixture.window.document.querySelectorAll('[data-seerr-overlay=true]').length, 0);
+  fixture.window.history.pushState({}, '', '/discover');
+  fixture.window.testOverlay.handleRouteChange(); await flush(fixture.window);
+  assert.equal(fixture.window.document.querySelectorAll('.seerr-card-badge').length, 2);
+  finish({ apiConfigured: false, serverUrl: null }); await flush(fixture.window);
+  assert.equal(fixture.window.document.querySelectorAll('.seerr-card-badge').length, 2);
+});
 
 function seedBlob({ entries = {}, index = [INDEX_ENTRY], server = SERVER, matcher = Config.matcherVersion } = {}) {
   return { [CACHE_KEY]: { server, epoch: 0, matcher, entries, index } };

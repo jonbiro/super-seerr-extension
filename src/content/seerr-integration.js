@@ -30,6 +30,8 @@
   let configuredServer = null;
   let connectionToken;
   let configGeneration = 0;
+  let routeConfigPending = false;
+  let routeConfigGeneration = 0;
 
   // Check API config — controls whether request features are available.
   // The API key is deliberately never read here: the worker answers whether
@@ -186,10 +188,17 @@
     const nextPath = window.location.pathname + window.location.search;
     if (nextPath === currentPath) return;
     currentPath = nextPath;
-    if (!isSeerrPage()) return;
     seerrDomReadyRetries = 0;
-    cleanupOverlay();
-    injectOverlay();
+    cleanupOverlay({ preserveListIndex: true });
+    // SPA navigation can cross into another saved installation on this origin,
+    // or return from one that was inactive. Recheck the worker's site verdict.
+    routeConfigPending = true;
+    const generation = ++routeConfigGeneration;
+    void checkApiConfig().then(() => {
+      if (generation !== routeConfigGeneration) return;
+      routeConfigPending = false;
+      injectOverlay();
+    });
   }
 
   // ──────────────── Idempotency ────────────────
@@ -206,7 +215,7 @@
   const cardRatingQueue = window.createRatingQueue();
   window.addEventListener('scroll', () => cardRatingQueue.reprioritize(), { passive: true, capture: true });
 
-  function cleanupOverlay() {
+  function cleanupOverlay({ preserveListIndex = false } = {}) {
     document.querySelectorAll('.seerr-sort-filter-bar').forEach(bar => bar.__seerrPresetCleanup?.());
     abandonBulkRun();
     activeBulkSeasonController?.abort();
@@ -229,7 +238,7 @@
     bulkMode = false;
     selectedCards.clear();
     bulkActionBar = null;
-    lastListItems = [];
+    lastListItems = preserveListIndex ? lastListItems.filter(item => ['movie', 'tv'].includes(mediaTypeOf(item))) : [];
     document.querySelectorAll('[data-seerr-overlay="true"]').forEach(el => el.remove());
     // Also remove the filter toggle button
     const toggle = document.getElementById('seerr-filter-toggle');
@@ -427,7 +436,12 @@
   // and is bounded rather than replaced.
   function rememberListItems(items) {
     if (!Array.isArray(items) || items.length === 0) return;
-    lastListItems = lastListItems.concat(items);
+    // Fix route-inferred types at ingestion; a later TV/movie route must not
+    // reinterpret an older untyped catalogue item under its own fallback.
+    lastListItems = lastListItems.concat(items.map(item => {
+      const info = mediaInfoFromListItem(item);
+      return info ? { ...item, mediaType: info.mediaType } : item;
+    }));
     if (lastListItems.length > Config.overlayCacheMaxEntries) {
       lastListItems = lastListItems.slice(-Config.overlayCacheMaxEntries);
     }
@@ -437,7 +451,7 @@
   // lists arrive. Raw items carry far more fields than that; only the
   // identifying ones cross into storage, in a shape the live pipeline reads
   // back directly (poster matching, media info, page metadata).
-  function projectListIndex(items) {
+  function projectListIndex(items = lastListItems) {
     const seen = new Set();
     const projected = [];    for (const item of items) {
       if (!item || typeof item !== 'object') continue;
@@ -649,10 +663,24 @@
       return;
     }
 
+    // Same-origin messages may still describe a different installation, and
+    // page messages are untrusted even when the observer projected them.
+    let observedUrl;
+    try {
+      if (typeof data.url !== 'string') throw new Error('Missing API URL');
+      observedUrl = new URL(data.url, window.location.href);
+      const prefix = `${configuredServer.pathname.replace(/\/+$/, '')}/api/v1/`;
+      if (observedUrl.origin !== configuredServer.origin || observedUrl.username || observedUrl.password ||
+          !observedUrl.pathname.startsWith(prefix) ||
+          !/^(discover|search|request|media|movie|tv|collection|watchlist|blocklist|person)(\/|$)/.test(observedUrl.pathname.slice(prefix.length))) {
+        throw new Error('Not this server\'s title API');
+      }
+    } catch (_) { observedStats.rejected++; return; }
+
     observedStats.messages++;
     observedStats.items += data.items.length;
     observedStats.lastAt = Date.now();
-    const path = (() => { try { return new URL(data.url, window.location.href).pathname; } catch (_) { return String(data.url); } })();
+    const path = observedUrl.pathname;
     observedStats.byUrl.set(path, (observedStats.byUrl.get(path) || 0) + data.items.length);
 
     const source = String(data.url || '').includes('/request') ? 'seerr-requests-api' : 'seerr-discover-api';
@@ -1629,7 +1657,7 @@
   function isSeerrPage() {
     // Content-script matches must cover self-hosted servers, but generic
     // Next.js markup is not proof that a page belongs to the user's Seerr.
-    if (!configuredServer || configuredServer.origin !== window.location.origin) return false;
+    if (routeConfigPending || !configuredServer || configuredServer.origin !== window.location.origin) return false;
     const basePath = configuredServer.pathname.replace(/\/+$/, '');
     return !basePath || window.location.pathname === basePath || window.location.pathname.startsWith(`${basePath}/`);
   }

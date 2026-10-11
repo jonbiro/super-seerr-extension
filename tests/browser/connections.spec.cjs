@@ -185,6 +185,11 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await options.evaluate(async parent => {
       await chrome.runtime.sendMessage({ action: 'activateSeerrConnection', data: { id: parent } });
     }, second.origin);
+    await expect(seerr.locator('.seerr-card-badge')).toHaveCount(2);
+    await seerr.evaluate(() => history.pushState({}, '', '/movie/550'));
+    await expect(seerr.locator('[data-seerr-overlay=true]')).toHaveCount(0);
+    await seerr.evaluate(() => history.back());
+    await expect(seerr.locator('.seerr-card-badge')).toHaveCount(2);
     await seerr.goto(`${child}/550`);
     await expect(seerr.locator('[data-seerr-overlay=true]')).toHaveCount(0);
     const cacheReply = await options.evaluate(async pageUrl => {

@@ -148,6 +148,29 @@ test('an inactive nested Seerr site cannot inherit the active parent site config
   assert.equal((await message(w, 'getConfigState', undefined, nestedPage)).data.serverUrl, first);
 });
 
+test('SPA messages use the current tab URL instead of the original parent document', async () => {
+  const w = await setup();
+  await message(w, 'saveSeerrConnection', { url: 'https://home.example', apiKey: 'root-key' });
+  const originalSender = { id: 'test', url: 'https://home.example/discover', tab: { id: 1 }, frameId: 0 };
+  let url = `${first}/discover`, writes = 0;
+  w.context.chrome.tabs = { get: async () => ({ id: 1, url }) };
+  w.api.requestMedia = async () => { writes++; return { tmdbId: 550 }; };
+  const config = await message(w, 'getConfigState', undefined, originalSender);
+  assert.equal(config.data.serverUrl, null); assert.equal(config.data.apiConfigured, false);
+  for (const action of ['getOverlayCache', 'requestMedia', 'getRottenTomatoesRatings']) {
+    const reply = await message(w, action, { tmdbId: 550, title: 'Fight Club', year: 1999, mediaType: 'movie' }, originalSender);
+    assert.equal(reply.success, false); assert.match(reply.error, /not the active/, action);
+  }
+  assert.equal(writes, 0);
+  url = 'https://home.example/discover';
+  assert.equal((await message(w, 'getConfigState', undefined, originalSender)).data.serverUrl, 'https://home.example');
+  url = 'https://other.example/discover';
+  assert.match((await message(w, 'getConfigState', undefined, originalSender)).error, /page changed/);
+  w.context.chrome.tabs.get = async () => { throw new Error('Tab closed'); };
+  assert.equal((await message(w, 'requestMedia', {}, originalSender)).success, false);
+  assert.equal(writes, 0);
+});
+
 test('popup uses the confirmed switch result even if subsequent history reads fail', async t => {
   const { JSDOM } = require('jsdom');
   const fs = require('node:fs');

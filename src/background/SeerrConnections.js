@@ -30,6 +30,20 @@
     connectionToken() {
       return this.connections ? `${this.connections.revision}:${this.connections.activeId}` : this.baseUrl ?? null;
     },
+    async currentSeerrSender(sender) {
+      if (!Number.isInteger(sender?.tab?.id) || (sender.frameId ?? 0) !== 0 || !chrome.tabs?.get) return sender;
+      let original;
+      try { original = new URL(sender.url); } catch (_) { return sender; }
+      const sites = this.connections?.sites || (this.baseUrl ? [{ url: this.baseUrl }] : []);
+      if (!sites.some(site => new URL(site.url).origin === original.origin)) return sender;
+      // MessageSender.url can remain the original document URL after pushState.
+      // The browser's tab URL determines which installation owns this message.
+      const tab = await chrome.tabs.get(sender.tab.id);
+      if (!tab.url || new URL(tab.url).origin !== original.origin) {
+        throw new Error('The Seerr page changed. Reload it before trying again.');
+      }
+      return { ...sender, url: tab.url };
+    },
     async connectionOperation(action, data, sender) {
       this.requireExtensionPage(sender);
       if (action === 'getSeerrConnections') {

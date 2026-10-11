@@ -243,6 +243,7 @@ class SeerrAPI {
 
   async handleMessage(request, sender, sendResponse) {
     try {
+      sender = await this.currentSeerrSender(sender);
       if (['requestMedia', 'addToWatchlist', 'getMediaStatus', 'getSeasonOptions', 'getMediaCandidates', 'saveTitleCorrection', 'getSavedTitleCorrection', 'searchMedia'].includes(request.action)) {
         this.assertConnectionTarget(request, sender);
       }

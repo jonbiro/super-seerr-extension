@@ -6,6 +6,15 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.76]
+
+- Revalidate observed title API URLs against the active Seerr origin and base path before accepting catalogue or rating data; reject other installations, credentials in URLs, and non-title endpoints.
+- Recheck site configuration during SPA navigation so entering an inactive nested installation removes the parent overlay and returning restores it; block injection while checking and ignore late navigation results.
+- Use the browser's current tab URL for Seerr message routing because a content script's sender URL can retain its pre-navigation address; reject requests and cache access from inactive nested SPA pages.
+- Preserve the active site's bounded title index during same-site navigation so poster-only cards retain their identities, fixing inferred media types before a later route can reinterpret them; still clear the index when the configured server changes or caches are cleared.
+- Fix live title-index persistence: the cache callback now projects the current catalogue when called without arguments, restoring poster-only identities and cached badges after a cold reload.
+- Add cross-server observation, base-path persistence and rapid-navigation regressions, plus a real Chromium nested-site SPA round trip.
+
 ## [3.5.75]
 
 - Merge concurrent cache writes using separate public-score and server-check timestamps, preserving newer RT scores alongside newer server-local IMDb/TMDB values and confidence for only the RT fields retained.
