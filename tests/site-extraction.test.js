@@ -13,11 +13,11 @@ const SOURCE_LABELS = {
 
 const { SITES } = require('./browser/site-fixtures.cjs');
 
-for (const { site, url, html, expect } of SITES) {
+for (const { site, url, html, expect, pageTitle } of SITES) {
   test(`${site} extracts ${expect.mediaType} "${expect.title}" from ${new URL(url).pathname}`, async t => {
     // A decoy page title: extractTitle falls back to document.title, so a
     // matching one would let a broken selector pass unnoticed.
-    const fixture = loadIntegration({ site, url, html, title: `Decoy Fallback Title - ${site}` });
+    const fixture = loadIntegration({ site, url, html, title: pageTitle || `Decoy Fallback Title - ${site}` });
     t.after(() => fixture.dom.window.close());
 
     const data = await fixture.integration().extractMediaData();

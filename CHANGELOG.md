@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.83]
+
+- Recognize IMDb TV metadata in links, spans and list items, including hyphenated mini-series labels; ignore episode text in query strings, fragments and unrelated sidebar metadata when choosing movie versus TV controls.
+- Prefer the IMDb title's own hero release year over unrelated year links, retaining years when hero metadata uses list items or spans.
+- Decode Trakt fallback slugs without corrupting accented letters, retain the plausible release year removed from the slug, preserve numeric titles and non-year numeric suffixes, and refuse undecodable fallback identities.
+- Add extraction and decoy regressions plus shared Chromium/Firefox fixtures for mini-series controls, misleading episode references and encoded Trakt title/year fallbacks.
+
 ## [3.5.82]
 
 - Load remembered title choices using the current site's connection token before building discovery panels, fixing saved choices being ignored after switching sites.

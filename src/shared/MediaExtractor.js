@@ -25,7 +25,12 @@ function findReleaseYear(text) {
 // Visible release metadata takes precedence; time elements may omit the year
 // from their label while retaining it in the machine-readable date.
 function releaseYearFromElement(element) {
-  const visibleYear = findReleaseYear(element.textContent);
+  // Adjacent metadata nodes may have no literal whitespace despite being
+  // visually separated by layout. Joining their text directly can hide a TV
+  // premiere year ("TV Series2008–2013") and select the ending year instead.
+  const metadataText = node => node.nodeType === 3 ? node.textContent
+    : node.nodeType === 1 ? [...node.childNodes].map(metadataText).join(' ') : '';
+  const visibleYear = findReleaseYear(metadataText(element));
   if (visibleYear !== null) return visibleYear;
   if (element.localName !== 'time') return null;
   const date = element.getAttribute('datetime')?.trim();
@@ -164,6 +169,11 @@ class MediaExtractor {
     }
     
     return null;
+  }
+
+  // Reuse the same bounds for release years reconstructed from URL slugs.
+  parseReleaseYear(text) {
+    return findReleaseYear(text);
   }
 
   /**

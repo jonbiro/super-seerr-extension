@@ -88,14 +88,18 @@ class TraktIntegration extends BaseIntegration {
     this.log('Extracted title before cleanup:', title);
 
     // For app.trakt.tv React SPA, if we only got generic title, extract from URL
+    let fallbackYear = null;
     if (!title || /^(?:Trakt(?: Web)?|Track Your Shows & Movies)$/i.test(title.trim()) || title.trim() === '') {
       this.log('Title extraction failed, trying to extract from URL slug');
       if (urlMatch && urlMatch[2]) {
+        let slug;
+        try { slug = decodeURIComponent(urlMatch[2]); }
+        catch (_) { return null; } // An undecodable slug is not a title.
+        fallbackYear = this.extractor.parseReleaseYear(slug.match(/-(\d{4})$/)?.[1]);
         // Convert URL slug to title (e.g., "peacemaker-2022" -> "Peacemaker")
-        title = urlMatch[2]
-          .replace(/-\d{4}$/, '') // Remove year suffix
+        title = (fallbackYear === null ? slug : slug.replace(/-\d{4}$/, ''))
           .replace(/-/g, ' ') // Replace dashes with spaces
-          .replace(/\b\w/g, l => l.toUpperCase()); // Title case
+          .replace(/(^|\s)\p{L}/gu, l => l.toUpperCase()).trim(); // Preserve Unicode letters within words.
         this.log('Extracted title from URL slug:', title);
       }
     }
@@ -122,7 +126,7 @@ class TraktIntegration extends BaseIntegration {
 
     const year = this.extractor.extractYear(yearSelectors, {
       fallback: true
-    });
+    }) ?? fallbackYear;
 
     // Try to find TMDb ID - Trakt often has TMDb links/data
     let tmdbId = null;

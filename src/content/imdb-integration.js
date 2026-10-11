@@ -60,7 +60,6 @@ class IMDBIntegration extends BaseIntegration {
 
     // Extract year from multiple sources
     const yearSelectors = [
-      '[data-testid="hero-title-block__metadata"] a', // Modern metadata
       'a[href*="/releaseyear/"]', // Release year link (resilient)
       '.sc-69e49b85-0 a[href*="/year/"]', // Year link (CSS module — fragile)
       '.titleBar-desktopSpacing a[href*="/year/"]', // Desktop year
@@ -69,8 +68,11 @@ class IMDBIntegration extends BaseIntegration {
       '[data-testid="title-pc-principal-credit"] a[href*="year"]' // Principal credit year
     ];
 
-    const year = this.extractor.extractYear(yearSelectors, {
-      multiElementSelector: '[data-testid="hero-title-block__metadata"] a',
+    const heroMetadata = '[data-testid="hero-title-block__metadata"]';
+    const year = this.extractor.extractYear([], {
+      multiElementSelector: `${heroMetadata}, ${heroMetadata} a, ${heroMetadata} li, ${heroMetadata} span, ${heroMetadata} time`,
+      fallback: false
+    }) ?? this.extractor.extractYear(yearSelectors, {
       fallback: true
     });
 
@@ -116,30 +118,23 @@ class IMDBIntegration extends BaseIntegration {
   determineMediaType() {
     // Check for TV series indicators
     const tvIndicatorSelectors = [
-      '[data-testid="hero-title-block__metadata"] .ipc-inline-list__item',
-      '[data-testid="hero-title-block__metadata"] li',
-      '.subtext',
+      '[data-testid="hero-title-block__metadata"]',
+      '.title_wrapper .subtext',
       '.title-overview .subtext'
     ];
 
     for (const selector of tvIndicatorSelectors) {
-      const elements = document.querySelectorAll(selector);
-      for (const element of elements) {
-        const text = element.textContent.toLowerCase();
-        if (text.includes('tv series') || 
-            text.includes('tv mini series') || 
-            text.includes('miniseries') ||
-            text.includes('episodes')) {
-          this.log('Detected TV series from text:', text);
-          return 'tv';
+      for (const metadata of document.querySelectorAll(selector)) {
+        // Modern metadata can use bare links or spans instead of list items.
+        // Inspect those separately so adjacent years do not join the type.
+        for (const element of [metadata, ...metadata.querySelectorAll('a, li, span')]) {
+          const text = element.textContent.normalize('NFKC').replace(/[\u2010-\u2015]/g, '-').replace(/\s+/g, ' ');
+          if (/\b(?:tv\s+series|(?:tv\s+)?mini[\s-]*series|\d+\s+episodes?)\b/i.test(text)) {
+            this.log('Detected TV series from text:', text);
+            return 'tv';
+          }
         }
       }
-    }
-
-    // Check URL for TV indicators
-    if (window.location.href.includes('/episodes/')) {
-      this.log('Detected TV series from URL (episodes)');
-      return 'tv';
     }
 
     // Default to movie

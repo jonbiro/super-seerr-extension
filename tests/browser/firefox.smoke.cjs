@@ -258,6 +258,7 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
       await eventually(() => script('return document.querySelectorAll(".seerr-flyout").length;'), 1, `${fixture.site} ${fixture.expect.mediaType}: one packaged flyout`);
       assert.equal(await script('return document.querySelector(".seerr-title").textContent;'), fixture.expect.title);
       assert.ok((await script('return document.querySelector(".seerr-year").textContent;')).includes(fixture.expect.mediaType === 'tv' ? 'TV Series' : 'Movie'));
+      if (fixture.expect.year) assert.ok((await script('return document.querySelector(".seerr-year").textContent;')).includes(String(fixture.expect.year)));
       await script('document.querySelector(".seerr-tab").click();');
       assert.equal(await script('return document.querySelector(".seerr-tab").getAttribute("aria-expanded");'), 'true');
       t.diagnostic(`Firefox packaged fixture passed: ${fixture.site} ${fixture.expect.mediaType}`);

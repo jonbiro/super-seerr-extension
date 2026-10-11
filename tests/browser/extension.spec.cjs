@@ -378,12 +378,12 @@ test('content scripts cannot access local secrets; cache bridge and clear notifi
 });
 
 for (const fixture of require('./site-fixtures.cjs').SITES) {
-  test(`packaged ${fixture.site} integration boots on its ${fixture.expect.mediaType} fixture`, async () => {
+  test(`packaged ${fixture.site} integration boots on its ${fixture.expect.mediaType} fixture${fixture.label ? ` (${fixture.label})` : ''}`, async () => {
     const page = await context.newPage();
     // Only the webpage is a fixture. Manifest matching, script order, bootstrap,
     // DOM extraction, worker messages, and the rendered flyout are production.
     await page.route('**/*', route => route.request().isNavigationRequest()
-      ? route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta charset="utf-8"><title>Decoy fallback title</title></head><body>${fixture.html}</body></html>` })
+      ? route.fulfill({ contentType: 'text/html', body: `<!doctype html><html><head><meta charset="utf-8"><title>${fixture.pageTitle || 'Decoy fallback title'}</title></head><body>${fixture.html}</body></html>` })
       : route.abort());
     await page.goto(fixture.url, { waitUntil: 'domcontentloaded' });
     await expect(page.locator('.seerr-flyout')).toHaveCount(1, { timeout: 15000 });

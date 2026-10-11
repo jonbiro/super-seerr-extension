@@ -21,7 +21,7 @@ async function interceptSiteFixtures(url) {
       else request.resolve(message.result);
     } else if (message.method === 'network.beforeRequestSent' && message.params.isBlocked) {
       const fixture = SITES.find(item => new URL(item.url).href === message.params.request.url);
-      const body = fixture ? `<!doctype html><html><head><meta charset="utf-8"><title>Decoy fallback title</title></head><body>${fixture.html}</body></html>` : '';
+      const body = fixture ? `<!doctype html><html><head><meta charset="utf-8"><title>${fixture.pageTitle || 'Decoy fallback title'}</title></head><body>${fixture.html}</body></html>` : '';
       void command('network.provideResponse', { request: message.params.request.request,
         statusCode: fixture ? 200 : 404,
         headers: [{ name: 'Content-Type', value: { type: 'string', value: 'text/html; charset=utf-8' } }],
