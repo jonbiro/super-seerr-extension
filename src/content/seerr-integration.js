@@ -159,12 +159,13 @@
 
   function detectRoute() {
     const path = serverPath();
-    if (/^\/movie\/\d+/.test(path)) return { type: 'movie-detail', id: path.match(/\/movie\/(\d+)/)[1] };
-    if (/^\/tv\/\d+/.test(path))    return { type: 'tv-detail',    id: path.match(/\/tv\/(\d+)/)[1] };
-    if (/^\/collection\/\d+/.test(path)) return { type: 'collection', id: path.match(/\/collection\/(\d+)/)[1] };
-    if (/^\/person\/\d+/.test(path))     return { type: 'person',     id: path.match(/\/person\/(\d+)/)[1] };
-    if (/^\/search/.test(path))     return { type: 'search' };
-    if (/^\/discover/.test(path))   return { type: 'discover' };
+    const identified = path.match(/^\/(movie|tv|collection|person)\/([1-9]\d*)(?:\/|$)/);
+    if (identified && Number.isSafeInteger(Number(identified[2]))) {
+      const family = identified[1];
+      return { type: family === 'movie' || family === 'tv' ? `${family}-detail` : family, id: identified[2] };
+    }
+    if (/^\/search(?:\/|$)/.test(path)) return { type: 'search' };
+    if (/^\/discover(?:\/|$)/.test(path)) return { type: 'discover' };
     if (/^\/requests(?:\/|$)/.test(path)) return { type: 'requests' };
     if (/^\/blocklist(?:\/|$)/.test(path)) return { type: 'blocklist' };
     // Only the watchlist tab of a profile shows titles; its settings do not.

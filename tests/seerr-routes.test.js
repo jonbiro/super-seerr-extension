@@ -66,3 +66,27 @@ test('the new routes work under a server base path', async () => {
     assert.equal(overlay.isListRoute(route), true);
   }
 });
+
+for (const base of ['', '/seerr']) {
+  test(`route segments require complete names and positive safe IDs (${base || 'root'})`, async () => {
+    const invalid = ['/searching', '/discovery', '/search-results', '/discoveries'];
+    for (const family of ['movie', 'tv', 'collection', 'person']) {
+      for (const id of ['0', '000550', '-1', '550junk', '550.5', '999999999999999999']) invalid.push(`/${family}/${id}`);
+    }
+    for (const path of invalid) {
+      assert.equal((await at(`${base}${path}`, `https://seerr.example${base}`)).detectRoute(), null, path);
+    }
+  });
+
+  test(`valid route segment boundaries preserve trailing slashes and nested pages (${base || 'root'})`, async () => {
+    for (const [path, type, id] of [
+      ['/movie/550/', 'movie-detail', '550'], ['/tv/1396/season/1', 'tv-detail', '1396'],
+      ['/collection/1241/', 'collection', '1241'], ['/person/287/', 'person', '287'],
+      ['/search/', 'search', undefined], ['/discover/movies', 'discover', undefined]
+    ]) {
+      const route = (await at(`${base}${path}`, `https://seerr.example${base}`)).detectRoute();
+      assert.equal(route?.type, type, path);
+      assert.equal(route?.id, id, path);
+    }
+  });
+}

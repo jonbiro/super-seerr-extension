@@ -65,6 +65,13 @@ test('optional host permission controls registration, real SPA navigation and re
   await expect(page.locator('.seerr-card-badge')).toHaveCount(0);
   await page.evaluate(() => history.back());
   await expect(page.locator('.seerr-card-badge')).toHaveCount(2);
+  for (const pathname of ['/searching', '/discoveries', '/movie/550junk']) {
+    await page.evaluate(path => history.pushState({}, '', path), pathname);
+    await expect(page.locator('.seerr-card-badge')).toHaveCount(0);
+    await expect(page.locator('#seerr-filter-bar')).toHaveCount(0);
+    await page.evaluate(() => history.pushState({}, '', '/discover'));
+    await expect(page.locator('.seerr-card-badge')).toHaveCount(2);
+  }
   expect(await options.evaluate(() => chrome.permissions.remove({ origins: ['http://127.0.0.1/*'] }))).toBe(true);
   await expect.poll(() => options.evaluate(async () => (await chrome.scripting.getRegisteredContentScripts()).length)).toBe(0);
   await page.reload();

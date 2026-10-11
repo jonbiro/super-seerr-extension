@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.100]
+
+- Require complete Seerr route segments, so paths such as /searching, /discoveries and /movie/550junk cannot receive unrelated ratings controls or lookups.
+- Validate movie, TV, collection and person IDs as positive safe integers, consistent with card-link identity checks.
+- Preserve valid trailing slashes, nested pages and reverse-proxy base paths; add route, DOM and installed Chromium SPA navigation regressions.
+
 ## [3.5.99]
 
 - Use one coverage updater for filter controls and asynchronous rating updates, preserving the visible-card count instead of overwriting it with only the scored total.

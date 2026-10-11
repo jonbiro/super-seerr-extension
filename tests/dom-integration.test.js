@@ -1147,3 +1147,13 @@ test('wrapped-card filter coverage consistently shows visible counts and clears 
   assert.equal(coverage(), '2/3 scored');
   assert.ok([...doc.querySelectorAll('#grid > li')].every(item => item.style.display !== 'none'));
 });
+
+for (const path of ['/searching', '/discoveries', '/movie/2junk']) {
+  test(`unsupported route ${path} receives no ratings controls or lookups`, async t => {
+    const f = createOverlay({ path });
+    t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+    await settle();
+    assert.equal(f.window.document.querySelectorAll('[data-seerr-overlay="true"]').length, 0);
+    assert.equal(f.messages.filter(message => message.action === 'getRottenTomatoesRatings').length, 0);
+  });
+}
