@@ -35,12 +35,14 @@ class PopupManager {
     this.setStatus('loading', 'Checking connections…');
     const diagnostics = document.getElementById('diagnosticChecks');
     const repairFocused = diagnostics.contains(document.activeElement);
+    this.testConnectionButton.disabled = true;
+    this.testConnectionButton.querySelector('span').textContent = 'Checking…';
     this.configuredState.classList.add('hidden');
     this.notConfiguredState.classList.add('hidden');
     this.errorState.classList.add('hidden');
     diagnostics.replaceChildren();
     diagnostics.setAttribute('aria-busy', 'true');
-    if (repairFocused) (this.testConnectionButton.disabled ? this.openOptionsButton : this.testConnectionButton).focus();
+    if (repairFocused) this.openOptionsButton.focus();
     try {
       const response = await this.sendMessage({ action: 'getPopupDiagnostics' });
       if (generation !== this.checkGeneration) return;
@@ -68,7 +70,11 @@ class PopupManager {
       this.showErrorState(error.message);
       this.setStatus('error', 'Could not check connections');
     } finally {
-      if (generation === this.checkGeneration) diagnostics.removeAttribute('aria-busy');
+      if (generation === this.checkGeneration) {
+        diagnostics.removeAttribute('aria-busy');
+        this.testConnectionButton.disabled = false;
+        this.testConnectionButton.querySelector('span').textContent = 'Check connections';
+      }
     }
   }
 
@@ -161,14 +167,7 @@ class PopupManager {
 
   async testConnection() {
     if (this.testConnectionButton.disabled) return;
-    this.testConnectionButton.disabled = true;
-    const label = this.testConnectionButton.querySelector('span');
-    label.textContent = 'Checking…';
-    try { await this.checkStatus(); }
-    finally {
-      this.testConnectionButton.disabled = false;
-      label.textContent = 'Check connections';
-    }
+    await this.checkStatus();
   }
 
   async sendMessage(message) {

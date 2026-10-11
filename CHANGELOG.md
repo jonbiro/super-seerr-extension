@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.200]
+
+- Keep the popup connection-check button and label owned by the newest diagnostic check, including when switching Seerr sites during a manual check.
+- Re-enable checking as soon as the latest reply arrives; obsolete replies cannot unlock a pending check or keep a completed check disabled.
+- Move focus to Settings when refreshing removes a focused repair control, and cover both reply orders and obsolete success/failure responses in Chromium.
+
 ## [3.5.199]
 
 - Hide obsolete connection readiness and diagnostic results immediately when the popup checks again or switches sites, rather than presenting a previous site's accepted API key while loading.
