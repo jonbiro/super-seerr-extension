@@ -12,12 +12,7 @@
       const existing = entries.get(key);
       if (existing && (existing.pending || existing.expiresAt > Date.now())) return existing.promise;
       const generation = this.seerrReadGeneration || 0;
-      const server = this.baseUrl, apiKey = this.apiKey, token = this.connectionToken();
-      const assertConnection = () => {
-        if (this.baseUrl !== server || this.apiKey !== apiKey || this.connectionToken() !== token) {
-          throw new Error('Active Seerr site changed. Refresh the title and review it again.');
-        }
-      };
+      const assertConnection = this.seerrConnectionGuard();
       const entry = { pending: true, expiresAt: 0, promise: null };
       entry.promise = Promise.resolve().then(() => {
         assertConnection();

@@ -30,6 +30,14 @@
     connectionToken() {
       return this.connections ? `${this.connections.revision}:${this.connections.activeId}` : this.baseUrl ?? null;
     },
+    seerrConnectionGuard() {
+      const server = this.baseUrl, apiKey = this.apiKey, token = this.connectionToken();
+      return () => {
+        if (this.baseUrl !== server || this.apiKey !== apiKey || this.connectionToken() !== token) {
+          throw new Error('Active Seerr site changed. Refresh the title and review it again.');
+        }
+      };
+    },
     async currentSeerrSender(sender) {
       if (!Number.isInteger(sender?.tab?.id) || (sender.frameId ?? 0) !== 0 || !chrome.tabs?.get) return sender;
       let original;

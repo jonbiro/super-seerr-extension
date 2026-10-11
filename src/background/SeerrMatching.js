@@ -45,8 +45,10 @@
     },
 
     async matchingMediaChoices(mediaData) {
+      const assertConnection = this.seerrConnectionGuard();
       for (const query of this.generateSearchTerms(mediaData.title)) {
         const results = await this.searchMedia(query, mediaData.mediaType);
+        assertConnection();
         // A query variant is only a discovery aid, not a different identity.
         const candidates = this.matchingCandidates(results, mediaData);
         this.log('Seerr title match:', { query, candidates: candidates.length });
@@ -117,6 +119,7 @@
     // up stays trusted — Seerr itself judges the write.
     async tmdbIdentityMatches(mediaData) {
       if (!mediaData || !mediaData.title || !mediaData.tmdbId) return true;
+      const assertConnection = this.seerrConnectionGuard();
       let details;
       try {
         const endpoint = mediaData.mediaType === 'tv'
@@ -124,8 +127,10 @@
           : `/api/v1/movie/${mediaData.tmdbId}`;
         details = await this.makeAPIRequest('GET', endpoint);
       } catch (_) {
+        assertConnection();
         return true;
       }
+      assertConnection();
       if (!details || typeof details !== 'object') return true;
       const known = [details.title, details.originalTitle, details.name, details.originalName]
         .filter(title => typeof title === 'string' && title.trim());

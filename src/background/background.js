@@ -568,6 +568,7 @@ class SeerrAPI {
 
   async getMediaStatusUncached(mediaData) {
     mediaData = MediaValidation.media(mediaData);
+    const assertConnection = this.seerrConnectionGuard();
     this.log('📊 [Background] Getting media status for:', mediaData);
     this.log('📊 [Background] API Config - baseUrl:', this.baseUrl, 'apiKey:', this.apiKey ? '[SET]' : '[NOT SET]');
 
@@ -583,13 +584,17 @@ class SeerrAPI {
       // to survive the identity check: extraction sometimes hands over a
       // neighbour's id, and a mismatch falls through to search below.
       const knownTmdbId = mediaData.tmdbId;
-      if (Number.isInteger(knownTmdbId) && knownTmdbId > 0 && await this.tmdbIdentityMatches(mediaData)) {
+      const trustedId = Number.isInteger(knownTmdbId) && knownTmdbId > 0 && await this.tmdbIdentityMatches(mediaData);
+      assertConnection();
+      if (trustedId) {
         this.log('📊 [Background] Using provided TMDB ID, skipping search:', knownTmdbId);
         const details = await this.getMediaDetails(knownTmdbId, mediaData.mediaType);
+        assertConnection();
         return this.formatMediaStatus(details, mediaData.mediaType);
       }
 
       const bestMatch = await this.resolveMediaMatch(mediaData);
+      assertConnection();
       if (!bestMatch) {
         this.log('📊 [Background] No unambiguous match; asking the user to choose in Seerr');
         return {
@@ -606,6 +611,7 @@ class SeerrAPI {
 
       this.log('📊 [Background] Fetching detailed status...');
       const mediaDetails = await this.getMediaDetails(tmdbId, mediaData.mediaType);
+      assertConnection();
       this.log('📊 [Background] Media details response:', mediaDetails);
 
       const formattedStatus = this.formatMediaStatus(mediaDetails, mediaData.mediaType);
@@ -627,12 +633,14 @@ class SeerrAPI {
   }
 
   async getMediaDetails(tmdbId, mediaType) {
+    const assertConnection = this.seerrConnectionGuard();
     tmdbId = MediaValidation.tmdbId(tmdbId);
     mediaType = MediaValidation.mediaType(mediaType);
     this.log(`📊 [Background] Getting media details for TMDB ID ${tmdbId} (${mediaType})`);
 
     this.log('📊 [Background] Checking requests first for accurate status...');
     const requestResult = await this.searchRequests(tmdbId, mediaType);
+    assertConnection();
 
     if (requestResult) {
       this.log('📊 [Background] Found in requests, using request status');
@@ -644,6 +652,7 @@ class SeerrAPI {
       this.log(`📊 [Background] Not in requests, trying direct lookup: ${endpoint}`);
 
       const response = await this.makeAPIRequest('GET', endpoint);
+      assertConnection();
       this.log('📊 [Background] Direct lookup response:', response);
 
       return response;

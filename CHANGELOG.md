@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.111]
+
+- Stop old-connection status lookups before starting dependent detail reads or additional title-search variants after a server, key or saved-site revision changes.
+- Reject identity verification interrupted by a connection change instead of treating it as an ordinary unavailable lookup; guard request-history and detail continuations too.
+- Reuse a shared connection guard and add 13 regressions reproduced against the previous implementation.
+
 ## [3.5.110]
 
 - Bind cached server reads and status lookups to their original server, API key and saved-site revision, rejecting queued or in-flight results after a connection change.
