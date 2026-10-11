@@ -134,3 +134,30 @@ test('a failed refresh cannot revive an expired title score', async () => {
   await assert.rejects(worker.api.getRottenTomatoesRatings(input), /Search unavailable/);
   await worker.api.flushRtCache();
 });
+
+for (const prior of ['rated', 'unrated', 'failed']) test(`a restart preserves lookup ordering from a ${prior} title-only cache`, async () => {
+  const now = Date.now();
+  const first = loadWorker(); await first.ready;
+  first.context.Date = class extends Date { static now() { return now; } };
+  provider(first, { failedDetail: prior === 'failed' });
+  if (prior === 'unrated') first.api.parseRtSearchResults = () => [];
+  // Multiple lookups within one clock tick are ordered by the worker itself.
+  for (let i = 0; i < 3; i++) await first.api.getRottenTomatoesRatings({ ...input, refresh: true });
+  await first.api.flushRtCache();
+  const saved = first.localStore.rtCacheV1.entries[key];
+  assert.ok(saved.checkedAt > now);
+  assert.equal(saved.diagnostic, prior);
+  assert.equal(Object.keys(first.localStore.publicRatingsV1.entries).length, 0);
+
+  const restarted = loadWorker({ local: first.localStore }); await restarted.ready;
+  restarted.context.Date = class extends Date { static now() { return now; } };
+  provider(restarted, { critics: 95 });
+  assert.equal((await restarted.api.getRottenTomatoesRatings({ ...input, tmdbId: 550, refresh: true })).rtCriticsScore, 95);
+  await restarted.api.flushRtCache();
+  assert.equal(restarted.localStore.rtCacheV1.entries[key].value.rtCriticsScore, 95, 'the refreshed result must replace the earlier title record');
+  assert.ok(restarted.localStore.rtCacheV1.entries[key].checkedAt > saved.checkedAt);
+  const calls = provider(restarted, { critics: 10 });
+  restarted.api.baseUrl = 'https://second-seerr.example';
+  assert.equal((await restarted.api.getRottenTomatoesRatings({ ...input, tmdbId: 550, title: 'El club de la lucha' })).rtCriticsScore, 95);
+  assert.equal(calls.length, 0, 'the completed refresh must also reach the shared ID cache');
+});

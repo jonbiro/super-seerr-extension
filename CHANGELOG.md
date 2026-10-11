@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.155]
+
+- Restore lookup ordering from persisted title-only, unrated and failed Rotten Tomatoes results, preventing worker restarts from silently discarding successful refreshes.
+- Reject nonfinite or malformed cache timestamps and implausibly distant future check times before they can pin stale results or the lookup clock.
+- Add restart regressions that verify refreshed scores persist and become available across Seerr sites, plus invalid-timestamp recovery coverage.
+
 ## [3.5.154]
 
 - Require a complete release-date format or a four-digit year before using Seerr metadata as title-identity evidence; do not coerce malformed detail dates into contradictory years.

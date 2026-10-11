@@ -74,8 +74,9 @@
             .sort((a, b) => (a[1]?.expiresAt || 0) - (b[1]?.expiresAt || 0))) {
             // A live in-memory entry is newer than anything on disk.
             if (this.rtCache.has(key)) continue;
-            if (!entry || typeof entry !== 'object' || typeof entry.expiresAt !== 'number') continue;
+            if (!entry || typeof entry !== 'object' || !Number.isFinite(entry.expiresAt)) continue;
             const checkedAt = entry.checkedAt ?? entry.expiresAt - RatingsConfig.rtCacheTtlMs;
+            if (!Number.isFinite(checkedAt) || checkedAt <= 0 || checkedAt > now + 60000) continue;
             const diagnostic = ['uncertain', 'failed', 'unrated', 'rated'].includes(entry.diagnostic) ? entry.diagnostic : null;
             // Older versions kept failed detail reads for an hour. Honor the
             // short failure backoff on upgrade as well as for new results.
@@ -83,6 +84,10 @@
               ? Math.min(entry.expiresAt, checkedAt + RatingsConfig.inconclusiveRetryMs) : entry.expiresAt;
             if (now >= expiresAt) continue;
             this.rtCache.set(key, { value: entry.value ?? null, expiresAt, checkedAt, diagnostic });
+            // Title-only, negative and failed lookups also use the monotonic
+            // clock. Restore their ordering before the next refresh so a
+            // restart within the same clock tick cannot discard its result.
+            this.rtLookupClock = Math.max(this.rtLookupClock, checkedAt);
           }
         } catch (error) {
           if (generation === this.rtCacheGeneration) this.rtCacheReady = null;

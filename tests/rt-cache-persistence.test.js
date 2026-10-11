@@ -295,3 +295,25 @@ for (const failedReads of [1, 2]) test(`cache writes preserve saved title and pu
   assert.equal((await restarted.api.getRottenTomatoesRatings({ title: 'Example', year: 2020, tmdbId: 1, mediaType: 'movie' })).rtCriticsScore, 80);
   assert.equal(provider.fetches, 0);
 });
+
+for (const invalid of [
+  { name: 'nonfinite expiry', expiresAt: Infinity },
+  { name: 'nonfinite check time', checkedAt: Infinity },
+  { name: 'string check time', checkedAt: 'invalid' },
+  { name: 'distant future check time', checkedAt: Date.now() + 120000 }
+]) test(`a persisted title record with ${invalid.name} cannot pin the lookup clock`, async () => {
+  const now = Date.now();
+  const worker = loadWorker({ local: stored({ 'movie:Example:2020': {
+    value: { rtCriticsScore: 11 }, checkedAt: now, expiresAt: now + 60000, ...invalid
+  } }) });
+  await worker.ready;
+  const rt = stubRt(worker.api);
+  const rating = await worker.api.getRottenTomatoesRatings({ title: 'Example', year: 2020 });
+  assert.equal(rating.rtCriticsScore, 80, 'invalid timing metadata must cause a cold lookup');
+  assert.equal(rt.fetches, 2);
+  await worker.api.flushRtCache();
+  const entry = worker.localStore.rtCacheV1.entries['movie:Example:2020'];
+  assert.ok(Number.isFinite(entry.checkedAt));
+  assert.ok(entry.checkedAt <= Date.now() + 60000);
+  assert.ok(Number.isFinite(entry.expiresAt));
+});
