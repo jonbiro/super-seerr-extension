@@ -110,3 +110,26 @@ test('TV season action follows status recovery and hides during writes', async (
     }
   }
 });
+
+for (const [name, details, primary, context] of [
+  ['declined', { status: 3, media: { tmdbId: 1, inProduction: true } }, 'Request declined', 'Series in production'],
+  ['failed', { status: 4, media: { tmdbId: 1, inProduction: true } }, 'Request failed', 'Series in production'],
+  ['processing', { mediaInfo: { status: 3, seasons: [{ status: 5 }, { status: 3 }] } }, 'Processing download', '1 season not fully available']
+]) test(`title context never hides the ${name} request status`, async ({ page }) => {
+  const { loadWorker } = require('../helpers/worker');
+  const { api } = loadWorker();
+  const status = api.formatMediaStatus(details, 'tv');
+  await page.evaluate(status => {
+    const ui = new UIComponents(); ui.injectStyles();
+    const { flyout, panel } = ui.createFlyout();
+    const elements = ui.createFlyoutContent({ title: 'Example series', mediaType: 'tv' }, panel);
+    ui.updateFlyoutStatus(elements, status);
+    document.body.append(flyout); flyout.setExpanded(true);
+  }, status);
+  const text = page.locator('.seerr-status-text');
+  await expect(text).toContainText(primary);
+  await expect(text).toContainText(context);
+  await expect(text).not.toContainText('Monitoring');
+  expect(await page.locator('.seerr-panel').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  if (name === 'declined') await page.locator('.seerr-panel').screenshot({ path: '/tmp/super-seerr-3.5.159-status-context.png' });
+});

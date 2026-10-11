@@ -87,3 +87,14 @@ test('a late status error from the previous site cannot evict the current site c
   assert.equal((await worker.api.getMediaStatus(media)).status, 'available_watch');
   assert.equal(calls, 2, 'new site retains its own completed status read');
 });
+
+for (const [mediaType, media, expected] of [
+  ['tv', { inProduction: true }, 'Series in production'],
+  ['movie', { belongsToCollection: { id: 1 }, inProduction: true }, 'Part of a collection'],
+  ['tv', { seasons: [{ status: 5 }, { status: 3 }] }, '1 season not fully available']
+]) test(`title metadata describes facts without claiming server monitoring: ${expected}`, () => {
+  const { api } = loadWorker();
+  const status = api.formatMediaStatus({ mediaInfo: { status: 3, ...media } }, mediaType);
+  assert.equal(status.monitoring.message, expected);
+  assert.doesNotMatch(status.monitoring.message, /monitor/i);
+});

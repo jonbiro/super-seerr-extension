@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.159]
+
+- Preserve the primary flyout status when supplementary title information is present, so declined, failed and processing messages remain visible.
+- Describe production, collection and season metadata without claiming Seerr is monitoring future content.
+- Add worker and narrow-browser regressions using actual formatted status responses.
+
 ## [3.5.158]
 
 - Distinguish missing API keys from saved keys that are rejected or could not be verified, avoiding misleading ratings-only status and instructions to add an existing key.

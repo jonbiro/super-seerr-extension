@@ -306,6 +306,8 @@
       return found;
     },
 
+    // Production and collection metadata describe the title, not Seerr's
+    // monitoring configuration. Keep the legacy response field informational.
     detectMonitoringStatus(mediaDetails, mediaType) {
       if (!mediaDetails) return null;
 
@@ -313,13 +315,13 @@
         const media = mediaDetails.media || mediaDetails.mediaInfo || mediaDetails;
 
         if (media.inProduction === true) {
-          return { type: 'future_episodes', message: 'Monitoring new episodes', indicator: '📡' };
+          return { type: 'future_episodes', message: 'Series in production', indicator: 'ℹ️' };
         }
 
         if (media.seasons && Array.isArray(media.seasons)) {
           const incompleteSeasons = media.seasons.filter(season => season && typeof season === 'object' && !Array.isArray(season) && season.status !== 5);
           if (incompleteSeasons.length > 0) {
-            return { type: 'future_seasons', message: `Monitoring ${incompleteSeasons.length} season(s)`, indicator: '📡' };
+            return { type: 'future_seasons', message: `${incompleteSeasons.length} season${incompleteSeasons.length === 1 ? '' : 's'} not fully available`, indicator: 'ℹ️' };
           }
         }
       }
@@ -327,7 +329,7 @@
       if (mediaType === 'movie') {
         const media = mediaDetails.media || mediaDetails.mediaInfo || mediaDetails;
         if (media.belongsToCollection && media.inProduction) {
-          return { type: 'future_collection', message: 'Monitoring collection', indicator: '📡' };
+          return { type: 'future_collection', message: 'Part of a collection', indicator: 'ℹ️' };
         }
       }
 

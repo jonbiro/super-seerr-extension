@@ -285,7 +285,7 @@ class UIComponents {
       
       let message = statusData.message || 'Connecting to Seerr...';
       if (statusData.monitoring?.message) {
-        message = `${statusData.monitoring.indicator} ${statusData.monitoring.message}`;
+        message += ` · ${statusData.monitoring.indicator} ${statusData.monitoring.message}`;
       }
       statusText.textContent = message;
     }
