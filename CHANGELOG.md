@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.237]
+
+- Refresh filter counts and reapply thresholds when Seerr changes card visibility or layout, without mutation-observer loops.
+
 ## [3.5.236]
 
 - Make rating filters take precedence over important host layout rules, and calculate visibility from rendered styles when CSS overrides the hidden attribute.

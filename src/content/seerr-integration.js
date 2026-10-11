@@ -2008,7 +2008,16 @@
 
   function setupCardObserver() {
     if (cardObserver || !window.MutationObserver) return;
-    cardObserver = new MutationObserver(() => {
+    cardObserver = new MutationObserver(records => {
+      // Host layout attributes affect visibility, but mutations inside our
+      // toolbar/badges must not schedule another pass of their own.
+      let cards;
+      const relevant = records.some(record => {
+        if (record.type !== 'attributes' || !['class', 'style', 'hidden'].includes(record.attributeName)) return true;
+        cards ||= getMediaCards();
+        return cards.some(card => record.target === card || record.target.contains(card));
+      });
+      if (!relevant) return;
       const route = detectRoute();
       if (!isListRoute(route)) return;
       clearTimeout(cardObserverTimer);
@@ -2019,7 +2028,7 @@
       }, 250);
     });
     cardObserver.observe(document.body, { childList: true, characterData: true, subtree: true, attributes: true,
-      attributeFilter: ['href', 'src', 'srcset', 'alt'] });
+      attributeFilter: ['href', 'src', 'srcset', 'alt', 'class', 'style', 'hidden'] });
   }
 
   // ──────────────── Sort & Filter ────────────────
@@ -2048,7 +2057,8 @@
     const scored = cards.filter(c => getCardAnyScore(c) !== null).length;
     const hidden = cards.filter(isCardHidden).length;
     const visible = total - hidden;
-    coverageEl.textContent = `${scored}/${total} scored${hidden > 0 ? ` · ${visible} visible` : ''}`;
+    const text = `${scored}/${total} scored${hidden > 0 ? ` · ${visible} visible` : ''}`;
+    if (coverageEl.textContent !== text) coverageEl.textContent = text;
   }
 
   let currentSort = 'default';
@@ -2095,8 +2105,11 @@
       if (!filterDisplayState.has(node) || node.style.display !== 'none') {
         filterDisplayState.set(node, { value: node.style.display, priority: node.style.getPropertyPriority?.('display') || '' });
       }
-      if (node.style.setProperty) node.style.setProperty('display', 'none', 'important');
-      else node.style.display = 'none';
+      if (node.style.setProperty) {
+        if (node.style.display !== 'none' || node.style.getPropertyPriority('display') !== 'important') {
+          node.style.setProperty('display', 'none', 'important');
+        }
+      } else if (node.style.display !== 'none') node.style.display = 'none';
     } else if (filterDisplayState.has(node)) {
       const original = filterDisplayState.get(node);
       // A host update made while hidden takes precedence over our snapshot.
@@ -2168,7 +2181,7 @@
     ensureFilterToggle();
 
     if (document.querySelector('[data-seerr-overlay="true"][class*="sort-filter-bar"]')) {
-      applyScoreSort(getCardsGrid());
+      applyScoreFilters(getCardsGrid());
       return;
     }
 

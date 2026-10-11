@@ -310,3 +310,52 @@ test('filters override important host layout rules and coverage follows the rend
   expect(await card.evaluate(node => node.style.display)).toBe('');
   expect(await item.evaluate(node => node.style.display)).toBe('');
 });
+
+for (const change of ['class', 'style', 'hidden']) {
+  test(`coverage follows host ${change} visibility changes without filter interaction`, async ({ page }) => {
+    await showFilter(page, 390);
+    await page.addStyleTag({ content: '.host-hidden { display:none; }' });
+    const card = page.locator('[data-testid="title-card"]');
+    const coverage = page.locator('.seerr-score-coverage');
+    // Let initial injection and its lazy-card retry finish before changing only
+    // an attribute; no child insertion or filter interaction should be needed.
+    await page.waitForTimeout(2500);
+    await expect(coverage).toHaveText('1/1 scored');
+    await card.evaluate((node, change) => {
+      if (change === 'class') node.classList.add('host-hidden');
+      else if (change === 'style') node.style.display = 'none';
+      else node.hidden = true;
+    }, change);
+    await expect(card).toBeHidden();
+    await expect(coverage).toHaveText('1/1 scored · 0 visible', { timeout: 1200 });
+    await card.evaluate((node, change) => {
+      if (change === 'class') node.classList.remove('host-hidden');
+      else if (change === 'style') node.style.removeProperty('display');
+      else node.hidden = false;
+    }, change);
+    await expect(coverage).toHaveText('1/1 scored', { timeout: 1200 });
+  });
+}
+
+test('host layout changes cannot reveal filtered cards or start an observer loop', async ({ page }) => {
+  await showFilter(page, 390);
+  const card = page.locator('[data-testid="title-card"]');
+  await page.getByLabel('Critics ≥', { exact: true }).fill('90');
+  await expect(card).toBeHidden();
+  // Simulate a React layout update overwriting the extension's inline hide.
+  await card.evaluate(node => { node.style.display = 'grid'; });
+  await expect(card).toHaveCSS('display', 'none', { timeout: 1200 });
+  await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored · 0 visible');
+  await page.waitForTimeout(600);
+  await page.evaluate(() => {
+    window.visibilityMutations = 0;
+    new MutationObserver(records => { window.visibilityMutations += records.length; }).observe(document.querySelector('.grid'), {
+      attributes: true, childList: true, subtree: true
+    });
+  });
+  // A quiet settled grid must stay quiet, even with active thresholds.
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(() => window.visibilityMutations)).toBe(0);
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(card).toHaveCSS('display', 'grid');
+});
