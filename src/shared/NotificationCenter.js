@@ -20,6 +20,7 @@
   }
 
   createNotification(title, message, type = 'info', duration = type === 'error' ? 0 : 5000) {
+    const initiatingControl = document.activeElement;
     const closeBtn = this.el('button', { type: 'button', className: 'seerr-notification-close', 'aria-label': 'Dismiss notification', textContent: '×' });
     // Insert the empty live region first; populate it in a later task so assistive
     // technology can observe a change to an already-established region.
@@ -37,6 +38,17 @@
       timer = setTimeout(() => this.removeNotification(notification), remaining);
     };
     notification.__seerrDismiss = () => { dismissed = true; pause(); clearTimeout(populate); };
+    notification.__seerrReturnFocus = () => {
+      if (!notification.contains(document.activeElement)) return;
+      const candidates = [initiatingControl, ...document.querySelectorAll('.seerr-notification-close')];
+      for (const target of candidates) {
+        if (!target?.isConnected || target === document.body || notification.contains(target) ||
+            target.disabled || target.closest('[inert]')) continue;
+        target.focus();
+        if (document.activeElement === target) return;
+      }
+    };
+    notification.addEventListener('keydown', event => event.stopPropagation());
     notification.addEventListener('mouseenter', () => { hovered = true; pause(); });
     notification.addEventListener('mouseleave', () => { hovered = false; resume(); });
     notification.addEventListener('focusin', pause);
@@ -61,8 +73,11 @@
   }
 
   removeNotification(notification) {
+    notification?.__seerrReturnFocus?.();
     notification?.__seerrDismiss?.();
     if (notification?.parentNode) {
+      // The fading notification must stop accepting focus immediately.
+      notification.inert = true;
       if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) { notification.remove(); return; }
       notification.style.opacity = '0';
       notification.style.transform = 'translateX(100%)';

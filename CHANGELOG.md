@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.143]
+
+- Restore keyboard focus when dismissing request and connection notifications, with another notification as a fallback when the initiating control is gone.
+- Isolate notification keystrokes from host shortcuts and prevent fading notifications from accepting focus.
+- Add browser coverage for dismissal with and without reduced motion, removed controls, background removal and host shortcuts.
+
 ## [3.5.142]
 
 - Mark the ratings-toolbar buttons as non-submit actions, preventing Reset, Refresh, Load more and Select titles from submitting a containing host form.
