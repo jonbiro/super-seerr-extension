@@ -755,7 +755,9 @@
       if (response.diagnostic === 'uncertain') outcome.uncertain = true;
       if (response.diagnostic === 'failed') outcome.conclusive = false;
       if (!response.data) return null;
-      if (typeof response.data.lastUpdated === 'number') outcome.publicCheckedAt = response.data.lastUpdated;
+      if (typeof response.data.lastUpdated === 'number' && response.data.confidence >= Config.confidenceThreshold) {
+        outcome.publicCheckedAt = Math.max(outcome.publicCheckedAt ?? 0, response.data.lastUpdated);
+      }
 
       return Model.createRatingsBundle({
         rtCriticsScore: response.data.rtCriticsScore ?? null,
@@ -801,7 +803,10 @@
       const rtBundle = await fetchRottenTomatoesRatings(
         lookupTitle, lookupYear, mediaType, options.refresh === true, pageMeta?.originalTitle || null, options.outcome ?? {}, tmdbId);
       if (rtBundle && rtBundle.confidence >= Config.confidenceThreshold) {
-        bundle = mergeBundles(bundle, rtBundle);
+        // Another site can refresh the worker while this tab still holds an
+        // older partial public snapshot. Prefer the newer provider values.
+        bundle = shared && rtBundle.lastUpdated > shared.checkedAt
+          ? mergeBundles(rtBundle, bundle) : mergeBundles(bundle, rtBundle);
       } else if (rtBundle && options.outcome) {
         options.outcome.uncertain = true;
       }
@@ -1072,8 +1077,12 @@
         const retryMs = outcome.conclusive === false ? Config.inconclusiveRetryMs
           : status === 'unrated' ? Config.unratedRetryMs
           : status === 'rated' ? Config.ratingsFreshMs : Config.partialRatingsRetryMs;
+        // Expired provider data stays visible after a failed refresh, but its
+        // old expiry must not cause another lookup on every badge pass.
+        const retryAt = outcome.conclusive === false ? checkedAt + retryMs
+          : Math.min(checkedAt + retryMs, (publicCheckedAt ?? checkedAt) + Config.rtCacheTtlMs);
         ratingsCache.set(key, { bundle: storable, cachedAt: checkedAt,
-          ...(publicCheckedAt ? { publicCheckedAt } : {}), retryAt: Math.min(checkedAt + retryMs, (publicCheckedAt ?? checkedAt) + Config.rtCacheTtlMs),
+          ...(publicCheckedAt ? { publicCheckedAt } : {}), retryAt,
           diagnostics: { status, checkedAt, source: storable?.source || 'No source returned a score' },
           ...(provisional ? { provisional: true } : {}) });
         if (!provisional) schedulePersistedRatingsFlush();

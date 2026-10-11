@@ -157,6 +157,32 @@ test('loading a newer shared result updates cached RT without overwriting local 
   await tick();
 });
 
+for (const [label, newer, confidence] of [['newer', true, 1], ['older', false, 1], ['low-confidence', true, 0.2]])
+test(`a worker result (${label}) respects the tab's partial public score age`, async () => {
+  const worker = await seed();
+  const shared = worker.localStore.publicRatingsV1.entries['movie:550'];
+  shared.checkedAt = Date.now() - 10000;
+  shared.expiresAt = shared.checkedAt + Config.rtCacheTtlMs;
+  shared.value.rtAudienceScore = null;
+  const lastUpdated = shared.checkedAt + (newer ? 1000 : -1000);
+  const overlay = loadOverlay({ pathname: '/discover', settings: { seerrUrl: 'https://seerr.example/' },
+    local: worker.localStore,
+    scripts: [{ props: { results: [{ id: 550, mediaType: 'movie', title: 'Fight Club', imdbRating: 7.2, voteAverage: 6.1 }] } }],
+    sendMessage: async () => ({ success: true, diagnostic: 'rated', data: {
+      rtCriticsScore: 95, rtAudienceScore: 92, confidence, source: 'rotten-tomatoes', lastUpdated
+    } })
+  });
+  const bundle = await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  const accepted = confidence >= Config.confidenceThreshold;
+  assert.equal(bundle.rtCriticsScore, newer && accepted ? 95 : 80);
+  assert.equal(bundle.rtAudienceScore, accepted ? 92 : null);
+  assert.equal(bundle.imdbRating, 7.2); assert.equal(bundle.tmdbRating, 6.1);
+  assert.equal(overlay.ratingsCache.get('movie:550').publicCheckedAt, accepted ? Math.max(shared.checkedAt, lastUpdated) : shared.checkedAt);
+  await overlay.flushPersistedRatings();
+  assert.equal(overlay.localStore.overlayRatingsByServerV1['https://seerr.example'].entries['movie:550'].bundle.rtCriticsScore,
+    newer && accepted ? 95 : 80);
+});
+
 
 test('a temporary public cache read failure is retried instead of pinning a cold cache', async () => {
   const saved = await seed(), worker = loadWorker({ local: saved.localStore }); await worker.ready;

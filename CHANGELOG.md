@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.74]
+
+- Respect failed-refresh backoff after a shared public score expires, keeping known scores visible without repeatedly retrying on every badge pass.
+- Prefer newer worker RT scores over an older partial tab snapshot while preserving server-local IMDb/TMDB values; keep source timestamps from moving backward or advancing for rejected low-confidence matches.
+- Add regressions for expired-score failures, newer and older worker results, low-confidence matches, and persistence of the corrected scores.
+
 ## [3.5.73]
 
 - Share independently verified Rotten Tomatoes scores across Seerr sites by media type and TMDB ID, including localized titles, while retaining separate server ratings, requests, availability and catalogue indexes.

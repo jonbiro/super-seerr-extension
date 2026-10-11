@@ -44,6 +44,24 @@ test('failed refresh preserves known scores and schedules a short retry', async 
   assert.equal(entry.retryAt - entry.cachedAt, Config.inconclusiveRetryMs);
 });
 
+test('an expired public score does not bypass failed-refresh backoff', async () => {
+  const overlay = await fixture();
+  const previous = overlay.ratingsCache.get('movie:550');
+  const publicCheckedAt = Date.now() - Config.rtCacheTtlMs - 1000;
+  previous.publicCheckedAt = publicCheckedAt;
+  previous.retryAt = Date.now() - 1;
+  let calls = 0;
+  overlay.setResolver(async (_id, _title, _year, _type, options) => {
+    calls++; options.outcome.conclusive = false; return null;
+  });
+  await overlay.getRatings(550, 'Example', 2020, 'movie'); await settle();
+  const entry = overlay.ratingsCache.get('movie:550');
+  assert.equal(entry.publicCheckedAt, publicCheckedAt);
+  assert.equal(entry.retryAt - entry.cachedAt, Config.inconclusiveRetryMs);
+  for (let i = 0; i < 5; i++) await overlay.getRatings(550, 'Example', 2020, 'movie');
+  await settle(); assert.equal(calls, 1);
+});
+
 test('a cleared in-flight refresh cannot restore the removed entry', async () => {
   const overlay = await fixture();
   overlay.ratingsCache.get('movie:550').retryAt = Date.now() - 1;
