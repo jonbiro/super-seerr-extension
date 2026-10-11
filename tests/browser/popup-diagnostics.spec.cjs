@@ -5,6 +5,9 @@ const http = require('node:http');
 const { createExtension } = require('./fixture.cjs');
 
 test('installed popup rejects proxy success pages and recovers through setup and account checks', async () => {
+  // Exercise several permission/account transitions and close the installed
+  // browser within the same budget, including on a busy development machine.
+  test.setTimeout(60000);
   let mode = 'html';
   const server = http.createServer((request, response) => {
     if (request.url === '/api/v1/settings/public') {

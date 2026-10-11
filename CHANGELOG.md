@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.239]
+
+- Show saved-site capacity in Settings and prevent starting an eleventh site draft, while keeping existing sites editable and removable.
+
 ## [3.5.238]
 
 - Count titles inside hidden grids and ancestor containers as hidden, while preserving host layout through Reset. Reuse ancestor visibility checks within each sort/count pass.

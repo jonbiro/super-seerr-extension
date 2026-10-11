@@ -2,6 +2,7 @@
 // switch can never pair one site's URL with another site's API key.
 (function (root) {
   const KEY = 'seerrConnectionsV1';
+  const MAX_SITES = 10;
   const normalize = value => {
     const url = new URL(value);
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
@@ -25,7 +26,7 @@
       return { revision: 0, activeId: url, sites: url ? [{ id: url, url, name: new URL(url).host, apiKey: local.seerrApiKey || '' }] : [] };
     },
     publicSeerrConnections(value) {
-      return { revision: value.revision, activeId: value.activeId, sites: value.sites.map(({ id, name, url }) => ({ id, name, url })) };
+      return { revision: value.revision, activeId: value.activeId, maxSites: MAX_SITES, sites: value.sites.map(({ id, name, url }) => ({ id, name, url })) };
     },
     connectionToken() {
       return this.connections ? `${this.connections.revision}:${this.connections.activeId}` : this.baseUrl ?? null;
@@ -65,7 +66,7 @@
           const previous = data?.id ? value.sites.find(site => site.id === data.id) : null;
           if (data?.id && !previous) throw new Error('This site was removed. Reload Settings.');
           if (value.sites.some(site => site.url === url && site !== previous)) throw new Error('This site is already saved. Select it from Saved sites.');
-          if (!previous && value.sites.length >= 10) throw new Error('You can save up to 10 Seerr sites.');
+          if (!previous && value.sites.length >= MAX_SITES) throw new Error(`You can save up to ${MAX_SITES} Seerr sites.`);
           const name = String(data?.name || new URL(url).host).trim().slice(0, 80);
           const site = { id: url, url, name: name || new URL(url).host, apiKey: String(data?.apiKey || '').trim() };
           value.sites = previous ? value.sites.map(item => item === previous ? site : item) : [...value.sites, site];

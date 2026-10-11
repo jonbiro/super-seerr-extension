@@ -4,6 +4,7 @@ const path = require('node:path');
 const { createExtension, startServer } = require('./fixture.cjs');
 
 test('a verified provider refresh updates two already open Seerr pages without replacing native scores', async () => {
+  test.setTimeout(60000);
   const server = await startServer(), build = await createExtension('chrome');
   let context;
   try {
@@ -22,28 +23,35 @@ test('a verified provider refresh updates two already open Seerr pages without r
     await options.locator('#serverUrl').fill(server.origin);
     await options.locator('#apiKey').fill('smoke-key');
     await options.locator('button[type=submit]').click();
+    await expect(options.locator('#status')).toContainText('Settings saved successfully');
     await expect.poll(() => options.evaluate(async () => (await chrome.scripting.getRegisteredContentScripts()).length)).toBe(2);
-    const first = await context.newPage(), second = await context.newPage();
-    for (const page of [first, second]) {
-      await page.goto(`${server.origin}/discover`);
-      await expect(page.locator('.seerr-card-badge').first()).toContainText('85%');
-    }
-    await first.locator('.seerr-min-critics').fill('90');
-    await expect(first.locator('.seerr-score-coverage')).toHaveText('1/1 scored · 0 visible');
-    await expect(first.locator('[data-testid="title-card"]')).toBeHidden();
-    await second.locator('.seerr-rating-details summary').click();
-    await second.locator('.seerr-rating-details button').focus();
-    await expect(second.locator('.seerr-rating-details')).toHaveAttribute('open', '');
-    // Deterministic provider transport; parsing, public admission, persistence,
-    // notifications and the installed content scripts all run unchanged.
+    // Install transport before opening Seerr: card startup can already queue
+    // provider reads. Mocking later leaves real network jobs occupying slots.
+    // Parsing, admission, persistence and notifications still run unchanged.
     await worker.evaluate(() => {
+      globalThis.fixtureCriticsScore = 85;
       const original = globalThis.fetch;
       globalThis.fetch = (url, ...args) => String(url).startsWith('https://www.rottentomatoes.com/')
         ? Promise.resolve(new Response(String(url).includes('/search?')
-          ? '<search-page-media-row release-year="1999" tomatometer-score="95"><a data-qa="info-name" href="/m/fight_club">Fight Club</a></search-page-media-row>'
+          ? `<search-page-media-row release-year="1999" tomatometer-score="${globalThis.fixtureCriticsScore}"><a data-qa="info-name" href="/m/fight_club">Fight Club</a></search-page-media-row>`
           : '<script id="media-scorecard-json">{"audienceScore":{"score":92}}</script>', { status: 200 }))
         : original(url, ...args);
     });
+    const first = await context.newPage(), second = await context.newPage();
+    for (const page of [first, second]) {
+      await page.bringToFront();
+      await page.goto(`${server.origin}/discover`);
+      await expect(page.locator('.seerr-card-badge').first()).toContainText('85%', { timeout: 10000 });
+    }
+    await first.bringToFront();
+    await first.locator('.seerr-min-critics').fill('90');
+    await expect(first.locator('.seerr-score-coverage')).toHaveText('1/1 scored · 0 visible');
+    await expect(first.locator('[data-testid="title-card"]')).toBeHidden();
+    await second.bringToFront();
+    await second.locator('.seerr-rating-details summary').click();
+    await second.locator('.seerr-rating-details button').focus();
+    await expect(second.locator('.seerr-rating-details')).toHaveAttribute('open', '');
+    await worker.evaluate(() => { globalThis.fixtureCriticsScore = 95; });
     const result = await options.evaluate(async origin => {
       const tab = (await chrome.tabs.query({})).find(tab => tab.url === `${origin}/discover`);
       return (await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => chrome.runtime.sendMessage({

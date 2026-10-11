@@ -417,8 +417,14 @@ class OptionsManager {
     if (this.testButton) this.testButton.disabled = !!(this._connectionBusy || this._testingSeerr);
     if (this.testPlexButton) this.testPlexButton.disabled = !!(this._connectionBusy || this._testingPlex);
     const selected = this.connectionChoices?.sites.find(site => site.id === this.connectionId);
+    const count = this.connectionChoices?.sites.length ?? 0;
+    const limit = this.connectionChoices?.maxSites ?? 10;
+    const capacity = document.getElementById('seerrSitesCapacity');
+    const capacityText = this.connectionChoicesUnavailable ? ''
+      : this.connectionChoices ? `${count} of ${limit} sites saved.${count >= limit ? ' Remove an inactive site before adding another.' : ''}` : '';
+    if (capacity && capacity.textContent !== capacityText) capacity.textContent = capacityText;
     for (const id of ['addSeerrSite', 'savedSeerrSites']) {
-      const control = document.getElementById(id); if (control) control.disabled = busy;
+      const control = document.getElementById(id); if (control) control.disabled = busy || (id === 'addSeerrSite' && count >= limit);
     }
     for (const id of ['useSeerrSite', 'removeSeerrSite']) {
       const control = document.getElementById(id);
@@ -427,6 +433,8 @@ class OptionsManager {
   }
 
   newConnection() {
+    if (this._saving || this._connectionBusy ||
+        (this.connectionChoices?.sites.length ?? 0) >= (this.connectionChoices?.maxSites ?? 10)) return;
     this.connectionMode = true; this.connectionId = null;
     const select = document.getElementById('savedSeerrSites');
     if (!Array.from(select.options).some(option => option.value === '')) {

@@ -283,3 +283,23 @@ test('a delayed popup list cannot restore an older active site after a settings 
   assert.equal(dom.window.document.getElementById('activeSeerrSite').value, second);
   assert.equal(dom.window.document.getElementById('activeSeerrSite').title, second);
 });
+
+test('advertised saved-site capacity matches enforcement and permits edits at capacity', async () => {
+  const w = await setup();
+  for (let i = 1; i < 10; i++) {
+    assert.equal((await message(w, 'saveSeerrConnection', { url: `https://site-${i}.example`, apiKey: `fixture-${i}` })).success, true);
+  }
+  const full = await message(w, 'getSeerrConnections');
+  assert.equal(full.data.maxSites, 10);
+  assert.equal(full.data.sites.length, full.data.maxSites);
+  const overflow = await message(w, 'saveSeerrConnection', { url: 'https://overflow.example', apiKey: 'overflow-key' });
+  assert.equal(overflow.success, false);
+  assert.match(overflow.error, /up to 10/);
+  assert.equal(w.localStore.seerrConnectionsV1.sites.length, 10);
+  assert.equal((await message(w, 'saveSeerrConnection', { id: first, url: first, name: 'Edited at capacity', apiKey: 'edited-key' })).success, true);
+  assert.equal(w.localStore.seerrConnectionsV1.sites.length, 10);
+  assert.equal(w.api.apiKey, 'edited-key');
+  assert.equal((await message(w, 'removeSeerrConnection', { id: 'https://site-9.example' })).success, true);
+  assert.equal((await message(w, 'saveSeerrConnection', { url: 'https://replacement.example', apiKey: 'replacement-key' })).success, true);
+  assert.equal(w.localStore.seerrConnectionsV1.sites.length, 10);
+});

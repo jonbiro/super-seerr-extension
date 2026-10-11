@@ -322,3 +322,24 @@ for (const [method, action, buttonId] of [
     assert.equal(button.disabled, false);
   });
 }
+
+test('saved-site capacity prevents an unusable new draft and recovers after removal', async t => {
+  const f = await fixture(t);
+  const sites = Array.from({ length: 10 }, (_, i) => ({ id: `site-${i}`, url: `https://site-${i}.example`, name: `Site ${i}` }));
+  let value = { revision: 2, activeId: sites[0].id, maxSites: 10, sites };
+  f.window.chrome.runtime.sendMessage = async () => ({ success: true, data: value });
+  await f.manager.loadConnectionChoices();
+  assert.equal(f.doc.getElementById('addSeerrSite').disabled, true);
+  assert.match(f.doc.getElementById('seerrSitesCapacity').textContent, /10 of 10/);
+  assert.match(f.doc.getElementById('seerrSitesCapacity').textContent, /Remove an inactive site/);
+  f.manager.newConnection();
+  assert.equal(f.doc.getElementById('apiKey').value, 'unsaved-family-key');
+  value = { ...value, revision: 3, sites: sites.slice(0, 9) };
+  await f.manager.loadConnectionChoices();
+  assert.equal(f.doc.getElementById('addSeerrSite').disabled, false);
+  assert.match(f.doc.getElementById('seerrSitesCapacity').textContent, /9 of 10/);
+  assert.doesNotMatch(f.doc.getElementById('seerrSitesCapacity').textContent, /Remove an inactive site/);
+  f.doc.getElementById('addSeerrSite').click();
+  assert.equal(f.doc.getElementById('apiKey').value, '');
+  assert.equal(f.manager.connectionId, null);
+});
