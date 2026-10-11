@@ -181,7 +181,10 @@
     rtTitleCacheKey(data) {
       const title = typeof data?.title === 'string' ? data.title.trim() : '';
       const original = typeof data?.originalTitle === 'string' ? data.originalTitle.trim() : '';
-      return `${data.mediaType || 'movie'}:${title}:${data.year || ''}${original && original !== title ? `:original:${original}` : ''}`;
+      // Escape field delimiters as well as literal escapes. Otherwise a title
+      // containing ':original:' can address a different title/year tuple.
+      const part = value => String(value).replace(/%/g, '%25').replace(/:/g, '%3A');
+      return `${part(data.mediaType || 'movie')}:${part(title)}:${part(data.year || '')}${original && original !== title ? `:original:${part(original)}` : ''}`;
     },
 
     async getRottenTomatoesRatings(data) {
@@ -194,7 +197,7 @@
         tmdbId: this.publicRatingKey(data) ? data.tmdbId : null };
       // A refresh coalesces with other refreshes but must not join an ordinary
       // lookup already in flight, which would hand back the stale value.
-      const key = `${refresh ? 'refresh:' : ''}${normalized.mediaType}:${title}:${normalized.year || ''}:${originalTitle || ''}:${this.publicRatingKey(normalized) || ''}`;
+      const key = JSON.stringify([refresh, this.rtTitleCacheKey(normalized), this.publicRatingKey(normalized)]);
       if (this.rtPending.has(key)) return this.rtPending.get(key);
       const pending = this.resolveRottenTomatoesRatings(normalized);
       this.rtPending.set(key, pending);

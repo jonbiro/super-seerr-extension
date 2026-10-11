@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.134]
+
+- Escape title-cache field delimiters and use structured keys for concurrent RT lookups, so colons and literal percent sequences cannot mix different titles or original titles.
+- Require typed movie/TV identities and numeric or string TMDB IDs before sharing or reading verified public ratings; reject array coercion.
+- Invalidate older ratings verdicts that may have been affected, retaining each site's catalogue index. Add regression checks for live and persisted cache collisions, concurrent lookups and malformed shared identities.
+
 ## [3.5.133]
 
 - Prevent late Plex Watchlist results from changing stale card or detail controls, showing old-title notifications, or adding errors after navigation or a Seerr site switch.

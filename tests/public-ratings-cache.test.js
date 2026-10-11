@@ -42,7 +42,9 @@ test('movies, TV series, different IDs and contradictory years cannot collide', 
 for (const [name, request, options] of [
   ['missing ID', { tmdbId: null }, {}], ['missing type', { mediaType: undefined }, {}],
   ['null type', { mediaType: null }, {}], ['invalid ID', { tmdbId: '1e3' }, {}],
-  ['unsafe ID', { tmdbId: Number.MAX_SAFE_INTEGER + 1 }, {}], ['missing year', { year: null }, {}],
+  ['unsafe ID', { tmdbId: Number.MAX_SAFE_INTEGER + 1 }, {}],
+  ['array ID', { tmdbId: [550] }, {}], ['string array ID', { tmdbId: ['550'] }, {}],
+  ['array media type', { mediaType: ['movie'] }, {}], ['missing year', { year: null }, {}],
   ['approximate match', {}, { year: 1998 }], ['failed detail lookup', {}, { failDetail: true }],
   ['different Japanese voicing', { title: 'ハ' }, { title: 'バ' }],
   ['different Cyrillic letter', { title: 'и' }, { title: 'й' }],
@@ -427,4 +429,16 @@ for (const deadline of ['later', 'earlier', 'implicit']) test(`adopting shared r
   for (let i = 0; i < 12; i++) await tick();
   assert.equal(calls, 1, 'the adopted score refreshes when its provider expiry passes');
   assert.equal(overlay.ratingsCache.get('movie:550').bundle.rtCriticsScore, 95);
+});
+
+
+for (const [name, override] of [
+  ['array ID', { tmdbId: [550] }], ['string array ID', { tmdbId: ['550'] }],
+  ['array media type', { mediaType: ['movie'] }]
+]) test(`${name} cannot read a verified public ID entry`, async () => {
+  const worker = await seed();
+  const calls = provider(worker, { critics: 12, title: 'Localized' });
+  const result = await worker.api.getRottenTomatoesRatings({ ...input, title: 'Localized', ...override });
+  assert.equal(result.rtCriticsScore, 12);
+  assert.equal(calls.length, 2, 'malformed identity must use its own title lookup');
 });

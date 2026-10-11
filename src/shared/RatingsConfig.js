@@ -29,7 +29,9 @@ const RatingsConfig = {
   //    percentages. Recheck cached scores produced by that parser.
   // 9: chained HTML decoding could turn escaped references into exact title
   //    matches, while supplementary characters were truncated.
-  matcherVersion: 9,
+  // 10: delimiter collisions could reuse another title's cached score; array
+  //     IDs/types could be treated as verified identities. Recheck old bundles.
+  matcherVersion: 10,
 
   // Thresholds for quality summary heuristics (RT critics %)
   summary: {

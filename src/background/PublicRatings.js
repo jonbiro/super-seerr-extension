@@ -4,8 +4,10 @@
   const Config = root.RatingsConfig;
   root.PublicRatings = {
     publicRatingKey(data) {
-      const id = String(data?.tmdbId ?? '');
-      return /^(movie|tv)$/.test(data?.mediaType) && /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id))
+      if (!data || (data.mediaType !== 'movie' && data.mediaType !== 'tv') ||
+          (typeof data.tmdbId !== 'number' && typeof data.tmdbId !== 'string')) return null;
+      const id = String(data.tmdbId);
+      return /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id))
         ? `${data.mediaType}:${id}` : null;
     },
     sanitizePublicRating(entry, mediaType = null) {
