@@ -214,6 +214,15 @@ class BaseIntegration {
       this.log('Extracted media data:', mediaData);
 
       if (mediaData && mediaData.title) {
+        // An explicit temporary choice lasts for this page and site, even
+        // when a routine retry extracts the original ambiguous metadata.
+        const choice = this._manualTitleChoice;
+        if (choice && choice.pageUrl === pageUrl && choice.connectionToken === connectionToken &&
+            ['title', 'mediaType', 'tmdbId', 'imdbId', 'year'].every(key => choice.source[key] === mediaData[key])) {
+          mediaData = choice.selected;
+        } else {
+          this._manualTitleChoice = null;
+        }
         // A same-page retry must not replace the identity behind an open panel
         // while its status lookup is still using that identity.
         const sameIdentity = this.mediaData && this._mediaConnectionToken === connectionToken
@@ -562,6 +571,10 @@ class BaseIntegration {
       }
       this.plexOnWatchlist = false;
       this.mediaData = { ...view.media, title: selected.title, tmdbId: selected.tmdbId, mediaType: selected.mediaType, year: selected.year };
+      this._manualTitleChoice = selected.rememberChoice ? null : {
+        source: this._manualTitleChoice?.source || view.media, selected: this.mediaData,
+        connectionToken: this._mediaConnectionToken, pageUrl: this.getNavigationKey()
+      };
       const heading = view.elements.flyout?.querySelector('.seerr-title');
       if (heading) heading.textContent = selected.title;
       const metadata = view.elements.flyout?.querySelector('.seerr-year');
@@ -1031,6 +1044,7 @@ class BaseIntegration {
     this.uiElements = {};
     this.mediaData = null;
     delete this._mediaConnectionToken;
+    this._manualTitleChoice = null;
     this.currentStatusData = null;
     this.plexOnWatchlist = false;
     // A request in flight belongs to the old page: navigating mid-request

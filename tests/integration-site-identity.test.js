@@ -178,3 +178,43 @@ test('back-forward restoration reloads saved choices for the selected site', asy
   assert.match(p.integration.uiElements.panel.textContent, /2011/);
   assert.match(p.integration.uiElements.panel.textContent, /family.example/);
 });
+
+for (const expanded of [false, true]) test(`an unremembered title choice survives a same-page retry (expanded: ${expanded})`, async t => {
+  const p = probe(t);
+  const send = p.integration.client.sendMessage.bind(p.integration.client);
+  p.integration.client.sendMessage = message => {
+    if (message.action === 'getSavedTitleCorrection') return Promise.resolve({ success: true, data: null });
+    if (message.action === 'getMediaCandidates') return Promise.resolve({ success: true, data: Object.values(choices) });
+    return send(message);
+  };
+  await p.integration.extractAndSetup();
+  p.integration.ui.chooseTitle = async () => ({ ...choices.Family, rememberChoice: false });
+  await p.integration.handleTitleChoice();
+  const panel = p.integration.uiElements.flyout;
+  panel.setExpanded(expanded);
+  await p.integration.extractAndSetup();
+  assert.equal(p.integration.mediaData.tmdbId, 911, 'a retry must not undo the explicit match');
+  assert.equal(p.integration.uiElements.flyout, panel, 'same-page retries preserve the chosen panel');
+  assert.ok(!p.messages.some(message => message.action === 'saveTitleCorrection'));
+  p.switchTo('Family'); p.integration.cleanupUI();
+  await p.integration.extractAndSetup();
+  assert.equal(p.integration.mediaData.tmdbId, undefined, 'a temporary choice cannot leak into another site');
+});
+
+for (const change of ['metadata', 'URL']) test(`a temporary choice is retired when page ${change} changes`, async t => {
+  const p = probe(t);
+  const send = p.integration.client.sendMessage.bind(p.integration.client);
+  p.integration.client.sendMessage = message => {
+    if (message.action === 'getSavedTitleCorrection') return Promise.resolve({ success: true, data: null });
+    if (message.action === 'getMediaCandidates') return Promise.resolve({ success: true, data: Object.values(choices) });
+    return send(message);
+  };
+  await p.integration.extractAndSetup();
+  p.integration.ui.chooseTitle = async () => ({ ...choices.Family, rememberChoice: false });
+  await p.integration.handleTitleChoice();
+  if (change === 'metadata') p.integration.extractMediaData = async () => ({ ...original, year: 1982 });
+  else p.fixture.window.history.pushState({}, '', '/title/tt9999999/');
+  await p.integration.extractAndSetup();
+  assert.equal(p.integration.mediaData.tmdbId, undefined);
+  assert.equal(p.integration._manualTitleChoice, null);
+});

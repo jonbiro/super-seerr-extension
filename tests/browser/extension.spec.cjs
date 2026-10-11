@@ -263,12 +263,14 @@ test('popup diagnoses connections and shows confirmed local actions with working
   await popup.close();
 });
 
-test('ambiguous title picker checks the chosen identity and sends only a separately confirmed request', async () => {
+for (const remember of [false, true]) test(`ambiguous title picker preserves the chosen identity through retries (remember: ${remember})`, async () => {
+  await options.evaluate(() => chrome.storage.local.remove('titleCorrectionsV1'));
   const manager = await context.newPage();
   await manager.goto('chrome://extensions');
   await manager.evaluate(id => chrome.developerPrivate.addHostPermission(id, 'http://127.0.0.1/*'), extensionId);
   await manager.close();
   await options.locator('#serverUrl').fill(origin);
+  await options.locator('#apiKey').fill('smoke-key');
   await options.locator('button[type="submit"]').click();
   await expect.poll(() => options.evaluate(() => chrome.permissions.contains({ origins: ['http://127.0.0.1/*'] }))).toBe(true);
   const page = await context.newPage();
@@ -294,9 +296,18 @@ test('ambiguous title picker checks the chosen identity and sends only a separat
     await page.getByRole('button', { name: 'Open Super Seerr', exact: true }).click();
     await page.getByRole('button', { name: 'Choose title', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Choose matching title' })).toBeVisible();
-    await page.getByLabel('Remember this match on this device').check();
+    if (remember) await page.getByLabel('Remember this match on this device').check();
     await page.getByRole('button', { name: /The Thing \(2011\)/ }).click();
     await expect(page.locator('.seerr-title')).toHaveText('The Thing');
+    await expect(page.locator('.seerr-year')).toHaveText('2011 • Movie');
+    await expect(page.getByRole('button', { name: 'Request on Seerr', exact: true })).toBeVisible();
+    expect(posts).toHaveLength(0);
+    await options.evaluate(async tabId => chrome.scripting.executeScript({ target: { tabId }, func: async () => {
+      await window.pickerProbe.extractAndSetup();
+      window.pickerProbe.uiElements.flyout.setExpanded(false);
+      await window.pickerProbe.extractAndSetup();
+      window.pickerProbe.uiElements.flyout.setExpanded(true);
+    } }), tabId);
     await expect(page.locator('.seerr-year')).toHaveText('2011 • Movie');
     await expect(page.getByRole('button', { name: 'Request on Seerr', exact: true })).toBeVisible();
     expect(posts).toHaveLength(0);
@@ -305,7 +316,8 @@ test('ambiguous title picker checks the chosen identity and sends only a separat
     expect(posts[0].mediaId).toBe(911);
     expect(posts[0].mediaType).toBe('movie');
     const saved = await options.evaluate(() => chrome.runtime.sendMessage({ action: 'getSavedTitleCorrection', data: { title: 'The Thing', mediaType: 'movie' } }));
-    expect(saved.data.tmdbId).toBe(911);
+    if (remember) expect(saved.data.tmdbId).toBe(911);
+    else expect(saved.data).toBeNull();
 
   } finally {
     server.off('request', capture);
@@ -447,7 +459,7 @@ test('Settings inspects and forgets remembered matches and exports a redacted di
 test('recent confirmed requests show current status and exact Seerr title links', async () => {
   const popup = await context.newPage();
   await popup.goto(`chrome-extension://${extensionId}/src/popup/popup.html`);
-  const row = popup.locator('#recentActionsList li').filter({ hasText: 'Requested: The Thing' });
+  const row = popup.locator('#recentActionsList li').filter({ hasText: 'Requested: The Thing' }).first();
   await expect(row.getByRole('link', { name: 'Open in Seerr' })).toHaveAttribute('href', `${origin}/movie/911`);
   await expect(row).toContainText('Not requested'); // The fixture serves an empty request history.
   await popup.getByRole('button', { name: 'Refresh statuses' }).click();
