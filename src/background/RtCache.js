@@ -75,8 +75,14 @@
             // A live in-memory entry is newer than anything on disk.
             if (this.rtCache.has(key)) continue;
             if (!entry || typeof entry !== 'object' || typeof entry.expiresAt !== 'number') continue;
-            if (now >= entry.expiresAt) continue;
-            this.rtCache.set(key, { value: entry.value ?? null, expiresAt: entry.expiresAt, checkedAt: entry.checkedAt ?? entry.expiresAt - RatingsConfig.rtCacheTtlMs, diagnostic: ['uncertain', 'failed', 'unrated', 'rated'].includes(entry.diagnostic) ? entry.diagnostic : null });
+            const checkedAt = entry.checkedAt ?? entry.expiresAt - RatingsConfig.rtCacheTtlMs;
+            const diagnostic = ['uncertain', 'failed', 'unrated', 'rated'].includes(entry.diagnostic) ? entry.diagnostic : null;
+            // Older versions kept failed detail reads for an hour. Honor the
+            // short failure backoff on upgrade as well as for new results.
+            const expiresAt = diagnostic === 'failed'
+              ? Math.min(entry.expiresAt, checkedAt + RatingsConfig.inconclusiveRetryMs) : entry.expiresAt;
+            if (now >= expiresAt) continue;
+            this.rtCache.set(key, { value: entry.value ?? null, expiresAt, checkedAt, diagnostic });
           }
         } catch (error) {
           if (generation === this.rtCacheGeneration) this.rtCacheReady = null;

@@ -245,10 +245,10 @@
       const shared = !refresh && this.cachedPublicRating(identity);
       if (shared) return { ...shared.value, lastUpdated: shared.checkedAt, diagnostic: 'rated' };
       const cacheKey = this.rtTitleCacheKey(identity);
-      // Scores move as reviews arrive, so a refresh discards what we hold and
-      // refetches; the new value then becomes the cached one.
-      if (refresh) this.rtCache.delete(cacheKey);
-      const cached = this.rtCache.get(cacheKey);
+      // Bypass the cached value for a refresh, but keep it available to other
+      // tabs until a completed lookup replaces it. A transport failure says
+      // nothing about the last unexpired score or its original expiry.
+      const cached = !refresh && this.rtCache.get(cacheKey);
       if (cached && Date.now() < cached.expiresAt) {
         this.sharePublicRating(identity, cached.value, cached, generation);
         return cached.value ? { ...cached.value, lastUpdated: cached.checkedAt, diagnostic: cached.diagnostic } : null;
@@ -310,7 +310,16 @@
 
       const ttl = result.rtCriticsScore === null && result.rtAudienceScore === null
         ? RatingsConfig.rtNegativeCacheTtlMs : RatingsConfig.rtCacheTtlMs;
-      this.cacheRottenTomatoesResult(cacheKey, result, outcome.failed ? RatingsConfig.rtNegativeCacheTtlMs : ttl, generation, outcome.failed ? 'failed' : 'rated', checkedAt);
+      // A partial transport failure must not replace an unexpired successful
+      // result used by other tabs. Report this attempt to its caller, while
+      // retaining the fallback's original timestamp and expiry.
+      const previous = this.rtCache.get(cacheKey);
+      const keepSuccessful = outcome.failed && previous?.diagnostic === 'rated'
+        && previous.expiresAt > Date.now()
+        && previous.value?.confidence >= RatingsConfig.confidenceThreshold
+        && ['rtCriticsScore', 'rtAudienceScore'].some(field =>
+          Number.isFinite(previous.value[field]) && previous.value[field] >= 0 && previous.value[field] <= 100);
+      if (!keepSuccessful) this.cacheRottenTomatoesResult(cacheKey, result, outcome.failed ? RatingsConfig.inconclusiveRetryMs : ttl, generation, outcome.failed ? 'failed' : 'rated', checkedAt);
       this.sharePublicRating(identity, result, this.rtCache.get(cacheKey), generation);
       return result;
     },

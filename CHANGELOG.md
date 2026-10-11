@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.80]
+
+- Retry failed Rotten Tomatoes detail reads after two minutes instead of retaining failed or partial responses for an hour; apply the shorter retry window to persisted failures from earlier versions.
+- Retain unexpired successful title-cache scores during a refresh and after search or detail transport failures, keeping their original age and expiry so other tabs and sites can continue using them without duplicate lookups.
+- Add failure, retry, refresh overlap, expiry and cold-restart regressions plus Chromium coverage using deterministic provider responses with the actual extension worker and storage.
+
 ## [3.5.79]
 
 - Invalidate recycled card identities when their poster or visible title changes without a replacement link; remove stale badges, selections and Plex actions, and ignore late results for the previous title.
