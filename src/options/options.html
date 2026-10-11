@@ -36,6 +36,20 @@
             </div>
 
             <form id="settingsForm" class="settings-form">
+                <fieldset class="connection-options">
+                    <legend>Seerr sites</legend>
+                    <label for="savedSeerrSites">Saved sites</label>
+                    <select id="savedSeerrSites" aria-describedby="activeSeerrSite"></select>
+                    <p id="activeSeerrSite" role="status"></p>
+                    <div class="connection-controls">
+                        <button type="button" id="addSeerrSite" class="button secondary">Add another site</button>
+                        <button type="button" id="useSeerrSite" class="button secondary">Use selected site</button>
+                        <button type="button" id="removeSeerrSite" class="button secondary">Remove selected site</button>
+                    </div>
+                    <label for="seerrSiteName">Site name <small>(optional)</small></label>
+                    <input type="text" id="seerrSiteName" maxlength="80" placeholder="Home, Family, or another name">
+                    <small>Save Settings saves and activates the site below. One site is active at a time for ratings and requests. Saved sites and API keys stay on this device. Select a saved site to edit it; use the button above to switch without saving edits.</small>
+                </fieldset>
                 <div class="form-group">
                     <label for="serverUrl">Seerr Server URL</label>
                     <input 

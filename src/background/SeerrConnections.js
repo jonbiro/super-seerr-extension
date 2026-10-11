@@ -1,0 +1,92 @@
+// Saved sites and their credentials are a single device-local record, so a
+// switch can never pair one site's URL with another site's API key.
+(function (root) {
+  const KEY = 'seerrConnectionsV1';
+  const normalize = value => {
+    const url = new URL(value);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+      throw new Error('Use an HTTP(S) server URL without credentials, query parameters, or fragments');
+    }
+    return url.href.replace(/\/+$/, '');
+  };
+  root.SeerrConnections = {
+    async readSeerrConnections() {
+      const stored = (await chrome.storage.local.get(KEY))[KEY];
+      if (stored) {
+        if (!Array.isArray(stored.sites) || !stored.sites.some(site => site.id === stored.activeId)) {
+          throw new Error('Saved sites could not be loaded');
+        }
+        return JSON.parse(JSON.stringify(stored));
+      }
+      const [synced, local] = await Promise.all([
+        chrome.storage.sync.get('seerrUrl'), chrome.storage.local.get('seerrApiKey')
+      ]);
+      const url = synced.seerrUrl ? normalize(synced.seerrUrl) : null;
+      return { revision: 0, activeId: url, sites: url ? [{ id: url, url, name: new URL(url).host, apiKey: local.seerrApiKey || '' }] : [] };
+    },
+    publicSeerrConnections(value) {
+      return { activeId: value.activeId, sites: value.sites.map(({ id, name, url }) => ({ id, name, url })) };
+    },
+    connectionToken() {
+      return this.connections ? `${this.connections.revision}:${this.connections.activeId}` : this.baseUrl ?? null;
+    },
+    async connectionOperation(action, data, sender) {
+      this.requireExtensionPage(sender);
+      if (action === 'getSeerrConnections') {
+        await this.connectionChangePending;
+        return this.publicSeerrConnections(await this.readSeerrConnections());
+      }
+      const operation = (this.connectionChangePending || Promise.resolve()).then(async () => {
+        const value = await this.readSeerrConnections();
+        if (action === 'saveSeerrConnection') {
+          const url = normalize(data?.url);
+          const previous = data?.id ? value.sites.find(site => site.id === data.id) : null;
+          if (data?.id && !previous) throw new Error('This site was removed. Reload Settings.');
+          if (value.sites.some(site => site.url === url && site !== previous)) throw new Error('This site is already saved. Select it from Saved sites.');
+          if (!previous && value.sites.length >= 10) throw new Error('You can save up to 10 Seerr sites.');
+          const name = String(data?.name || new URL(url).host).trim().slice(0, 80);
+          const site = { id: url, url, name: name || new URL(url).host, apiKey: String(data?.apiKey || '').trim() };
+          value.sites = previous ? value.sites.map(item => item === previous ? site : item) : [...value.sites, site];
+          value.activeId = site.id;
+        } else if (action === 'activateSeerrConnection') {
+          if (!value.sites.some(site => site.id === data?.id)) throw new Error('This site was removed. Reload Settings.');
+          value.activeId = data.id;
+        } else if (action === 'removeSeerrConnection') {
+          if (value.activeId === data?.id) throw new Error('Switch to another site before removing this one.');
+          value.sites = value.sites.filter(site => site.id !== data?.id);
+        } else throw new Error('Unknown site operation');
+        value.revision = (value.revision || 0) + 1;
+        await chrome.storage.local.set({ [KEY]: value, seerrApiKey: '' });
+        // Commit the matching pair in memory too, before another async read.
+        // A settings-read failure after persistence must not leave the previous
+        // server receiving requests while the picker reports the new one.
+        this.connections = value;
+        const active = value.sites.find(site => site.id === value.activeId);
+        this.baseUrl = active.url;
+        this.apiKey = active.apiKey;
+        this.invalidateSeerrReads();
+        await this.loadSettings();
+        await this.syncOverlayRegistration();
+        await this.notifyContentState();
+        return this.publicSeerrConnections(value);
+      });
+      this.connectionChangePending = operation.catch(() => {});
+      return operation;
+    },
+    assertConnectionTarget(request, sender) {
+      if (request.connectionToken !== undefined && request.connectionToken !== this.connectionToken()) {
+        throw new Error('Active Seerr site changed. Refresh the title and review it again.');
+      }
+      // An old overlay must never send an action to a different saved site.
+      if (!this.connections || !sender?.url) return;
+      const page = new URL(sender.url);
+      const matches = this.connections.sites.filter(site => {
+        const url = new URL(site.url), base = url.pathname.replace(/\/+$/, '');
+        return page.origin === url.origin && (page.pathname === base || page.pathname.startsWith(`${base}/`));
+      }).sort((a, b) => b.url.length - a.url.length);
+      if (matches.length && matches[0].id !== this.connections.activeId) {
+        throw new Error('This is not the active Seerr site. Switch sites in the extension popup first.');
+      }
+    }
+  };
+})(globalThis);

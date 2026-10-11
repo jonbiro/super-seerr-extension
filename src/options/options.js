@@ -31,8 +31,13 @@ class OptionsManager {
   async init() {
     // Load existing settings
     await this.loadSettings();
+    await this.loadConnectionChoices();
     
     // Bind event listeners
+    document.getElementById('addSeerrSite')?.addEventListener('click', () => this.newConnection());
+    document.getElementById('savedSeerrSites')?.addEventListener('change', () => this.editConnection());
+    document.getElementById('useSeerrSite')?.addEventListener('click', () => this.useConnection());
+    document.getElementById('removeSeerrSite')?.addEventListener('click', () => this.removeConnection());
     this.form?.addEventListener('submit', (e) => this.handleSave(e));
     this.testButton?.addEventListener('click', () => this.testConnection());
     this.testPlexButton?.addEventListener('click', () => this.testPlexConnection());
@@ -121,8 +126,10 @@ class OptionsManager {
   // never blocks on the grant, so this is the standing reminder to fix that.
   async refreshPermissionWarning() {
     if (!this.permissionWarning) return;
-    const { seerrUrl } = await chrome.storage.sync.get(['seerrUrl']);
-    const pattern = this.originPattern(seerrUrl || '');
+    const [{ seerrUrl }, local] = await Promise.all([chrome.storage.sync.get(['seerrUrl']), chrome.storage.local.get('seerrConnectionsV1')]);
+    const connections = local.seerrConnectionsV1;
+    const activeUrl = connections ? connections.sites.find(site => site.id === connections.activeId)?.url : seerrUrl;
+    const pattern = this.originPattern(activeUrl || '');
     this.savedPermissionPattern = pattern;
     const missing = !!pattern && !(await this.hasOverlayPermission(pattern));
     this.permissionWarning.classList.toggle('hidden', !missing);
@@ -156,11 +163,16 @@ class OptionsManager {
       // The URL and feature flags sync across devices; the keys stay local.
       const [settings, local] = await Promise.all([
         chrome.storage.sync.get(['seerrUrl', 'overlayFeatures']),
-        chrome.storage.local.get(['seerrApiKey', 'plexToken', 'debugLogging'])
+        chrome.storage.local.get(['seerrApiKey', 'plexToken', 'debugLogging', 'seerrConnectionsV1'])
       ]);
 
-      this.serverUrlInput.value = settings.seerrUrl || '';
-      this.apiKeyInput.value = local.seerrApiKey || '';
+      const connections = local.seerrConnectionsV1;
+      const active = connections?.sites.find(site => site.id === connections.activeId);
+      this.connectionMode = !!connections;
+      this.connectionId = active?.id;
+      this.serverUrlInput.value = active?.url || settings.seerrUrl || '';
+      this.apiKeyInput.value = active ? active.apiKey : local.seerrApiKey || '';
+      if (document.getElementById('seerrSiteName')) document.getElementById('seerrSiteName').value = active?.name || '';
       if (this.plexTokenInput) this.plexTokenInput.value = local.plexToken || '';
       if (this.debugLoggingInput) this.debugLoggingInput.checked = local.debugLogging === true;
       document.querySelectorAll('[data-overlay-feature]').forEach(input => {
@@ -180,12 +192,14 @@ class OptionsManager {
   async saveSettings(showSuccess = true) {
     // Double submissions would prompt for host permissions twice, and the
     // second prompt arrives with no user gesture left to grant it on.
-    if (this._saving) return;
+    if (this._saving || this._connectionBusy) return;
     this._saving = true;
+    this.updateConnectionControls();
     try {
       await this.saveSettingsInner(showSuccess);
     } finally {
       this._saving = false;
+      this.updateConnectionControls();
     }
   }
 
@@ -193,6 +207,8 @@ class OptionsManager {
     const serverUrl = this.serverUrlInput.value.trim();
     const apiKey = this.apiKeyInput.value.trim();
     const plexToken = this.plexTokenInput ? this.plexTokenInput.value.trim() : '';
+    const connectionId = this.connectionId;
+    const connectionName = document.getElementById('seerrSiteName')?.value.trim();
 
     // URL is required; API key is optional (ratings-only mode)
     if (!serverUrl) {
@@ -233,8 +249,14 @@ class OptionsManager {
     }).catch(() => false);
 
     try {
-      // The keys are secrets, so they stay on this device.
-      await Promise.all([
+      // Saved profiles commit the URL and key together in the worker.
+      if (this.connectionMode || connectionName) {
+        const response = await chrome.runtime.sendMessage({ action: 'saveSeerrConnection', data: { id: connectionId, name: connectionName, url: serverUrl, apiKey } });
+        if (!response?.success) throw new Error(response?.error || 'Could not save this site');
+        this.connectionMode = true;
+        await chrome.storage.sync.set({ overlayFeatures: Object.fromEntries(Array.from(document.querySelectorAll('[data-overlay-feature]'), input => [input.dataset.overlayFeature, input.checked])) });
+        await chrome.storage.local.set({ plexToken, debugLogging: this.debugLoggingInput?.checked === true });
+      } else await Promise.all([
         chrome.storage.sync.set({
           seerrUrl: serverUrl,
           overlayFeatures: Object.fromEntries(Array.from(document.querySelectorAll('[data-overlay-feature]'), input => [input.dataset.overlayFeature, input.checked]))
@@ -242,6 +264,7 @@ class OptionsManager {
         chrome.storage.local.set({ seerrApiKey: apiKey, plexToken, debugLogging: this.debugLoggingInput?.checked === true })
       ]);
 
+      await this.loadConnectionChoices();
       // The worker re-registers off this storage change, so no nudge here.
       await this.refreshPermissionWarning();
 
@@ -254,8 +277,97 @@ class OptionsManager {
       }
     } catch (error) {
       console.error('Error saving settings:', error);
-      this.showStatus('error', 'Failed to save settings');
+      this.showStatus('error', error.message || 'Failed to save settings');
     }
+  }
+
+  async loadConnectionChoices() {
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'getSeerrConnections' });
+      if (!response?.success || !Array.isArray(response.data?.sites)) return;
+      this.connectionChoices = response.data;
+      const select = document.getElementById('savedSeerrSites');
+      if (!select) return;
+      select.replaceChildren();
+      for (const site of response.data.sites) {
+        const option = document.createElement('option');
+        option.value = site.id; option.textContent = `${site.name} — ${site.url}`;
+        select.append(option);
+      }
+      this.connectionId = response.data.activeId;
+      select.value = this.connectionId || '';
+      const active = response.data.sites.find(site => site.id === this.connectionId);
+      document.getElementById('activeSeerrSite').textContent = active ? `Active site: ${active.name} (${active.url})` : 'No site saved yet.';
+      this.updateConnectionControls();
+    } catch (_) { this.showStatus('error', 'Could not load saved sites. Reload Settings.'); }
+  }
+
+  updateConnectionControls() {
+    const busy = !!(this._saving || this._connectionBusy);
+    const selected = this.connectionChoices?.sites.find(site => site.id === this.connectionId);
+    for (const id of ['addSeerrSite', 'savedSeerrSites']) {
+      const control = document.getElementById(id); if (control) control.disabled = busy;
+    }
+    for (const id of ['useSeerrSite', 'removeSeerrSite']) {
+      const control = document.getElementById(id);
+      if (control) control.disabled = busy || !selected || selected.id === this.connectionChoices.activeId;
+    }
+  }
+
+  newConnection() {
+    this.connectionMode = true; this.connectionId = null;
+    document.getElementById('savedSeerrSites').value = '';
+    document.getElementById('seerrSiteName').value = '';
+    this.serverUrlInput.value = ''; this.apiKeyInput.value = '';
+    this.apiKeyInput.type = 'password'; this.toggleButton.textContent = 'Show';
+    this.toggleButton.setAttribute('aria-label', 'Show Seerr API key');
+    this.updateConnectionControls(); this.serverUrlInput.focus();
+    this.showStatus('info', 'Enter the new site URL and its own API key, then Save Settings to activate it.');
+  }
+
+  async editConnection() {
+    this._connectionBusy = true; this.updateConnectionControls();
+    try {
+      const id = document.getElementById('savedSeerrSites').value;
+      const local = await chrome.storage.local.get('seerrConnectionsV1');
+      const site = local.seerrConnectionsV1?.sites.find(item => item.id === id);
+      if (site) {
+        this.connectionMode = true; this.connectionId = site.id;
+        this.serverUrlInput.value = site.url; this.apiKeyInput.value = site.apiKey;
+        document.getElementById('seerrSiteName').value = site.name;
+      } else { await this.loadSettings(); this.connectionId = id; }
+      this.apiKeyInput.type = 'password'; this.toggleButton.textContent = 'Show';
+      this.toggleButton.setAttribute('aria-label', 'Show Seerr API key');
+    } catch (_) { this.showStatus('error', 'Could not load this site. Reload Settings.'); }
+    finally { this._connectionBusy = false; this.updateConnectionControls(); }
+  }
+
+  async useConnection() {
+    const selected = this.connectionChoices?.sites.find(site => site.id === this.connectionId);
+    if (!selected || this._connectionBusy) return;
+    // Request access from this click, before any storage or messaging await.
+    const permission = this.requestOverlayPermission(this.originPattern(selected.url));
+    this._connectionBusy = true; this.updateConnectionControls();
+    try {
+      if (!await permission) throw new Error('Site access was declined. The active site has not changed.');
+      const response = await chrome.runtime.sendMessage({ action: 'activateSeerrConnection', data: { id: selected.id } });
+      if (!response?.success) throw new Error(response?.error || 'Could not switch sites');
+      await this.loadSettings(); await this.loadConnectionChoices(); await this.refreshPermissionWarning();
+      this.showStatus('success', `Now using ${selected.name}. Reload its Seerr tab if ratings are not visible yet.`);
+    } catch (error) { this.showStatus('error', error.message); }
+    finally { this._connectionBusy = false; this.updateConnectionControls(); }
+  }
+
+  async removeConnection() {
+    if (this._connectionBusy) return;
+    this._connectionBusy = true; this.updateConnectionControls();
+    try {
+      const response = await chrome.runtime.sendMessage({ action: 'removeSeerrConnection', data: { id: this.connectionId } });
+      if (!response?.success) throw new Error(response?.error || 'Could not remove this site');
+      await this.loadSettings(); await this.loadConnectionChoices();
+      this.showStatus('success', 'Saved site removed. Its server and historical actions were not changed.');
+    } catch (error) { this.showStatus('error', error.message); }
+    finally { this._connectionBusy = false; this.updateConnectionControls(); }
   }
 
   async reloadSettings() {

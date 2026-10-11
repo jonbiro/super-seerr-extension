@@ -42,3 +42,16 @@ test('an explicit attempt count is respected', () => {
   assert.equal(new SeerrClient({ retryAttempts: 5 }).retryAttempts, 5);
   assert.equal(new SeerrClient({}).retryAttempts, 3);
 });
+
+test('a request retains the reviewed connection token while its preflight is pending', async () => {
+  const client = new SeerrClient();
+  client.connectionToken = '1:home';
+  let finish;
+  client.testExtensionConnection = () => new Promise(resolve => { finish = resolve; });
+  let sent;
+  client.sendMessage = async message => { sent = message; return { success: true, data: { id: 1 } }; };
+  const pending = client.requestMedia({ tmdbId: 550, mediaType: 'movie' });
+  client.connectionToken = '2:family';
+  finish(true); await pending;
+  assert.equal(sent.connectionToken, '1:home');
+});

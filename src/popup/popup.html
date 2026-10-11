@@ -23,6 +23,11 @@
         </header>
 
         <main class="popup-main">
+            <section id="seerrSiteSwitcher" class="site-switcher hidden">
+                <label for="activeSeerrSite">Active Seerr site</label>
+                <select id="activeSeerrSite" aria-describedby="siteSwitchStatus"></select>
+                <p id="siteSwitchStatus" role="status"></p>
+            </section>
             <div id="configuredState" class="state-content hidden">
                 <div class="info-section">
                     <h3 id="configuredHeading">Ratings are on</h3>
@@ -87,5 +92,6 @@
 
     <script src="popup.js"></script>
     <script src="recent-actions.js"></script>
+    <script src="connections.js"></script>
 </body>
 </html>

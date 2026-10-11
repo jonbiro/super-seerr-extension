@@ -363,3 +363,13 @@ footer a:hover {
 .support-tools dt { font-weight: 600; }
 .support-tools dd { margin: 0; }
 .support-tools input:focus-visible, .support-tools summary:focus-visible { outline: 3px solid #7c3aed; outline-offset: 3px; }
+
+.connection-options { border: 1px solid #d1d5db; border-radius: 10px; padding: 16px; margin-bottom: 24px; min-width: 0; }
+.connection-options legend { font-weight: 600; padding: 0 6px; }
+.connection-options label { display: block; margin: 12px 0 6px; font-weight: 600; }
+.connection-options select, .connection-options input { width: 100%; min-width: 0; padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; background: white; }
+.connection-options small { display: block; margin-top: 8px; color: #6b7280; }
+.connection-options p { overflow-wrap: anywhere; font-size: 13px; margin: 10px 0; }
+.connection-controls { display: flex; flex-wrap: wrap; gap: 8px; }
+.connection-controls .button { font-size: 13px; }
+.connection-options select:focus-visible { outline: 3px solid #7c3aed; outline-offset: 2px; }

@@ -28,18 +28,25 @@
   let apiConfigured = false;
   let plexConfigured = false;
   let configuredServer = null;
+  let connectionToken;
+  let configGeneration = 0;
 
   // Check API config — controls whether request features are available.
   // The API key is deliberately never read here: the worker answers whether
   // requests are possible so the secret stays out of this page's heap.
   // The Plex token stays out the same way: only plexConfigured crosses.
   async function checkApiConfig() {
+    const generation = ++configGeneration;
     try {
       const settings = await chrome.storage.sync.get(['seerrUrl', 'overlayFeatures']);
+      const response = await chrome.runtime.sendMessage({ action: 'getConfigState' }).catch(() => null);
+      if (generation !== configGeneration) return;
+      connectionToken = response?.data?.connectionToken;
+      const serverUrl = response?.success && response.data && 'serverUrl' in response.data ? response.data.serverUrl : settings.seerrUrl;
       const previousServer = configuredServer?.href;
       for (const flag of Object.keys(FEATURE_FLAGS)) FEATURE_FLAGS[flag] = settings.overlayFeatures?.[flag] !== false;
       try {
-        configuredServer = settings.seerrUrl ? new URL(settings.seerrUrl) : null;
+        configuredServer = serverUrl ? new URL(serverUrl) : null;
       } catch (_) {
         configuredServer = null;
       }
@@ -49,7 +56,6 @@
         lastListItems = [];
       }
 
-      const response = await chrome.runtime.sendMessage({ action: 'getConfigState' }).catch(() => null);
       apiConfigured = response?.success === true && response.data?.apiConfigured === true;
       plexConfigured = response?.success === true && response.data?.plexConfigured === true;
       log('API configured:', apiConfigured, 'Plex configured:', plexConfigured);
@@ -2206,7 +2212,7 @@
         const generation = routeGeneration;
         button.disabled = true; refreshSeasonReadiness(); label.textContent = ' Loading availability…';
         try {
-          const response = await chrome.runtime.sendMessage({ action: 'getSeasonOptions', data: t });
+          const response = await chrome.runtime.sendMessage({ action: 'getSeasonOptions', data: t, connectionToken });
           if (!modal.isConnected || generation !== routeGeneration) return;
           if (!response?.success) throw new Error(response?.error || 'Could not load seasons');
           const seasons = await window.chooseSeerrSeasons(response.data, { signal: controller.signal, confirmText: 'Use selected seasons' });
@@ -2261,7 +2267,7 @@
         }
         try {
           const response = await chrome.runtime.sendMessage({
-            action: 'requestMedia',
+            action: 'requestMedia', connectionToken,
             data: { title: t.title, mediaType: t.mediaType, tmdbId: tmdbIdNum, ...(t.mediaType === 'tv' ? { seasons: t.seasons, seasonServer: t.seasonServer } : {}) }
           });
           if (response && response.success) {

@@ -9,7 +9,8 @@ These criteria describe the current product contract. They replace the historica
 - Seerr and Jellyfin retain their names as external products. Seerr means https://github.com/seerr-team/seerr, the unified successor to Overseerr and Jellyseerr; those predecessors share its API surface but are not what this is tested against.
 - Required MIT attribution and historical settings migration remain intact.
 - A saved server URL enables ratings-only mode; request actions additionally require an API key.
-- The server URL and overlay preferences sync across devices; the API key is device-local and must be entered per device. An API key saved by an earlier version migrates out of sync storage on upgrade.
+- Overlay preferences sync across devices. Legacy single-site URLs continue to sync until saved sites are used. Named/multiple connections and their active choice stay device-local with their individual API keys. Legacy API keys migrate out of sync storage on upgrade.
+- Support up to ten saved Seerr sites, with one active site for requests and overlays. Preserve the existing connection when adding another. Reject stale requests after switching; never broadcast a request to multiple sites. Allow removal of inactive sites and keep confirmed history.
 - The extension must not hold an all-sites host permission. Access to the Seerr origin is optional and requested when its URL is saved; declining still saves settings and surfaces a standing notice.
 - Editing or testing settings must not save them. Save Settings applies connection values and overlay preferences together.
 - Temporary connection tests must not alter the worker’s active connection.

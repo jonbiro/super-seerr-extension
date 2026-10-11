@@ -2,7 +2,7 @@
 
 Request movies and TV shows from the pages where you discover them, and bring Rotten Tomatoes ratings into your [Seerr](https://github.com/seerr-team/seerr) server. Seerr is the unified successor to Overseerr and Jellyseerr; servers on those earlier projects share the same API surface and should work too, though only Seerr is what this is developed against.
 
-![Version](https://img.shields.io/badge/version-3.5.67-blue)
+![Version](https://img.shields.io/badge/version-3.5.68-blue)
 
 [Source](https://github.com/jonbiro/super-seerr-extension) · [Report a bug](https://github.com/jonbiro/super-seerr-extension/issues)
 
@@ -14,9 +14,17 @@ Request movies and TV shows from the pages where you discover them, and bring Ro
 4. Approve the permission prompt for your Seerr server. Super Seerr only asks for the one origin you saved, and the ratings overlay cannot run until you approve it.
 5. Refresh Seerr. For request and Seerr-watchlist actions, add a Seerr API key from Seerr Settings → General → API Key. For the Plex Watchlist button, add a Plex token: sign in at app.plex.tv, open the DevTools Console (F12), run `localStorage.getItem('myPlexAccessToken')`, paste the value, then **Test Plex** to verify it.
 
-If you dismiss the permission prompt, your settings are still saved and the site integrations keep working; Settings then shows a standing notice with a **Grant access** button. Changing the server URL asks again for the new origin and drops the old one.
+If you dismiss the permission prompt, your settings are still saved and the site integrations keep working; Settings then shows a standing notice with a **Grant access** button. Changing the server URL asks again for the new host and moves the overlay registration to the active site.
 
 **Test Connection** checks the entered URL and key without saving them. Editing a field does not save it; use **Save Settings** to apply changes. You can leave the API key empty for ratings-only mode. The toolbar shows **RT** for URL-only setup, **ON** for URL plus API key, and no badge when no URL is saved. These badges describe configuration, not server health.
+
+### Multiple Seerr sites
+
+In **Settings → Seerr sites**, choose **Add another site**, enter its URL and its own API key, and click **Save Settings**. Your existing connection is retained. You can name each site and save up to ten.
+
+Use **Active Seerr site** in the popup to switch. One site is active at a time for ratings, requests, status checks, and Seerr watchlisting; requests are never broadcast to every saved site. The flyout shows the destination, and changing sites dismisses old review dialogs. Reload the active Seerr tab if its ratings overlay is not yet visible.
+
+Select a saved site in Settings to edit its fields. **Use selected site** switches without saving field edits; **Save Settings** saves and activates the edited site. To remove a site and its saved key, activate another site first, select the inactive site, and choose **Remove selected site**. Confirmed action history remains. Plex Watchlist uses the same device-level Plex account across sites.
 
 After rebuilding, reload the extension in Chrome and refresh the pages using it. The local folder remains `dist/chrome`.
 
@@ -24,7 +32,7 @@ After rebuilding, reload the extension in Chrome and refresh the pages using it.
 
 `make build` also produces `dist/firefox`. Its manifest now uses the `background.scripts` module configuration [Mozilla documents for Firefox](https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background) instead of the `service_worker` entry Firefox ignores, so the previously known-broken background configuration is fixed.
 
-The real-extension smoke test passes in Firefox 147.0.3 with geckodriver 0.37.1: optional permissions, ratings injection, SPA navigation, addon reload, persisted cache clearing, and permission revocation. It also verifies an actual 3.5.2-to-current upgrade and manifest-driven integration on eleven synthetic movie/TV pages across all seven supported sites. These fixtures do not establish live-site compatibility. See [Firefox verification](docs/development.md#firefox-verification-opt-in) for prerequisites and remaining coverage.
+The real-extension smoke test passes in Firefox 157.0.1 with geckodriver 0.37.1: optional permissions, ratings injection, SPA navigation, addon reload, persisted cache clearing, permission revocation, and saving/switching two independent Seerr fixtures. It also verifies an actual 3.5.2-to-current upgrade and manifest-driven integration on eleven synthetic movie/TV pages across all seven supported sites. These fixtures do not establish live-site compatibility. See [Firefox verification](docs/development.md#firefox-verification-opt-in) for prerequisites and remaining coverage.
 
 ## What it does
 
@@ -96,7 +104,7 @@ Seerr requests use your configured URL and API key. Overlay session requests use
 
 Super Seerr does not request access to all websites. The site integrations run only on the seven supported sites listed above. Because a self-hosted Seerr can live on any domain, access to your server is an *optional* permission requested at the moment you save its URL, and the overlay is registered against that one origin at runtime. Revoking the permission in your browser removes the overlay registration.
 
-The server URL and your feature toggles use browser sync storage, so they follow your browser profile across devices. **The API key and the Plex token are stored in device-local storage and do not sync** — enter them once per device. An API key saved by an earlier version is moved out of sync storage automatically on upgrade. Saving a Plex token also requests host permission for plex.tv, without which Plex actions cannot reach the network; declining still saves everything else. Treat exported profiles and shared machines accordingly.
+Feature toggles use browser sync storage. Existing single-site setups also sync their URL; once you save named or multiple sites, the site list, active choice, URLs, and per-site keys are stored together on this device. **The API key and the Plex token are stored in device-local storage and do not sync** — enter them once per device. An API key saved by an earlier version is moved out of sync storage automatically on upgrade. Saving a Plex token also requests host permission for plex.tv, without which Plex actions cannot reach the network; declining still saves everything else. Treat exported profiles and shared machines accordingly.
 
 No telemetry service is configured by this project. The background worker is quiet by default; **Settings → Troubleshooting → Verbose logging** turns tracing on while you reproduce a problem. Debug output can include media titles and server responses, so review logs before sharing them.
 

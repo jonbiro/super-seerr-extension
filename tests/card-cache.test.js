@@ -47,7 +47,7 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
     runtime: { sendMessage: async message => {
       messages.push(message);
       if (message.action === 'getConfigState') {
-        return { success: true, data: { apiConfigured, serverUrl: SERVER, plexConfigured } };
+        return { success: true, data: { apiConfigured, serverUrl: syncStore.seerrUrl || null, plexConfigured } };
       }
       if (message.action === 'getRottenTomatoesRatings') return { success: true, data: rtScores };
       if (message.action === 'plexAddToWatchlist') return { success: true, data: { ratingKey: 'rk', already: false } };

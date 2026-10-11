@@ -35,7 +35,9 @@ class SeerrClient {
   }
 
   async sendMessage(message) {
-    return await chrome.runtime.sendMessage(message);
+    const scoped = ['getMediaStatus', 'requestMedia', 'addToWatchlist', 'getSeasonOptions', 'getMediaCandidates', 'saveTitleCorrection', 'getSavedTitleCorrection', 'searchMedia'].includes(message.action);
+    return await chrome.runtime.sendMessage(scoped && this.connectionToken !== undefined
+      ? { connectionToken: this.connectionToken, ...message } : message);
   }
 
   /**
@@ -104,6 +106,7 @@ class SeerrClient {
    * Request media on Seerr
    */
   async requestMedia(mediaData) {
+    const connectionToken = this.connectionToken;
     // A failed ping is safe: no media write has been sent yet.
     const extensionOk = await this.testExtensionConnection();
     if (!extensionOk) {
@@ -114,7 +117,7 @@ class SeerrClient {
     // Without server-side idempotency, never automatically resend a write.
     let response;
     try {
-      response = await this.sendMessage({ action: 'requestMedia', data: mediaData });
+      response = await this.sendMessage({ action: 'requestMedia', data: mediaData, ...(connectionToken !== undefined ? { connectionToken } : {}) });
     } catch (error) {
       throw new Error(`Request outcome unknown. Check Seerr before requesting again. (${error.message})`);
     }

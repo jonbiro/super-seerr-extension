@@ -22,6 +22,8 @@ class PopupManager {
     this.openOptionsButton?.addEventListener('click', () => this.openOptions());
     this.testConnectionButton?.addEventListener('click', () => this.testConnection());
     
+    window.addEventListener('seerrConnectionChanged', () => this.checkStatus());
+
     // Check status on load
     await this.checkStatus();
   }

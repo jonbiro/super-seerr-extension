@@ -7,6 +7,7 @@ import './RtCache.js';
 import './RottenTomatoes.js';
 import './SeerrTransport.js';
 import './SeerrReadCache.js';
+import './SeerrConnections.js';
 import './PlexWatchlist.js';
 import './RecentActions.js';
 import './PopupDiagnostics.js';
@@ -120,12 +121,16 @@ class SeerrAPI {
     try {
       const [synced, local] = await Promise.all([
         chrome.storage.sync.get(['seerrUrl']),
-        chrome.storage.local.get(['seerrApiKey', 'plexToken', 'debugLogging', 'mediaServerName'])
+        chrome.storage.local.get(['seerrApiKey', 'plexToken', 'debugLogging', 'mediaServerName', 'seerrConnectionsV1'])
       ]);
       if (generation !== this.settingsLoadGeneration) return;
-      if (this.baseUrl !== synced.seerrUrl || this.apiKey !== local.seerrApiKey) this.invalidateSeerrReads();
-      this.baseUrl = synced.seerrUrl;
-      this.apiKey = local.seerrApiKey;
+      this.connections = local.seerrConnectionsV1 || null;
+      const selected = this.connections?.sites?.find(site => site.id === this.connections.activeId);
+      const baseUrl = this.connections ? selected?.url : synced.seerrUrl;
+      const apiKey = this.connections ? selected?.apiKey : local.seerrApiKey;
+      if (this.baseUrl !== baseUrl || this.apiKey !== apiKey) this.invalidateSeerrReads();
+      this.baseUrl = baseUrl;
+      this.apiKey = apiKey;
       this.plexToken = local.plexToken || null;
       this.debugLogging = local.debugLogging === true;
       this.updateIconBadge();
@@ -235,7 +240,17 @@ class SeerrAPI {
 
   async handleMessage(request, sender, sendResponse) {
     try {
+      if (['requestMedia', 'addToWatchlist', 'getMediaStatus', 'getSeasonOptions', 'getMediaCandidates', 'saveTitleCorrection', 'getSavedTitleCorrection', 'searchMedia'].includes(request.action)) {
+        this.assertConnectionTarget(request, sender);
+      }
       switch (request.action) {
+        case 'getSeerrConnections':
+        case 'saveSeerrConnection':
+        case 'activateSeerrConnection':
+        case 'removeSeerrConnection': {
+          sendResponse({ success: true, data: await this.connectionOperation(request.action, request.data, sender) });
+          break;
+        }
         case 'requestMedia': {
           const result = await this.requestMedia(request.data);
           await this.recordRecentAction('request', { ...request.data, tmdbId: result.tmdbId || request.data.tmdbId, historyServer: result.historyServer || this.baseUrl });
@@ -336,7 +351,7 @@ class SeerrAPI {
         // The overlay must never hold the API key, so it asks whether requests
         // are available rather than reading the secret itself.
         case 'getConfigState': {
-          sendResponse({ success: true, data: { apiConfigured: !!(this.baseUrl && this.apiKey), serverUrl: this.baseUrl ?? null, plexConfigured: !!this.plexToken } });
+          sendResponse({ success: true, data: { apiConfigured: !!(this.baseUrl && this.apiKey), serverUrl: this.baseUrl ?? null, connectionToken: this.connectionToken(), plexConfigured: !!this.plexToken } });
           break;
         }
 
@@ -778,7 +793,7 @@ class SeerrAPI {
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
 
-Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests, globalThis.OverlayStorage, globalThis.TitleCorrections, globalThis.FilterPresetStorage);
+Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.SeerrConnections, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests, globalThis.OverlayStorage, globalThis.TitleCorrections, globalThis.FilterPresetStorage);
 
 const seerrAPI = new SeerrAPI();
 let initializing = true;
@@ -787,7 +802,7 @@ let initializing = true;
 // The URL and feature flags sync across devices; the API key stays local.
 chrome.storage.onChanged.addListener((changes, namespace) => {
   const relevant = (namespace === 'sync' && changes.seerrUrl) ||
-    (namespace === 'local' && (changes.seerrApiKey || changes.plexToken || changes.debugLogging));
+    (namespace === 'local' && (changes.seerrConnectionsV1 || changes.seerrApiKey || changes.plexToken || changes.debugLogging));
   if (!relevant || initializing) return;
   seerrAPI.log('🔄 [Background] Settings changed, reloading...');
   seerrAPI.loadSettings()
@@ -805,7 +820,7 @@ chrome.permissions?.onRemoved?.addListener(() => { seerrAPI.syncOverlayRegistrat
 chrome.permissions?.onAdded?.addListener(() => { seerrAPI.syncOverlayRegistration(); });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  settingsReady.then(() => seerrAPI.handleMessage(request, sender, sendResponse))
+  settingsReady.then(() => seerrAPI.connectionChangePending).then(() => seerrAPI.handleMessage(request, sender, sendResponse))
     .catch(error => sendResponse({ success: false, error: error.message }));
   return true; // Keep message channel open for async responses
 });

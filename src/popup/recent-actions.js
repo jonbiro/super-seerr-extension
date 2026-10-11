@@ -70,5 +70,6 @@
     await pending;
     if (current === generation) refresh.disabled = false;
   });
+  window.addEventListener('seerrConnectionChanged', () => refresh.click());
   void load();
 })();

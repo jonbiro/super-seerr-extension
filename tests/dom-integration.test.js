@@ -142,7 +142,7 @@ test('options edits and connection tests do not save; explicit save includes fea
   await dom.window.manager.testConnection();
   assert.equal(writes.length, 0);
   assert.equal(localWrites.length, 0);
-  assert.equal(messages[0].data.seerrUrl, 'https://new.example');
+  assert.equal(messages.find(message => message.action === 'testConnection').data.seerrUrl, 'https://new.example');
   await dom.window.manager.saveSettings();
   assert.equal(writes.length, 1);
   assert.equal(writes[0].overlayFeatures.cardBadges, false);

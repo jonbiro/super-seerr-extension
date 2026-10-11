@@ -278,3 +278,9 @@ body {
 .recent-action-state { display: block; margin-top: 6px; font-size: 12px; font-weight: 600; color: #374151; }
 .recent-actions li a { display: inline-block; padding: 5px 0; font-size: 12px; }
 .recent-actions button:focus-visible, .recent-actions a:focus-visible { outline: 3px solid #7c3aed; outline-offset: 2px; }
+
+.site-switcher { margin-bottom: 16px; }
+.site-switcher label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.site-switcher select { width: 100%; min-width: 0; padding: 8px; border: 1px solid #d1d5db; border-radius: 6px; font: inherit; font-size: 12px; }
+.site-switcher select:focus-visible { outline: 3px solid #7c3aed; outline-offset: 2px; }
+.site-switcher p { font-size: 12px; margin-top: 6px; overflow-wrap: anywhere; }

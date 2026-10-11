@@ -258,6 +258,23 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
       t.diagnostic(`Firefox packaged fixture passed: ${fixture.site} ${fixture.expect.mediaType}`);
     }
     assert.deepEqual(siteFixtures.errors, []);
+    const secondSite = await startServer();
+    try {
+      await navigate(optionsUrl);
+      const added = await message({ action: 'saveSeerrConnection', data: { name: 'Second Firefox site', url: secondSite.origin, apiKey: 'second-firefox-key' } });
+      assert.equal(added.success, true);
+      assert.equal(added.data.sites.length, 2);
+      assert.equal(JSON.stringify(added).includes('second-firefox-key'), false);
+      const connection = await message({ action: 'testConnection' });
+      assert.equal(connection.success, true);
+      assert.equal(connection.data.server, secondSite.origin);
+      await navigate(`moz-extension://${uuid}/src/popup/popup.html`);
+      await eventually(() => script('return document.querySelectorAll("#activeSeerrSite option").length;'), 2, 'Firefox popup lists both saved sites');
+      assert.equal(await script('return document.getElementById("activeSeerrSite").value;'), secondSite.origin);
+      assert.equal((await message({ action: 'activateSeerrConnection', data: { id: origin } })).success, true);
+      assert.equal((await message({ action: 'testConnection' })).data.server, origin);
+      t.diagnostic('Firefox saved and switched between two independent Seerr fixtures');
+    } finally { await new Promise(resolve => secondSite.server.close(resolve)); }
     t.diagnostic(`Validated Firefox ${started.capabilities.browserVersion}`);
   } catch (error) {
     const artifacts = path.resolve('test-results/firefox');

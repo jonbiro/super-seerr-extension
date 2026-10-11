@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.68]
+
+- Save up to ten named Seerr sites with separate device-local API keys, preserving the original connection when another site is added.
+- Switch the active site from the popup or Settings; edit saved connections and remove inactive sites without changing server data or confirmed history.
+- Store URL/key pairs atomically, invalidate status caches on switching, and reject requests from stale reviews or inactive saved-site overlays.
+- Show the request destination in external-site flyouts and refresh open integrations when connections change.
+- Add two-site Chromium and Firefox fixture coverage plus regressions for migration, key isolation, failed storage, permission denial, and stale requests.
+
 ## [3.5.67]
 
 - Remove cleared history from the popup immediately after deletion succeeds, even if reloading fails, and avoid status lookups for empty history.

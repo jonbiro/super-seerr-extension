@@ -92,6 +92,13 @@ class BaseIntegration {
       this.extractAndSetup().catch(err => this.error('Retry extraction failed:', err));
     }, this.retryDelay);
 
+    this._connectionListener = message => {
+      if (message?.action !== 'seerrStateChanged' || message.cacheCleared || this.destroyed) return;
+      this.cleanupUI();
+      this.extractAndSetup().catch(error => this.error('Could not refresh the selected site:', error));
+    };
+    chrome.runtime.onMessage?.addListener(this._connectionListener);
+
     // Setup SPA navigation detection
     this.setupNavigationDetection();
     this.setupLifecycleHandlers();
@@ -330,13 +337,29 @@ class BaseIntegration {
       // Plex token state is independent of Seerr status; the worker reports
       // only whether a token exists, never the token itself.
       let plexConfigured = false;
+      let connectionToken;
+      let serverUrl;
       try {
         const config = await this.client.sendMessage({ action: 'getConfigState' });
+        connectionToken = config?.data?.connectionToken;
+        serverUrl = config?.data?.serverUrl;
         plexConfigured = config?.success === true && config.data?.plexConfigured === true;
       } catch (_) { /* Treat current configuration failures as disconnected. */ }
 
       if (!isCurrent()) return;
       this.plexConfigured = plexConfigured;
+      this.client.connectionToken = connectionToken;
+      const panel = this.uiElements.panel;
+      if (panel && serverUrl) {
+        let destination = panel.querySelector('.seerr-connection-label');
+        if (!destination) {
+          destination = document.createElement('p'); destination.className = 'seerr-connection-label';
+          panel.prepend(destination);
+        }
+        const url = new URL(serverUrl);
+        destination.textContent = `Seerr: ${url.host}${url.pathname.replace(/\/$/, '')}`;
+        destination.style.cssText = 'font-size:12px;overflow-wrap:anywhere;margin:8px 12px;';
+      }
 
       // Plex state resolves alongside the Seerr lookup, never ahead of
       // rendering: a slow or failed lookup keeps the Add button rather than
@@ -923,6 +946,8 @@ class BaseIntegration {
    * Cleanup when extension is unloaded
    */
   destroy() {
+    if (this._connectionListener) chrome.runtime.onMessage?.removeListener?.(this._connectionListener);
+    this._connectionListener = null;
     if (this.navigationListener) {
       clearInterval(this.navigationListener);
       this.navigationListener = null;
