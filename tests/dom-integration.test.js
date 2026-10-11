@@ -1386,3 +1386,34 @@ for (const action of ['response', 'rejection', 'none']) test(`Plex detail status
     assert.equal(button.textContent, '✓ Added to Plex Watchlist');
   } else assert.equal(writes, 0);
 });
+
+for (const restore of ['Reset', 'disable overlay']) {
+  for (const display of ['flex', 'none']) {
+    test(`rating filters preserve Seerr display styles after ${restore} (${display})`, async t => {
+      const f = createOverlay({ wrapped: true });
+      t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+      await settle();
+      const doc = f.window.document;
+      const low = doc.querySelector('[data-id="1"]'), high = doc.querySelector('[data-id="2"]');
+      low.style.setProperty('display', display, 'important');
+      low.parentElement.style.setProperty('display', 'grid', 'important');
+      high.style.display = 'inline-flex';
+      high.parentElement.style.display = 'flex';
+      const input = doc.querySelector('.seerr-min-critics');
+      input.value = '80'; input.dispatchEvent(new f.window.Event('input'));
+      assert.equal(low.style.display, 'none');
+      assert.equal(high.style.display, 'inline-flex', 'a passing card retains its host layout');
+      assert.equal(high.parentElement.style.display, 'flex');
+      if (restore === 'Reset') doc.querySelector('.seerr-reset-sort').click();
+      else {
+        f.storage.overlayFeatures = { sortFilter: false, cardBadges: false };
+        f.change({ overlayFeatures: { newValue: f.storage.overlayFeatures } });
+        await settle();
+      }
+      assert.equal(low.style.display, display);
+      assert.equal(low.style.getPropertyPriority('display'), 'important');
+      assert.equal(low.parentElement.style.display, 'grid');
+      assert.equal(low.parentElement.style.getPropertyPriority('display'), 'important');
+    });
+  }
+}

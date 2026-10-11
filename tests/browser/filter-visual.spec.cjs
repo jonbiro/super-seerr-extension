@@ -251,3 +251,23 @@ for (const changed of [true, false]) test(`cross-tab preset refresh reconciles t
     await expect(page.locator('[data-testid="title-card"]')).toBeVisible();
   } else await expect(page.getByRole('status')).toHaveText('Applied Movie night');
 });
+
+test('filtering and Reset preserve host card and wrapper layout styles', async ({ page }) => {
+  await showFilter(page, 390);
+  await page.locator('[data-testid="title-card"]').evaluate(card => {
+    const item = document.createElement('li');
+    card.replaceWith(item); item.append(card);
+    card.style.setProperty('display', 'flex', 'important');
+    item.style.setProperty('display', 'grid', 'important');
+  });
+  const card = page.locator('[data-testid="title-card"]');
+  const item = page.locator('.grid > li');
+  await page.getByLabel('Critics ≥', { exact: true }).fill('90');
+  await expect(card).toBeHidden();
+  await expect(item).toHaveCSS('display', 'none');
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(card).toHaveCSS('display', 'flex');
+  await expect(item).toHaveCSS('display', 'grid');
+  expect(await card.evaluate(node => node.style.getPropertyPriority('display'))).toBe('important');
+  expect(await item.evaluate(node => node.style.getPropertyPriority('display'))).toBe('important');
+});

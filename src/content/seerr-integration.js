@@ -281,6 +281,7 @@
   }
 
   const cardRatingQueue = window.createRatingQueue();
+  const filterDisplayState = new WeakMap();
   window.addEventListener('scroll', () => cardRatingQueue.reprioritize(), { passive: true, capture: true });
 
   function cleanupOverlay({ preserveListIndex = false } = {}) {
@@ -296,8 +297,8 @@
       applyScoreSort(grid, 'default');
     }
     cards.forEach(card => {
-      card.style.display = '';
-      getCardLayoutItem(card).style.display = '';
+      setFilterHidden(card, false);
+      setFilterHidden(getCardLayoutItem(card), false);
       card.__seerrBadgesResolving = false;
       card.__seerrBadgesCleared = true;
       delete card.__seerrRatings;
@@ -2079,6 +2080,25 @@
     minImdb: 0
   };
 
+  // Own only the display override used to hide a filtered card. Host styles
+  // (including initially hidden cards and inline layout rules) survive Reset.
+  function setFilterHidden(node, hidden) {
+    if (hidden) {
+      if (!filterDisplayState.has(node) || node.style.display !== 'none') {
+        filterDisplayState.set(node, { value: node.style.display, priority: node.style.getPropertyPriority?.('display') || '' });
+      }
+      node.style.display = 'none';
+    } else if (filterDisplayState.has(node)) {
+      const original = filterDisplayState.get(node);
+      // A host update made while hidden takes precedence over our snapshot.
+      if (node.style.display === 'none') {
+        if (original.priority) node.style.setProperty('display', original.value, original.priority);
+        else node.style.display = original.value;
+      }
+      filterDisplayState.delete(node);
+    }
+  }
+
   function applyScoreFilters(grid, filters = currentFilters) {
     if (!grid) return;
     const currentCards = getMediaCards(grid);
@@ -2092,8 +2112,9 @@
       const hidesForAudience = filters.minAudience > 0 && (as === null || as < filters.minAudience);
       const hidesForTmdb = filters.minTmdb > 0 && (ts === null || ts < filters.minTmdb);
       const hidesForImdb = filters.minImdb > 0 && (is === null || is < filters.minImdb);
-      c.style.display = (hidesForCritics || hidesForAudience || hidesForTmdb || hidesForImdb) ? 'none' : '';
-      getCardLayoutItem(c).style.display = c.style.display;
+      const hidden = hidesForCritics || hidesForAudience || hidesForTmdb || hidesForImdb;
+      setFilterHidden(c, hidden);
+      setFilterHidden(getCardLayoutItem(c), hidden);
     });
     applyScoreSort(grid);
     updateSortFilterCoverage(grid);
@@ -2261,8 +2282,8 @@
         return idxA - idxB;
       });
       ordered.forEach(c => {
-        c.style.display = '';
-        getCardLayoutItem(c).style.display = '';
+        setFilterHidden(c, false);
+        setFilterHidden(getCardLayoutItem(c), false);
         grid.appendChild(getCardLayoutItem(c));
       });
       currentSort = 'default';
