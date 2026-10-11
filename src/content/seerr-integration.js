@@ -565,27 +565,18 @@
       if (title || originalTitle || year) {
         // Live observations are fresher than anything stored: fill the gaps
         // without overwriting what the page already said.
-        if (!pageMetadataByTmdbId.has(key)) {
-          pageMetadataByTmdbId.set(key, { title, originalTitle, year });
-        }
+        const live = pageMetadataByTmdbId.get(key);
+        pageMetadataByTmdbId.set(key, {
+          title: live?.title || title,
+          originalTitle: live?.originalTitle || originalTitle,
+          year: live?.year ?? year
+        });
       }
     }
-    if (lastListItems.length === 0) {
-      lastListItems = restored;
-      return;
-    }
-    // Live items may have arrived before the stored read finished; keep both,
-    // preferring the live copy where they describe the same title.
-    const liveKeys = new Set();
-    for (const item of lastListItems) {
-      const info = mediaInfoFromListItem(item);
-      if (info) liveKeys.add(`${info.mediaType}:${info.tmdbId}`);
-    }
-    lastListItems = lastListItems.concat(
-      restored.filter(item => !liveKeys.has(`${item.mediaType}:${item.tmdbId}`)));
-    if (lastListItems.length > Config.overlayCacheMaxEntries) {
-      lastListItems = lastListItems.slice(-Config.overlayCacheMaxEntries);
-    }
+    // Restore older records first, then merge live observations field by
+    // field. Sparse live records retain cached posters/years, while live
+    // values and live identities take priority at the retention limit.
+    lastListItems = projectListIndex(restored.concat(lastListItems), Config.overlayCacheMaxEntries);
   }
 
   // Why a given card has no identity yet. Distinguishes "Seerr has not mounted

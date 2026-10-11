@@ -22,7 +22,7 @@ const CARDS = `<article data-testid="title-card"><div><img src="https://image.tm
   <article data-testid="title-card"><div><img src="https://image.tmdb.org/t/p/w300/unknown.jpg" alt=""></div></article>`;
 
 function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverUrl = 'https://seerr.example', apiConfigured = false,
-  configForPage = null, pageUrl = 'https://seerr.example/discover', detail = false } = {}) {
+  configForPage = null, deferCache = false, pageUrl = 'https://seerr.example/discover', detail = false } = {}) {
   const { JSDOM } = require('jsdom');
   const dom = new JSDOM(`<main>${detail ? '<section class="media-header"><h1>Dune (2021)</h1></section>' : ''}<div id="grid">${CARDS}</div></main>`,
     { url: pageUrl, runScripts: 'outside-only' });
@@ -60,17 +60,22 @@ function openGrid({ local = {}, plexConfigured = false, rtScores = null, serverU
   for (const file of ['RatingsModel', 'RatingsConfig']) {
     window.eval(fs.readFileSync(`src/shared/${file}.js`, 'utf8'));
   }
+  let releaseCache;
+  const cacheGate = deferCache ? new Promise(resolve => { releaseCache = resolve; }) : null;
   const cacheMessage = require('./helpers/cache-bridge').cacheBridge({ settings: () => window.chrome.storage.sync.get(), local: window.chrome.storage.local, url: window.location.href });
   const send = window.chrome.runtime.sendMessage;
-  window.chrome.runtime.sendMessage = message => ['getOverlayCache', 'putOverlayCache'].includes(message.action) ? cacheMessage(message) : send(message);
+  window.chrome.runtime.sendMessage = async message => {
+    if (message.action === 'getOverlayCache' && cacheGate) await cacheGate;
+    return ['getOverlayCache', 'putOverlayCache'].includes(message.action) ? cacheMessage(message) : send(message);
+  };
   require('./helpers/overlay-modules').loadOverlayModules(window);
   window.eval(fs.readFileSync('src/content/seerr-integration.js', 'utf8').replace(/\}\)\(\);\s*$/, `window.testOverlay = {
     injectCardBadges, injectPlexCardButtons, injectSortFilterControls, hydrateCardsFromListItems, getRatings,
     flushPersistedRatings, projectListIndex, detectRoute, handleObservedApiResponse, handleRouteChange,
-    toggleBulkMode, notifyResult, listItemCount: () => lastListItems.length
+    toggleBulkMode, notifyResult, restoreListIndex, rememberListItems, listItemCount: () => lastListItems.length
   }; })();`));
   return {
-    dom, window, messages, localStore,
+    dom, window, messages, localStore, releaseCache,
     notify: message => messageListener?.(message),
     saveServerUrl: url => {
       syncStore.seerrUrl = url;
@@ -845,4 +850,40 @@ for (const placement of ['card', 'detail']) for (const focused of ['summary', 'b
   else assert.match(card.querySelector('.seerr-ratings-row').textContent, /99%/);
   assert.equal(updated.open, focused !== 'closed', 'repainting preserves the explanation state');
   assert.equal(doc.activeElement, focused === 'elsewhere' ? outside : updated.querySelector(control));
+});
+
+for (const liveYear of [null, 2022]) test(`a delayed stored catalogue fills gaps and preserves live metadata (year: ${liveYear})`, async t => {
+  const f = openGrid({ local: seedBlob(), plexConfigured: true, deferCache: true });
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.dom.window.close(); });
+  await flush(f.window);
+  f.window.testOverlay.handleObservedApiResponse({ source: f.window, origin: f.window.location.origin,
+    data: { channel: 'super-seerr:api', url: '/api/v1/request', items: [
+      { tmdbId: 123, mediaType: 'movie', title: 'Fresh Dune', ...(liveYear ? { releaseDate: `${liveYear}-01-01` } : {}) }
+    ] } });
+  f.releaseCache(); await flush(f.window);
+  f.window.testOverlay.hydrateCardsFromListItems();
+  f.window.testOverlay.injectPlexCardButtons();
+  const index = f.window.testOverlay.projectListIndex();
+  const title = index.find(item => item.tmdbId === '123');
+  assert.equal(title.title, 'Fresh Dune');
+  assert.equal(title.year, liveYear ?? 2021);
+  assert.equal(title.posterPath, '/p123.jpg');
+  const button = f.window.document.querySelector('.seerr-plex-card-button');
+  assert.ok(button, 'the cached poster must still identify the card');
+  assert.equal(button.getAttribute('aria-label'), 'Add Fresh Dune to Plex Watchlist');
+});
+
+test('cached-only catalogue records cannot evict fresher live observations at the limit', async t => {
+  const f = openGrid();
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.dom.window.close(); });
+  await flush(f.window);
+  const live = Array.from({ length: Config.overlayCacheMaxEntries }, (_, i) => ({
+    tmdbId: String(10000 + i), mediaType: 'movie', title: `Live ${i}`
+  }));
+  f.window.testOverlay.rememberListItems(live);
+  f.window.testOverlay.restoreListIndex([INDEX_ENTRY]);
+  assert.equal(f.window.testOverlay.listItemCount(), Config.overlayCacheMaxEntries);
+  const projected = f.window.testOverlay.projectListIndex(undefined, Config.overlayCacheMaxEntries);
+  assert.equal(projected[0].tmdbId, '10000');
+  assert.equal(projected.some(item => item.tmdbId === '123'), false);
 });

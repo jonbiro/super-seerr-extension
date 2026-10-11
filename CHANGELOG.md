@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.178]
+
+- Merge a delayed stored catalogue into live observations field by field, retaining cached posters and years when current records omit them while keeping newer live values.
+- Apply catalogue retention with cached records first so older cached-only titles cannot evict live observations.
+- Cover delayed reads with missing and updated live years, poster-only card hydration, and catalogue retention; both reported failure cases reproduced before the fix.
+
 ## [3.5.177]
 
 - Compare catalogue updates with each tab's previous snapshot, so changing a poster cannot replay an unchanged stale title, year, or date over another tab's correction.
