@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.136]
+
+- Keep host-page keydown shortcuts from cancelling score-details keyboard opening, closing and Tab navigation.
+- Restore keyboard focus to Retry scores after refresh and repaint, preserving focus moved elsewhere. Ignore completion updates for removed details or a different route.
+- Add browser regressions for host shortcut isolation and focus ownership after successful and failed score retries.
+
 ## [3.5.135]
 
 - Detect cache clears missed by an open tab when its next public-ratings read returns a different cache epoch, even if no shared scores remain.

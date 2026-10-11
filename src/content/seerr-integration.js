@@ -1312,20 +1312,30 @@
     retry.type = 'button';
     retry.textContent = 'Retry scores';
     details.addEventListener('click', event => event.stopPropagation());
+    details.addEventListener('keydown', event => event.stopPropagation());
     retry.addEventListener('click', async event => {
       event.preventDefault();
-      if (retry.disabled) return;
+      if (retry.disabled || !details.isConnected) return;
+      const restoreFocus = document.activeElement === retry;
       retry.disabled = true;
       retry.textContent = 'Checking…';
       const generation = routeGeneration;
+      const isCurrent = () => generation === routeGeneration && details.isConnected;
+      let repaint = false;
       try {
         await getRatings(info.tmdbId, info.title, info.year, info.mediaType, { refresh: true });
-        if (generation === routeGeneration && container.isConnected) repaintRatingTitle(info.tmdbId, info.mediaType);
+        repaint = isCurrent();
       } catch (_) {
-        text.textContent = 'The lookup failed. Please try again when the service is available.';
+        if (isCurrent()) text.textContent = 'The lookup failed. Please try again when the service is available.';
       } finally {
-        retry.disabled = false;
-        retry.textContent = 'Retry scores';
+        if (isCurrent()) {
+          retry.disabled = false;
+          retry.textContent = 'Retry scores';
+          // Disabling a keyboard-activated button releases focus to the body.
+          // Restore it before repaint so the replacement details retain it.
+          if (restoreFocus && document.activeElement === document.body) retry.focus({ preventScroll: true });
+          if (repaint) repaintRatingTitle(info.tmdbId, info.mediaType);
+        }
       }
     });
     details.append(summary, text, retry);
