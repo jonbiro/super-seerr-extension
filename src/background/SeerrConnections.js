@@ -25,7 +25,7 @@
       return { revision: 0, activeId: url, sites: url ? [{ id: url, url, name: new URL(url).host, apiKey: local.seerrApiKey || '' }] : [] };
     },
     publicSeerrConnections(value) {
-      return { activeId: value.activeId, sites: value.sites.map(({ id, name, url }) => ({ id, name, url })) };
+      return { revision: value.revision, activeId: value.activeId, sites: value.sites.map(({ id, name, url }) => ({ id, name, url })) };
     },
     connectionToken() {
       return this.connections ? `${this.connections.revision}:${this.connections.activeId}` : this.baseUrl ?? null;
@@ -73,18 +73,27 @@
       this.connectionChangePending = operation.catch(() => {});
       return operation;
     },
-    assertConnectionTarget(request, sender) {
-      if (request.connectionToken !== undefined && request.connectionToken !== this.connectionToken()) {
-        throw new Error('Active Seerr site changed. Refresh the title and review it again.');
-      }
-      // An old overlay must never send an action to a different saved site.
-      if (!this.connections || !sender?.url) return;
-      const page = new URL(sender.url);
+    savedSiteForPage(sender) {
+      if (!this.connections || !sender?.url) return null;
+      let page;
+      try { page = new URL(sender.url); } catch (_) { return null; }
       const matches = this.connections.sites.filter(site => {
         const url = new URL(site.url), base = url.pathname.replace(/\/+$/, '');
         return page.origin === url.origin && (page.pathname === base || page.pathname.startsWith(`${base}/`));
       }).sort((a, b) => b.url.length - a.url.length);
-      if (matches.length && matches[0].id !== this.connections.activeId) {
+      return matches[0] || null;
+    },
+    isInactiveSeerrPage(sender) {
+      const site = this.savedSiteForPage(sender);
+      return !!site && site.id !== this.connections.activeId;
+    },
+    assertConnectionTarget(request, sender) {
+      if (request.connectionToken !== undefined && request.connectionToken !== this.connectionToken()) {
+        throw new Error('Active Seerr site changed. Refresh the title and review it again.');
+      }
+      // Choose the most specific saved base path before granting access to a
+      // parent installation on the same origin.
+      if (this.isInactiveSeerrPage(sender)) {
         throw new Error('This is not the active Seerr site. Switch sites in the extension popup first.');
       }
     }

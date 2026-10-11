@@ -10,6 +10,7 @@
       return true;
     },
     overlayStorageServer(sender) {
+      this.assertConnectionTarget({}, sender);
       const server = new URL(this.baseUrl);
       const page = new URL(sender?.url);
       const base = server.pathname.replace(/\/+$/, '');

@@ -381,3 +381,21 @@ test('an older connection failure cannot overwrite a newer test result', async t
   assert.match(doc.getElementById('status').textContent, /Plex connected as New account/);
   assert.equal(doc.getElementById('testConnection').disabled, false);
 });
+
+test('a failed saved-site read restores the selector to the site whose fields remain visible', async t => {
+  const home = { id: 'https://home.example', url: 'https://home.example', apiKey: 'home-key', name: 'Home' };
+  const family = { id: 'https://family.example', url: 'https://family.example', apiKey: 'family-key', name: 'Family' };
+  const ctx = openOptions({ local: { seerrConnectionsV1: { activeId: home.id, sites: [home, family] } } });
+  t.after(() => ctx.dom.window.close());
+  ctx.window.chrome.runtime.sendMessage = async () => ({ success: true, data: { activeId: home.id, sites: [home, family] } });
+  await flush();
+  const select = ctx.window.document.getElementById('savedSeerrSites');
+  assert.equal(select.value, home.id);
+  ctx.window.chrome.storage.local.get = async () => { throw new Error('Read failed'); };
+  select.value = family.id; select.dispatchEvent(new ctx.window.Event('change'));
+  await flush();
+  assert.equal(select.value, home.id);
+  assert.equal(ctx.window.document.getElementById('apiKey').value, 'home-key');
+  assert.equal(ctx.window.document.getElementById('serverUrl').value, home.url);
+  assert.match(ctx.window.document.getElementById('status').textContent, /Could not load this site/);
+});

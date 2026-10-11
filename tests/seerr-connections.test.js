@@ -109,3 +109,93 @@ test('a denied popup host permission keeps the original active site and re-enabl
   assert.deepEqual(calls, ['getSeerrConnections']);
   assert.match(dom.window.document.getElementById('siteSwitchStatus').textContent, /declined/);
 });
+
+test('an inactive nested Seerr site cannot inherit the active parent site configuration or cache', async () => {
+  const w = await setup();
+  await message(w, 'saveSeerrConnection', { url: 'https://home.example', apiKey: 'root-key' });
+  // The original /base site is now inactive, though its path falls under /.
+  const nestedPage = { id: 'test', url: `${first}/discover`, tab: { id: 1 }, frameId: 0 };
+  const config = await message(w, 'getConfigState', undefined, nestedPage);
+  assert.equal(config.data.serverUrl, null);
+  assert.equal(config.data.apiConfigured, false);
+  for (const action of ['getOverlayCache', 'putOverlayCache', 'getFilterPresets']) {
+    assert.equal((await message(w, action, {}, nestedPage)).success, false, action);
+  }
+  const rootPage = { ...nestedPage, url: 'https://home.example/discover' };
+  assert.equal((await message(w, 'getConfigState', undefined, rootPage)).data.serverUrl, 'https://home.example');
+  // Prefix neighbors are still on the parent site, not the /base installation.
+  assert.equal((await message(w, 'getConfigState', undefined, { ...rootPage, url: 'https://home.example/baseball' })).data.serverUrl, 'https://home.example');
+  await message(w, 'activateSeerrConnection', { id: first });
+  assert.equal((await message(w, 'getConfigState', undefined, nestedPage)).data.serverUrl, first);
+});
+
+test('popup uses the confirmed switch result even if subsequent history reads fail', async t => {
+  const { JSDOM } = require('jsdom');
+  const fs = require('node:fs');
+  const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
+  t.after(() => dom.window.close());
+  const sites = [{ id: first, name: 'Home', url: first }, { id: second, name: 'Family', url: second }];
+  let activeId = first, notifications = 0, changed, reads = 0;
+  dom.window.addEventListener('seerrConnectionChanged', () => notifications++);
+  dom.window.chrome = { storage: { onChanged: { addListener: listener => { changed = listener; } } }, permissions: { request: async () => true }, runtime: { sendMessage: async ({ action }) => {
+    if (action === 'activateSeerrConnection') {
+      activeId = second;
+      const data = { revision: 2, activeId, sites };
+      changed?.({ seerrConnectionsV1: { newValue: data } }, 'local');
+      return { success: true, data };
+    }
+    reads++;
+    if (activeId === second) throw new Error('Worker disconnected');
+    return { success: true, data: { revision: 1, activeId, sites } };
+  } } };
+  dom.window.eval(fs.readFileSync('src/popup/connections.js', 'utf8'));
+  await new Promise(resolve => setImmediate(resolve));
+  const select = dom.window.document.getElementById('activeSeerrSite');
+  select.value = second; select.dispatchEvent(new dom.window.Event('change'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(select.value, second);
+  assert.equal(select.disabled, false);
+  assert.match(dom.window.document.getElementById('siteSwitchStatus').textContent, /Site switched/);
+  assert.equal(notifications, 1);
+  assert.equal(reads, 1, 'the matching storage notification does not reread a confirmed switch');
+});
+
+test('an open popup follows site changes made in Settings', async t => {
+  const { JSDOM } = require('jsdom');
+  const fs = require('node:fs');
+  const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
+  t.after(() => dom.window.close());
+  const sites = [{ id: first, name: 'Home', url: first }, { id: second, name: 'Family', url: second }];
+  let activeId = first, changed, notifications = 0;
+  dom.window.addEventListener('seerrConnectionChanged', () => notifications++);
+  dom.window.chrome = { storage: { onChanged: { addListener: listener => { changed = listener; } } }, runtime: {
+    sendMessage: async () => ({ success: true, data: { activeId, sites } })
+  } };
+  dom.window.eval(fs.readFileSync('src/popup/connections.js', 'utf8'));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(typeof changed, 'function');
+  activeId = second; changed({ seerrConnectionsV1: {} }, 'local');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(dom.window.document.getElementById('activeSeerrSite').value, second);
+  assert.equal(notifications, 1);
+});
+
+test('a delayed popup list cannot restore an older active site after a settings change', async t => {
+  const { JSDOM } = require('jsdom');
+  const fs = require('node:fs');
+  const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
+  t.after(() => dom.window.close());
+  const sites = [{ id: first, name: 'Home', url: first }, { id: second, name: 'Family', url: second }];
+  let changed, finishInitial, reads = 0;
+  dom.window.chrome = { storage: { onChanged: { addListener: listener => { changed = listener; } } }, runtime: {
+    sendMessage: () => ++reads === 1 ? new Promise(resolve => { finishInitial = resolve; })
+      : Promise.resolve({ success: true, data: { revision: 2, activeId: second, sites } })
+  } };
+  dom.window.eval(fs.readFileSync('src/popup/connections.js', 'utf8'));
+  changed({ seerrConnectionsV1: { newValue: { revision: 2, activeId: second } } }, 'local');
+  await new Promise(resolve => setImmediate(resolve));
+  finishInitial({ success: true, data: { revision: 1, activeId: first, sites } });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(dom.window.document.getElementById('activeSeerrSite').value, second);
+  assert.equal(dom.window.document.getElementById('activeSeerrSite').title, second);
+});

@@ -5,6 +5,7 @@
   const labels = { request: 'Requested', 'seerr-watchlist': 'Added to Seerr watchlist', 'plex-watchlist': 'Added to Plex watchlist' };
   const identity = entry => JSON.stringify([entry.at, entry.kind, entry.mediaType, entry.title, entry.tmdbId ?? null, entry.server ?? null]);
   let generation = 0;
+  let clearing = false;
   async function load() {
     const current = ++generation;
     let historyLoaded = false;
@@ -47,6 +48,7 @@
     }
   }
   clear.addEventListener('click', async () => {
+    clearing = true;
     generation++; clear.disabled = true; refresh.disabled = true;
     try {
       const response = await chrome.runtime.sendMessage({ action: 'clearRecentActions' });
@@ -56,20 +58,25 @@
       status.textContent = 'No confirmed actions yet.';
       await load();
     } catch (_) { status.textContent = 'Could not clear history. Try again.'; clear.disabled = false; }
-    finally { refresh.disabled = false; }
+    finally { clearing = false; refresh.disabled = false; }
   });
   const refresh = document.createElement('button'); refresh.type = 'button'; refresh.textContent = 'Refresh statuses';
   refresh.className = 'button secondary';
   clear.className = 'button secondary';
   const actions = document.createElement('div'); actions.className = 'recent-action-controls';
   clear.before(actions); actions.append(refresh, clear);
-  refresh.addEventListener('click', async () => {
+  async function refreshHistory() {
     refresh.disabled = true;
     const pending = load();
     const current = generation;
     await pending;
     if (current === generation) refresh.disabled = false;
+  }
+  refresh.addEventListener('click', refreshHistory);
+  window.addEventListener('seerrConnectionChanged', () => {
+    // A disabled button blocks clicks while an obsolete refresh is pending.
+    // Start a new generation directly; clearing already reloads after deletion.
+    if (!clearing) void refreshHistory();
   });
-  window.addEventListener('seerrConnectionChanged', () => refresh.click());
   void load();
 })();

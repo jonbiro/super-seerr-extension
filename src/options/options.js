@@ -331,6 +331,7 @@ class OptionsManager {
       const id = document.getElementById('savedSeerrSites').value;
       const local = await chrome.storage.local.get('seerrConnectionsV1');
       const site = local.seerrConnectionsV1?.sites.find(item => item.id === id);
+      if (local.seerrConnectionsV1 && !site) throw new Error('Site removed');
       if (site) {
         this.connectionMode = true; this.connectionId = site.id;
         this.serverUrlInput.value = site.url; this.apiKeyInput.value = site.apiKey;
@@ -338,7 +339,11 @@ class OptionsManager {
       } else { await this.loadSettings(); this.connectionId = id; }
       this.apiKeyInput.type = 'password'; this.toggleButton.textContent = 'Show';
       this.toggleButton.setAttribute('aria-label', 'Show Seerr API key');
-    } catch (_) { this.showStatus('error', 'Could not load this site. Reload Settings.'); }
+    } catch (_) {
+      // The fields still belong to the last successfully loaded site.
+      document.getElementById('savedSeerrSites').value = this.connectionId || '';
+      this.showStatus('error', 'Could not load this site. Reload Settings.');
+    }
     finally { this._connectionBusy = false; this.updateConnectionControls(); }
   }
 

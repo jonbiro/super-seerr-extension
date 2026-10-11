@@ -271,3 +271,27 @@ test('history status reads do not start if settings change while stored history 
   await rejected;
   assert.equal(calls, 0);
 });
+
+test('a site switch refreshes history even while an earlier status refresh is pending', async t => {
+  const dom = new JSDOM(fs.readFileSync('src/popup/popup.html', 'utf8'), { runScripts: 'outside-only' });
+  t.after(() => dom.window.close());
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  const entry = { kind: 'request', title: 'Film', mediaType: 'movie', at: 1 };
+  let reads = 0, finishOld;
+  dom.window.chrome = { runtime: { sendMessage: async ({ action }) => {
+    if (action === 'getRecentActions') return { success: true, data: [entry] };
+    if (++reads === 2) return new Promise(resolve => { finishOld = resolve; });
+    return { success: true, data: [{ ...entry, status: reads === 1 ? 'Requested' : 'Status unavailable' }] };
+  } } };
+  dom.window.eval(fs.readFileSync('src/popup/recent-actions.js', 'utf8'));
+  await tick();
+  const refresh = [...dom.window.document.querySelectorAll('button')].find(button => button.textContent === 'Refresh statuses');
+  refresh.click(); await tick();
+  dom.window.dispatchEvent(new dom.window.Event('seerrConnectionChanged'));
+  await tick();
+  assert.equal(reads, 3);
+  finishOld({ success: true, data: [{ ...entry, status: 'Old server status' }] });
+  await tick();
+  assert.equal(dom.window.document.querySelector('.recent-action-state').textContent, 'Status unavailable');
+  assert.equal(refresh.disabled, false);
+});

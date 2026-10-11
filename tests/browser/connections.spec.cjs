@@ -81,6 +81,9 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await expect(options.locator('#apiKey')).toHaveValue('family-key');
     await options.getByRole('button', { name: 'Use selected site', exact: true }).click();
     await expect(options.locator('#activeSeerrSite')).toContainText('Active site: Family');
+    await expect(popup.locator('#activeSeerrSite')).toHaveValue(second.origin);
+    await expect(popup.locator('#activeSeerrSite')).toHaveAttribute('title', second.origin);
+    await expect(popup.locator('#serverUrl')).toContainText(new URL(second.origin).host);
     await options.locator('#savedSeerrSites').selectOption(first.origin);
     await options.getByRole('button', { name: 'Remove selected site', exact: true }).click();
     await expect(options.locator('#savedSeerrSites option')).toHaveCount(1);
@@ -88,7 +91,27 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     const storage = await options.evaluate(async () => ({ sync: await chrome.storage.sync.get(null), local: await chrome.storage.local.get('seerrConnectionsV1') }));
     expect(JSON.stringify(storage.sync)).not.toContain('-key');
     expect(JSON.stringify(storage.local)).not.toContain('home-key');
-    expect(requests.filter(r => r.key && ((r.site === 'Home' && !['home-key', 'initial-home-key'].includes(r.key)) || (r.site === 'Family' && r.key !== 'family-key')))).toEqual([]);
+    await expect(popup.locator('#activeSeerrSite option')).toHaveCount(1);
+    // A child installation on a shared origin must not inherit the parent.
+    const child = `${second.origin}/movie`;
+    await options.evaluate(async child => {
+      const saved = await chrome.runtime.sendMessage({ action: 'saveSeerrConnection', data: { url: child, name: 'Nested site', apiKey: 'child-key' } });
+      if (!saved.success) throw new Error(saved.error);
+    }, child);
+    await options.evaluate(async parent => {
+      await chrome.runtime.sendMessage({ action: 'activateSeerrConnection', data: { id: parent } });
+    }, second.origin);
+    await seerr.goto(`${child}/550`);
+    await expect(seerr.locator('[data-seerr-overlay=true]')).toHaveCount(0);
+    const cacheReply = await options.evaluate(async pageUrl => {
+      const tabs = await chrome.tabs.query({});
+      const tab = tabs.find(tab => tab.url === pageUrl);
+      const results = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => chrome.runtime.sendMessage({ action: 'getOverlayCache' }) });
+      return results[0].result;
+    }, `${child}/550`);
+    expect(cacheReply.success).toBe(false);
+    expect(cacheReply.error).toContain('not the active');
+    expect(requests.filter(r => r.key && ((r.site === 'Home' && !['home-key', 'initial-home-key'].includes(r.key)) || (r.site === 'Family' && r.key !== (r.path.startsWith('/movie/api/') ? 'child-key' : 'family-key'))))).toEqual([]);
   } finally {
     await context?.close();
     await Promise.all([new Promise(resolve => first.server.close(resolve)), new Promise(resolve => second.server.close(resolve))]);

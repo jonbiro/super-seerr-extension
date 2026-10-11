@@ -351,7 +351,8 @@ class SeerrAPI {
         // The overlay must never hold the API key, so it asks whether requests
         // are available rather than reading the secret itself.
         case 'getConfigState': {
-          sendResponse({ success: true, data: { apiConfigured: !!(this.baseUrl && this.apiKey), serverUrl: this.baseUrl ?? null, connectionToken: this.connectionToken(), plexConfigured: !!this.plexToken } });
+          const inactive = this.isInactiveSeerrPage(sender);
+          sendResponse({ success: true, data: { apiConfigured: !inactive && !!(this.baseUrl && this.apiKey), serverUrl: inactive ? null : this.baseUrl ?? null, connectionToken: this.connectionToken(), plexConfigured: !inactive && !!this.plexToken } });
           break;
         }
 

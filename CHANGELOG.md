@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.69]
+
+- Keep the popup's active-site selector and diagnostics synchronized with changes made in Settings, and discard delayed lists from older configurations.
+- Use the confirmed switch result without a redundant read that could falsely restore the previous selection; expose the selected URL in the selector tooltip.
+- Refresh history for the new site even when an earlier status lookup is pending.
+- Restore the last loaded site selection when its replacement cannot be read, keeping the visible URL and API key aligned with the selected site.
+- Prevent inactive nested Seerr installations from inheriting their parent site's overlay configuration, ratings cache access, or filter-preset access; add worker and browser regressions.
+
 ## [3.5.68]
 
 - Save up to ten named Seerr sites with separate device-local API keys, preserving the original connection when another site is added.
