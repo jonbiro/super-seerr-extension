@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.103]
+
+- Update Score details when verified shared ratings resolve an uncertain match or fill missing scores, so the explanation agrees with the displayed ratings.
+- Preserve genuine lookup-failure notices and unresolved match explanations; correct older persisted explanations when rendering them.
+- Add live public-update DOM regressions covering complete and partial bundles, verified zero scores, native-score preservation and persisted diagnostics.
+
 ## [3.5.102]
 
 - Recover immediately when browser window creation or opener detachment throws, restoring Watch instead of leaving it disabled as Opening.

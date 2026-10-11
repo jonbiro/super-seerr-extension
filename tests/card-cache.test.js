@@ -762,3 +762,43 @@ for (const year of [2021, 1984]) test(`live public rating notification respects 
   assert.equal(fixture.window.testOverlay.listItemCount(), 1);
   assert.equal(fixture.messages.filter(message => message.action === 'getRottenTomatoesRatings').length, 0);
 });
+
+for (const status of ['uncertain', 'partial', 'unrated', 'failed']) {
+  for (const complete of [false, true]) test(`shared ratings repair score details (${status}, complete: ${complete})`, async t => {
+    const checkedAt = Date.now() - 10000;
+    const native = { ...BUNDLE, rtCriticsScore: null, rtAudienceScore: null,
+      ...(complete ? {} : { imdbRating: null }) };
+    const fixture = openGrid({ local: { overlayRatingsV1: {
+      server: SERVER, epoch: 0, matcher: Config.matcherVersion, index: [INDEX_ENTRY],
+      entries: { 'movie:123': { bundle: native, cachedAt: checkedAt, retryAt: Date.now() + 100000,
+        diagnostics: { status, checkedAt, source: 'seerr-native' } } }
+    } } });
+    t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.window.close(); });
+    await flush(fixture.window);
+    if (status === 'uncertain') assert.match(fixture.window.document.querySelector('article .seerr-rating-details p').textContent,
+      /match was uncertain/, 'an unresolved RT match still explains why its score is hidden');
+    const send = fixture.window.chrome.runtime.sendMessage;
+    fixture.window.chrome.runtime.sendMessage = async message => {
+      const reply = await send(message);
+      if (message.action === 'getOverlayCache') reply.data.publicRatingsV1 = { matcher: Config.matcherVersion, entries: {
+        'movie:123': { source: 'rotten-tomatoes', checkedAt: checkedAt + 1000, expiresAt: checkedAt + Config.rtCacheTtlMs,
+          value: { rtCriticsScore: 0, rtAudienceScore: 85, confidence: 1, source: 'rotten-tomatoes',
+            matchedTitle: 'Dune', matchedYear: 2021, url: 'https://www.rottentomatoes.com/m/dune' } }
+      } };
+      return reply;
+    };
+    fixture.notify({ action: 'publicRatingsChanged' });
+    await flush(fixture.window);
+    const card = fixture.window.document.querySelector('article');
+    assert.equal(card.__seerrRatings.rtCriticsScore, 0, 'a verified zero is still a rating');
+    assert.equal(card.__seerrRatings.tmdbRating, 7.5);
+    const explanation = card.querySelector('.seerr-rating-details p').textContent;
+    assert.match(explanation, status === 'failed' ? /A lookup failed/ : complete
+      ? /All score sources returned ratings/ : /Some sources have no score/);
+    assert.doesNotMatch(explanation, /match was uncertain|No source returned a rating/);
+    assert.equal(fixture.messages.filter(message => message.action === 'getRottenTomatoesRatings').length, 0);
+    await fixture.window.testOverlay.flushPersistedRatings();
+    assert.equal(fixture.localStore.overlayRatingsByServerV1['https://seerr.example'].entries['movie:123'].diagnostics.status,
+      status === 'failed' ? 'failed' : complete ? 'rated' : 'partial');
+  });
+}

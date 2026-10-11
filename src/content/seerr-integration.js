@@ -1105,7 +1105,7 @@
     if (shared && previous?.bundle && shared.checkedAt > (previous.publicCheckedAt ?? previous.cachedAt ?? 0)) {
       const bundle = mergeBundles(shared.bundle, previous.bundle);
       previous = { ...previous, bundle, publicCheckedAt: shared.checkedAt,
-        ...(previous.diagnostics ? { diagnostics: { ...previous.diagnostics, source: bundle.source } } : {}) };
+        ...(previous.diagnostics ? { diagnostics: { ...previous.diagnostics, status: ratingDetailsStatus(bundle, previous.diagnostics), source: bundle.source } } : {}) };
       ratingsCache.set(key, previous);
       schedulePersistedRatingsFlush();
     } else if (shared && previous && !previous.bundle) {
@@ -1256,11 +1256,22 @@
     return pending;
   }
 
+  function ratingDetailsStatus(bundle, diagnostics) {
+    // Public scores can resolve an old uncertain match or fill missing fields
+    // without a new server lookup. Keep genuine transport failures visible.
+    if (diagnostics?.status === 'failed') return 'failed';
+    const verifiedRt = bundle?.confidence >= Config.confidenceThreshold &&
+      (bundle.rtCriticsScore != null || bundle.rtAudienceScore != null);
+    if (diagnostics?.status === 'uncertain' && !verifiedRt) return 'uncertain';
+    if (!Model.hasAnyScore(bundle)) return 'unrated';
+    return isBundleComplete(bundle) && verifiedRt ? 'rated' : 'partial';
+  }
+
   function appendRatingDetails(container, info) {
     if (container.querySelector('.seerr-rating-details')) return;
     const entry = ratingsCache.get(ratingsCacheKey(info.tmdbId, info.title, info.year, info.mediaType));
     const diagnostics = entry?.diagnostics;
-    const status = diagnostics?.status || (entry?.bundle ? 'partial' : 'unrated');
+    const status = ratingDetailsStatus(entry?.bundle, diagnostics);
     const messages = {
       rated: 'All score sources returned ratings.',
       partial: 'Some sources have no score for this title yet.',
