@@ -162,8 +162,11 @@
         const guids = this.asPlexList(first.Guid || first.guid);
         for (const guid of guids) {
           const id = guid && (guid.id || guid.guid || '');
-          const match = String(id).match(/^tmdb:\/\/(\d+)/i);
-          if (match) return Number(match[1]);
+          if (typeof id !== 'string') continue;
+          const match = id.match(/^tmdb:\/\/(\d+)$/i);
+          if (!match || match[0] !== id) continue;
+          const tmdbId = Number(match[1]);
+          if (Number.isSafeInteger(tmdbId) && tmdbId > 0) return tmdbId;
         }
       } catch (_) {}
       return null;

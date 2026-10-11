@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.188]
+
+- Require a complete string TMDB GUID with a positive safe integer when verifying Plex search candidates, instead of accepting a numeric prefix or coerced array.
+- Skip malformed candidates and continue checking later results, while refusing additions when no verified match remains.
+- Cover movie and TV additions with suffixes, paths, queries, fragments, line breaks, and array GUIDs; verify both safe fallback and zero-write refusal.
+
 ## [3.5.187]
 
 - Normalize Plex candidate release years consistently across grouped and ungrouped search responses, including numeric strings and release dates.
