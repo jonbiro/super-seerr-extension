@@ -165,7 +165,7 @@
   window.addEventListener('popstate', () => setTimeout(handleRouteChange, 150));
   // Isolated content scripts cannot reliably patch the page's history methods.
   let navigationTimer = setInterval(handleRouteChange, 1000);
-  window.addEventListener('pagehide', () => {
+  window.addEventListener('pagehide', event => {
     abandonBulkRun();
     cardRatingQueue.clear();
     clearInterval(navigationTimer); navigationTimer = null;
@@ -174,13 +174,35 @@
     flushPersistedRatings();
     if (cardObserver) { cardObserver.disconnect(); cardObserver = null; }
     clearTimeout(cardObserverTimer);
+    if (event.persisted) {
+      routeConfigPending = true;
+      configGeneration++;
+      routeConfigGeneration++;
+      // The pagehide flush may still need the catalogue projection.
+      cleanupOverlay({ preserveListIndex: true });
+    }
   });
   // A hidden tab may never get pagehide before the browser discards it.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') flushPersistedRatings();
   });
-  window.addEventListener('pageshow', () => {
+  window.addEventListener('pageshow', event => {
     if (navigationTimer === null) navigationTimer = setInterval(handleRouteChange, 1000);
+    if (event.persisted) {
+      // The active installation, permissions or cache epoch may have changed
+      // while this document was frozen. Reload rather than reusing its heap.
+      routeConfigPending = true;
+      cleanupOverlay();
+      forgetPersistedRatings();
+      resetSeerrRatings();
+      const generation = ++routeConfigGeneration;
+      void checkApiConfig().then(() => {
+        if (generation !== routeConfigGeneration) return;
+        routeConfigPending = false;
+        injectOverlay();
+      });
+      return;
+    }
     if (isSeerrPage() && isListRoute(detectRoute())) setupCardObserver();
   });
 

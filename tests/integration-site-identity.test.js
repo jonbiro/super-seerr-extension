@@ -147,3 +147,20 @@ test('a late saved-choice reply cannot replace the new site panel or token', asy
   assert.equal(p.integration.uiElements.flyout, current);
   assert.equal(p.integration.client.connectionToken, 'Family');
 });
+
+test('back-forward restoration reloads saved choices for the selected site', async t => {
+  const p = probe(t);
+  p.integration.setupLifecycleHandlers();
+  await p.integration.extractAndSetup();
+  const old = p.integration.uiElements.flyout;
+  old.setExpanded(true);
+  p.fixture.window.dispatchEvent(new p.fixture.window.PageTransitionEvent('pagehide', { persisted: true }));
+  assert.equal(old.isConnected, false, 'frozen page must release stale action controls');
+  p.switchTo('Family'); // No state notification reaches a frozen document.
+  p.fixture.window.dispatchEvent(new p.fixture.window.PageTransitionEvent('pageshow', { persisted: true }));
+  for (let i = 0; i < 12; i++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(p.integration.mediaData.tmdbId, 911);
+  assert.equal(p.integration.client.connectionToken, 'Family');
+  assert.match(p.integration.uiElements.panel.textContent, /2011/);
+  assert.match(p.integration.uiElements.panel.textContent, /family.example/);
+});

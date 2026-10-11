@@ -984,3 +984,42 @@ test('late ratings for a replaced card cannot overwrite its new identity', async
   assert.match(card.querySelector('.seerr-card-badge').textContent, /95%/);
   assert.equal(card.querySelectorAll('.seerr-card-badge').length, 1);
 });
+
+test('back-forward restoration rechecks the active site before restoring Seerr controls', async t => {
+  const f = createOverlay();
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  assert.ok(f.window.document.querySelector('.seerr-sort-filter-bar'));
+  f.window.dispatchEvent(new f.window.PageTransitionEvent('pagehide', { persisted: true }));
+  f.storage.seerrUrl = 'https://family.example'; // Simulate a missed frozen-page notification.
+  f.window.dispatchEvent(new f.window.PageTransitionEvent('pageshow', { persisted: true }));
+  assert.equal(f.window.document.querySelector('.seerr-sort-filter-bar'), null, 'old controls disappear synchronously');
+  await settle();
+  assert.equal(f.window.document.querySelector('.seerr-sort-filter-bar'), null, 'inactive site stays disabled');
+  assert.equal(f.window.document.querySelector('.seerr-card-badge'), null);
+  assert.ok(f.messages.filter(m => m.action === 'getConfigState').length >= 2);
+});
+
+test('restoration discards frozen rating snapshots even when the Seerr URL is unchanged', async t => {
+  const f = createOverlay();
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const low = () => f.window.document.querySelector('[data-id="1"] .seerr-card-badge');
+  assert.match(low().textContent, /30/);
+  const send = f.window.chrome.runtime.sendMessage;
+  let cacheReads = 0;
+  f.window.chrome.runtime.sendMessage = message => {
+    if (message.action === 'getOverlayCache') cacheReads++;
+    if (message.action === 'getRottenTomatoesRatings') return Promise.resolve({ success: true, data: {
+      rtCriticsScore: 75, confidence: 0.9
+    } });
+    return send(message);
+  };
+  f.window.dispatchEvent(new f.window.PageTransitionEvent('pagehide', { persisted: true }));
+  // Another tab clears or updates the ratings while this one is frozen.
+  f.window.dispatchEvent(new f.window.PageTransitionEvent('pageshow', { persisted: true }));
+  await settle();
+  assert.ok(cacheReads > 0, 'the worker cache is read again after restoration');
+  assert.match(low().textContent, /75/);
+  assert.doesNotMatch(low().textContent, /30/);
+});

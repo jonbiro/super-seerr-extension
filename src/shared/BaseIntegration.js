@@ -132,9 +132,19 @@ class BaseIntegration {
     if (this._lifecycleBound) return;
     this._lifecycleBound = true;
 
-    this._pagehideListener = () => this.suspendNavigationPolling();
-    this._pageshowListener = () => {
-      if (!this.destroyed) this.resumeNavigationPolling();
+    this._pagehideListener = event => {
+      this.suspendNavigationPolling();
+      // Frozen documents can miss settings notifications. Release actions and
+      // invalidate pending replies before they enter the back/forward cache.
+      if (event.persisted) this.cleanupUI();
+    };
+    this._pageshowListener = event => {
+      if (this.destroyed) return;
+      this.resumeNavigationPolling();
+      if (event.persisted) {
+        this.cleanupUI();
+        this.extractAndSetup().catch(error => this.error('Could not refresh the restored page:', error));
+      }
     };
     window.addEventListener('pagehide', this._pagehideListener);
     window.addEventListener('pageshow', this._pageshowListener);

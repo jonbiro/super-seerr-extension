@@ -6,6 +6,13 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.85]
+
+- Release discovery actions and invalidate pending replies when a page enters the browser's back/forward cache; rebuild restored panels using the current Seerr site and its saved title choice.
+- Recheck configuration before restoring Seerr overlays, removing controls immediately when an installation is no longer active.
+- Reload shared/public and server-specific rating snapshots on restoration, so missed cache clears or updates cannot leave a frozen tab pinned to stale in-memory ratings.
+- Add lifecycle regressions for missed site-switch notifications and refreshed ratings at an unchanged URL.
+
 ## [3.5.84]
 
 - Ignore null, unrelated media types and 4K entries in embedded request lists when deriving standard-quality request status; retain direct media availability when no relevant request exists.
