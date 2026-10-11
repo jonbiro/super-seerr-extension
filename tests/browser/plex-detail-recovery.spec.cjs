@@ -11,7 +11,7 @@ for (const failure of ['response', 'rejection']) test(`Plex detail error stays r
     window.chrome = { storage: { sync: { get: async () => ({ seerrUrl: 'https://seerr.example' }) }, onChanged: { addListener() {} } },
       runtime: { onMessage: { addListener() {} }, sendMessage: async message => {
         if (message.action === 'getConfigState') return { success: true, data: { serverUrl: 'https://seerr.example', plexConfigured: true } };
-        if (message.action === 'plexWatchlistState') return { success: true, data: { onWatchlist: false } };
+        if (message.action === 'plexWatchlistState') return new Promise(resolve => { window.finishState = resolve; });
         if (message.action === 'plexAddToWatchlist') {
           window.writes.push(message);
           if (window.writes.length > 1) return { success: true, data: {} };
@@ -35,6 +35,8 @@ for (const failure of ['response', 'rejection']) test(`Plex detail error stays r
   await expect(note).toContainText(failure === 'rejection' ? 'Connection interrupted' : 'Permission denied');
   await expect(note).toContainText('<img src=x>');
   await expect(note.locator('img')).toHaveCount(0);
+  await expect(add).toBeEnabled();
+  await page.evaluate(() => window.finishState({ success: true, data: { onWatchlist: true } }));
   await expect(add).toBeEnabled();
   await page.clock.fastForward(6000);
   await expect(note).toBeVisible();

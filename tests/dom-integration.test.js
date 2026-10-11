@@ -1353,3 +1353,35 @@ for (const [label, metadata, expected] of [
   assert.equal(writes.length, 1);
   assert.equal(writes[0].year, expected);
 });
+
+for (const action of ['response', 'rejection', 'none']) test(`Plex detail status respects a newer add attempt (${action})`, async t => {
+  const f = createOverlay({ settings: { plexConfigured: true }, path: '/movie/1' });
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.dom.window.close(); });
+  await settle();
+  const doc = f.window.document, header = doc.createElement('header');
+  header.innerHTML = '<h1>Dune (2021)</h1>'; doc.body.append(header);
+  const original = f.window.chrome.runtime.sendMessage;
+  let finishState, writes = 0;
+  f.window.chrome.runtime.sendMessage = async message => {
+    if (message.action === 'plexWatchlistState') return new Promise(resolve => { finishState = resolve; });
+    if (message.action === 'plexAddToWatchlist') {
+      writes++;
+      if (writes > 1) return { success: true, data: {} };
+      if (action === 'rejection') throw new Error('Offline');
+      return { success: false, error: 'Request failed' };
+    }
+    return original(message);
+  };
+  f.window.testOverlay.injectPlexWatchlistButton();
+  const button = header.querySelector('.seerr-plex-watchlist-button');
+  assert.ok(finishState);
+  if (action !== 'none') { button.click(); await settle(); assert.equal(button.disabled, false); }
+  finishState({ success: true, data: { onWatchlist: true } }); await settle();
+  assert.equal(button.disabled, action === 'none', 'an older status must not disable a failed add retry');
+  assert.equal(button.textContent, action === 'none' ? '✓ On Plex Watchlist' : '＋ Add to Plex Watchlist');
+  if (action !== 'none') {
+    button.click(); await settle();
+    assert.equal(writes, 2);
+    assert.equal(button.textContent, '✓ Added to Plex Watchlist');
+  } else assert.equal(writes, 0);
+});

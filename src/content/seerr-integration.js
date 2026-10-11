@@ -1781,8 +1781,10 @@
     const pageUrl = window.location.href;
     const ownsButton = () => button.isConnected && generation === routeGeneration
       && configuration === configGeneration && pageUrl === window.location.href;
+    let actionStarted = false;
     button.addEventListener('click', async () => {
       if (!ownsButton() || button.disabled) return;
+      actionStarted = true;
       button.disabled = true;
       button.textContent = 'Adding to Plex…';
       try {
@@ -1805,13 +1807,13 @@
     });
     container.appendChild(button);
 
-    // Already there renders as state from the start. A click in flight wins:
-    // it disables the button first, so this late answer stands down.
+    // A user action owns the state from its start, including a failed attempt
+    // that re-enables retry. The earlier status read must not replace it.
     chrome.runtime.sendMessage({
       action: 'plexWatchlistState',
       data: { tmdbId: Number(tmdbId), title, year, mediaType }
     }).then(response => {
-      if (!ownsButton() || button.disabled) return;
+      if (!ownsButton() || actionStarted || button.disabled) return;
       if (response && response.success && response.data && response.data.onWatchlist) {
         button.disabled = true;
         button.textContent = '✓ On Plex Watchlist';

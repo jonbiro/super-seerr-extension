@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.183]
+
+- Prevent a delayed initial Plex status reply from replacing the retry button after a newer detail-page add attempt fails.
+- Continue showing initial watchlist state when no add was attempted.
+- Cover failed responses and rejected channels in DOM and browser retry tests, with an unchanged initial-state control; both failure cases reproduced before the fix.
+
 ## [3.5.182]
 
 - Use persistent, announced, dismissible error notifications for failed detail-page Plex additions, matching the card action instead of removing plain-text feedback after five seconds.
