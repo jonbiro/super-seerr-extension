@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.187]
+
+- Normalize Plex candidate release years consistently across grouped and ungrouped search responses, including numeric strings and release dates.
+- Require year confirmation for title-only lookups with a known release year, preventing missing or malformed candidate years from selecting a different remake.
+- Cover movie and TV additions with matching, mismatched, missing, and malformed years in both response formats; rejected matches issue no write.
+
 ## [3.5.186]
 
 - Keep Plex action history attributed to the Seerr site active when the action starts, even if the user switches sites before it finishes.

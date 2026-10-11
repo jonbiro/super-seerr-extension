@@ -15,6 +15,18 @@
   const PLEX_VERSION = '1.0';
   const PLEX_CLIENT_ID = 'super-seerr-extension';
 
+  function releaseYear(metadata) {
+    const year = metadata.year;
+    if (year != null) {
+      return (typeof year === 'number' || typeof year === 'string') && /^\d{4}$/.test(String(year)) && Number(year) >= 1800
+        ? Number(year) : null;
+    }
+    const date = metadata.originallyAvailableAt;
+    if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date) || Number(date.slice(0, 4)) < 1800) return null;
+    const parsed = new Date(`${date}T00:00:00Z`);
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date ? Number(date.slice(0, 4)) : null;
+  }
+
   function normalizeTitle(value = '') {
     // Fold Latin accents while preserving meaningful marks in other scripts
     // (for example, Japanese ハ and バ are different characters).
@@ -116,13 +128,11 @@
           const ratingKey = metadata.ratingKey || this.plexRatingKeyFromGuid(metadata.guid);
           if (!ratingKey) continue;
           const type = metadata.type === 'show' ? 'tv' : metadata.type === 'movie' ? 'movie' : metadata.type;
-          const year = metadata.year
-            || (metadata.originallyAvailableAt ? Number(String(metadata.originallyAvailableAt).slice(0, 4)) : null);
           out.push({
             ratingKey: String(ratingKey),
             title: metadata.title || metadata.name || '',
             type,
-            year: Number.isFinite(year) ? year : null,
+            year: releaseYear(metadata),
             guid: metadata.guid || null
           });
         }
@@ -136,7 +146,7 @@
             ratingKey: String(ratingKey),
             title: metadata.title || metadata.name || '',
             type: metadata.type === 'show' ? 'tv' : metadata.type,
-            year: metadata.year || null,
+            year: releaseYear(metadata),
             guid: metadata.guid || null
           });
         }
@@ -221,7 +231,7 @@
       // Title-only: require a single normalized title/year match, never a guess.
       const wanted = normalizeTitle(media.title);
       const matching = candidates.filter(candidate => /[\p{L}\p{N}]/u.test(wanted) && normalizeTitle(candidate.title) === wanted
-        && (media.year == null || candidate.year == null || candidate.year === media.year));
+        && (media.year == null || candidate.year === media.year));
       if (matching.length === 0) {
         throw new Error(`No Plex match for "${media.title}". Check the title in Plex Discover.`);
       }
