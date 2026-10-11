@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.184]
+
+- Save a named filter preset with Enter and prevent the key from submitting an enclosing host-page form.
+- Leave Enter used for IME text composition alone, and restore focus to the name field after success or failure without changing existing button focus behavior.
+- Cover keyboard saves both inside and outside a form, successful and failed saves, composition, and host-form submission prevention in the browser.
+
 ## [3.5.183]
 
 - Prevent a delayed initial Plex status reply from replacing the retry button after a newer detail-page add attempt fails.

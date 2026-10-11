@@ -73,11 +73,17 @@
       remove.disabled = !preset;
       if (preset) { name.value = preset.name; apply(preset); status.textContent = `Applied ${preset.name}`; }
     });
+    name.addEventListener('keydown', event => {
+      if (event.key !== 'Enter' || event.isComposing) return;
+      event.preventDefault();
+      if (!busy) save.click();
+    });
     save.addEventListener('click', async () => {
       if (busy) return;
       const preset = validate({ name: name.value, ...readCurrent() });
       if (!preset) { status.textContent = 'Enter a name for this preset.'; name.focus(); return; }
-      const restoreFocus = document.activeElement === save;
+      const initiatingControl = document.activeElement === name ? name : save;
+      const restoreFocus = document.activeElement === initiatingControl;
       setBusy(true);
       try {
         const next = await request('saveFilterPreset', preset);
@@ -85,7 +91,7 @@
         selection = preset.name; adopt(next); render();
         status.textContent = `Saved ${preset.name}`;
       } catch (error) { if (!disposed) status.textContent = error.message || 'Could not save preset.'; }
-      finally { finishAction(save, restoreFocus); }
+      finally { finishAction(initiatingControl, restoreFocus); }
     });
     remove.addEventListener('click', async () => {
       const selected = select.value; if (busy || !selected) return;
