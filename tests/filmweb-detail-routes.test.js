@@ -15,3 +15,19 @@ for (const [path, type] of [['/film/Podziemny+kr%C4%85g-1999-837/','movie'], ['/
     assert.equal((await f.integration().extractMediaData()).mediaType, type);
   });
 }
+
+for (const [type, path, title, year] of [
+  ['movie', '/film/Podziemny+kr%C4%85g-1999-837', 'Fight Club', 1999],
+  ['tv', '/serial/Breaking+Bad-2008-430668', 'Breaking Bad', 2008]
+]) {
+  test(`Filmweb ${type} original title excludes the nested release year`, async t => {
+    const titleClass = type === 'tv' ? 'serialCoverSection__originalTitle' : 'filmCoverSection__originalTitle';
+    const yearClass = type === 'tv' ? 'serialCoverSection__year' : 'filmCoverSection__year';
+    const html = `<h1 itemprop="name">Localized title</h1><h2 class="${titleClass}">${title}<div class="${yearClass}">${year}</div></h2>`;
+    const f = loadIntegration({site:'filmweb', url:`https://www.filmweb.pl${path}`, html});
+    t.after(() => f.dom.window.close());
+    const result = await f.integration().extractMediaData();
+    assert.equal(result.title, title);
+    assert.equal(result.year, year);
+  });
+}

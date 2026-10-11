@@ -41,22 +41,25 @@ for (const width of [1440, 1280, 1024, 768, 600, 390, 320]) test(`filter layout 
   expect(Math.abs(saveBounds.y - deleteBounds.y)).toBeLessThanOrEqual(1);
   const panelBounds = await page.locator('#seerr-filter-bar').boundingBox();
   expect(Math.abs(sortBounds.x - panelBounds.x - 17)).toBeLessThanOrEqual(1);
-  const hintBounds = await page.locator('.seerr-filter-hint').boundingBox();
+  const hintBounds = await page.locator('.seerr-rating-filter-hint').boundingBox();
+  const ratingHeadingBounds = await page.getByRole('heading', { name: 'Minimum ratings', exact: true }).boundingBox();
   const refreshBounds = await page.getByRole('button', { name: 'Refresh scores' }).boundingBox();
   const resetBounds = await page.getByRole('button', { name: 'Reset', exact: true }).boundingBox();
+  expect(await page.locator('.seerr-rating-filter-hint').textContent()).toBe('0 means any score');
+  expect(hintBounds.y).toBeLessThanOrEqual(ratingHeadingBounds.y + ratingHeadingBounds.height);
   if (width > 600) {
-    // Reset should stay with the rest of the actions instead of floating under the sort field.
+    // Reset stays with the refresh/load actions instead of floating under the sort field.
     expect(Math.abs(resetBounds.x - panelBounds.x - 17)).toBeLessThanOrEqual(1);
-    expect(Math.abs(hintBounds.x - resetBounds.x - resetBounds.width - 8)).toBeLessThanOrEqual(1);
-    expect(Math.abs(refreshBounds.x - hintBounds.x - hintBounds.width - 8)).toBeLessThanOrEqual(1);
+    expect(Math.abs(refreshBounds.x - resetBounds.x - resetBounds.width - 8)).toBeLessThanOrEqual(1);
   } else {
-    // The wrapped mobile hint needs only the normal flex row gap before actions.
-    expect(Math.abs(refreshBounds.y - hintBounds.y - hintBounds.height - 8)).toBeLessThanOrEqual(1);
+    // The optional third action spans the row instead of appearing as a half-width orphan.
     const loadBounds = await page.getByRole('button', { name: /Load 500 more/ }).boundingBox();
     const selectBounds = await page.getByRole('button', { name: 'Select titles', exact: true }).boundingBox();
     expect(Math.abs(loadBounds.x - refreshBounds.x - refreshBounds.width - 8)).toBeLessThanOrEqual(1);
-    expect(Math.abs(selectBounds.x - refreshBounds.x)).toBeLessThanOrEqual(1);
-    expect(Math.abs(selectBounds.width - refreshBounds.width)).toBeLessThanOrEqual(1);
+    const secondaryBounds = await page.locator('.seerr-filter-secondary-actions').boundingBox();
+    expect(Math.abs(selectBounds.x - secondaryBounds.x)).toBeLessThanOrEqual(1);
+    expect(Math.abs(selectBounds.width - secondaryBounds.width)).toBeLessThanOrEqual(1);
+    expect(selectBounds.y).toBeGreaterThan(loadBounds.y);
   }
   if (width >= 600 && width <= 768) {
     expect(Math.abs(presetBounds.y - nameBounds.y)).toBeLessThanOrEqual(1);

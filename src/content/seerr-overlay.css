@@ -229,8 +229,11 @@
 .seerr-cache-age:empty { display: none; }
 .seerr-filter-controls { display: grid; grid-template-columns: minmax(200px, 1.4fr) minmax(0, 3fr); gap: 12px; align-items: start; }
 .seerr-filter-field { min-width: 0; box-sizing: border-box; }
-.seerr-sort-field { display: flex; flex-direction: column; gap: 6px; }
-.seerr-rating-filters { min-width: 0; }
+.seerr-sort-field { display: flex; flex-direction: column; gap: 6px; padding-top: 24px; }
+.seerr-rating-filters { display: flex; min-width: 0; flex-direction: column; gap: 6px; }
+.seerr-rating-filter-header { display: flex; min-height: 18px; align-items: baseline; justify-content: space-between; gap: 8px; }
+.seerr-rating-filter-header h3 { margin: 0; color: var(--seerr-label); font-size: 12px; line-height: 18px; font-weight: 600; }
+.seerr-rating-filter-hint { margin: 0; color: var(--seerr-label); font-size: 11px; line-height: 18px; text-align: right; }
 .seerr-threshold-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
 .seerr-filter-field[data-score] {
   display: grid;
@@ -295,9 +298,9 @@
 .seerr-sort-filter-bar button:disabled, .seerr-sort-filter-bar input:disabled, .seerr-sort-filter-bar select:disabled { opacity: .5; cursor: default; }
 .seerr-sort-filter-bar .seerr-reset-sort { background: transparent; color: var(--seerr-label); }
 .seerr-sort-filter-bar .seerr-toggle-select { background: #7c3aed33; border-color: #a78bfa88; color: #ddd1ff; }
-.seerr-filter-hint { color: var(--seerr-label); font-size: 11px; margin: 0; }
 @container seerr-filters (max-width: 800px) {
   .seerr-filter-controls { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .seerr-sort-field { padding-top: 0; }
   .seerr-sort-filter-bar .seerr-filter-presets { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
   .seerr-filter-presets .seerr-presets-label { grid-column: 1 / -1; }
 }
@@ -312,8 +315,8 @@
     box-sizing: border-box;
     justify-content: initial;
   }
-  .seerr-filter-hint { grid-column: 1 / -1; }
   .seerr-filter-secondary-actions > button { width: 100%; }
+  .seerr-filter-secondary-actions > :last-child:nth-child(odd) { grid-column: 1 / -1; }
   .seerr-sort-filter-bar .seerr-filter-presets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .seerr-filter-presets .seerr-preset-actions { grid-column: 1 / -1; }
 }

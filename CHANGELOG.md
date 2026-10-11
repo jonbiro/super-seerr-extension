@@ -6,6 +6,18 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.218]
+
+- Keep the score explanation beside its rating filters and make the narrow-screen action row use its full width cleanly.
+
+## [3.5.217]
+
+- Retain Trakt release years when a visible title agrees with its slug, without mistaking a title such as "Space: 1999" for release metadata.
+
+## [3.5.216]
+
+- Keep Filmweb's original movie and TV titles separate from release-year metadata nested in the same heading.
+
 ## [3.5.215]
 
 - Keep filter actions together across desktop and tablet widths, and balance narrow-screen action buttons so no control is stranded at full width.

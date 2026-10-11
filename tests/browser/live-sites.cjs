@@ -48,7 +48,10 @@ const path = require('node:path');
           if (site.expect.year) await expect(page.locator('.seerr-year')).toContainText(String(site.expect.year));
           // A short viewport catches layout changes without issuing any action.
           await page.setViewportSize({ width: 390, height: 600 });
-          await page.locator('.seerr-tab').click();
+          // A host consent layer can intercept the pointer. Keep the check
+          // read-only and classify that block promptly instead of waiting for
+          // Playwright's much longer default click timeout.
+          await page.locator('.seerr-tab').click({ timeout: 3000 });
           await expect(page.locator('.seerr-tab')).toHaveAttribute('aria-expanded', 'true');
           const panel = page.locator('.seerr-panel');
           await expect.poll(async () => {

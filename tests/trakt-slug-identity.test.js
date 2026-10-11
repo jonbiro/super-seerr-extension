@@ -32,6 +32,20 @@ test('Trakt release metadata remains authoritative over a fallback slug year', a
   assert.equal((await f.integration().extractMediaData()).year, 1983);
 });
 
+for (const [slug, title, year] of [
+  ['am%C3%A9lie-2001', 'Amélie', 2001],
+  ['blade-runner-2049-2017', 'Blade Runner 2049', 2017]
+]) {
+  test(`Trakt visible title ${title} retains its matching slug year`, async t => {
+    const f = loadIntegration({ site: 'trakt', url: `https://app.trakt.tv/movies/${slug}`,
+      title: `Trakt Web: ${title}`, html: `<h1>${title}</h1>` });
+    t.after(() => f.window.close());
+    const media = await f.integration().extractMediaData();
+    assert.equal(media.title, title);
+    assert.equal(media.year, year);
+  });
+}
+
 test('Trakt visible titles retain literal year-like suffixes without inventing a release year', async t => {
   const f = loadIntegration({ site: 'trakt', url: 'https://trakt.tv/shows/space-1999',
     title: 'Trakt', html: '<h1 data-test-id="show-title">Space: 1999</h1>' });

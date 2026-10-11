@@ -54,6 +54,13 @@ class TraktIntegration extends BaseIntegration {
     }
 
     this.log(`Detected ${mediaType} page from URL:`, urlMatch[2]);
+    let decodedSlug = null;
+    try { decodedSlug = decodeURIComponent(urlMatch[2]); }
+    catch (_) { /* A visible page title can still identify an undecodable URL. */ }
+    const slugYearMatch = decodedSlug?.match(/-(\d{4})$/);
+    const slugYear = slugYearMatch ? this.extractor.parseReleaseYear(slugYearMatch[1]) : null;
+    const slugTitle = slugYear === null ? decodedSlug : decodedSlug.slice(0, slugYearMatch.index);
+    let fallbackYear = null;
 
     // Extract title - Trakt has clean, semantic structure
     // Enhanced selectors for both trakt.tv and app.trakt.tv
@@ -87,21 +94,23 @@ class TraktIntegration extends BaseIntegration {
 
     this.log('Extracted title before cleanup:', title);
 
-    // For app.trakt.tv React SPA, if we only got generic title, extract from URL
-    let fallbackYear = null;
+    // Some app pages initially expose only a generic title, so reconstruct it
+    // from the slug. Once the real title appears, retain a slug year only when
+    // the preceding slug text agrees with that title; this avoids treating a
+    // literal title such as "Space: 1999" as a release year.
     if (!title || /^(?:Trakt(?: Web)?|Track Your Shows & Movies)$/i.test(title.trim()) || title.trim() === '') {
       this.log('Title extraction failed, trying to extract from URL slug');
-      if (urlMatch && urlMatch[2]) {
-        let slug;
-        try { slug = decodeURIComponent(urlMatch[2]); }
-        catch (_) { return null; } // An undecodable slug is not a title.
-        fallbackYear = this.extractor.parseReleaseYear(slug.match(/-(\d{4})$/)?.[1]);
+      if (decodedSlug) {
+        fallbackYear = slugYear;
         // Convert URL slug to title (e.g., "peacemaker-2022" -> "Peacemaker")
-        title = (fallbackYear === null ? slug : slug.replace(/-\d{4}$/, ''))
+        title = (fallbackYear === null ? decodedSlug : slugTitle)
           .replace(/-/g, ' ') // Replace dashes with spaces
           .replace(/(^|\s)\p{L}/gu, l => l.toUpperCase()).trim(); // Preserve Unicode letters within words.
         this.log('Extracted title from URL slug:', title);
-      }
+      } else return null; // A generic application title cannot identify an invalid slug.
+    } else if (slugYear !== null) {
+      const normalize = value => value.normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
+      if (normalize(slugTitle.replace(/[-_]+/g, ' ')) === normalize(title)) fallbackYear = slugYear;
     }
 
     this.log('Final extracted title:', title);

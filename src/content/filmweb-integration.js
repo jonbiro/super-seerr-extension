@@ -49,6 +49,17 @@ class FilmwebIntegration extends BaseIntegration {
     let title = this.extractor.extractTextFromSelectors(originalTitleSelectors, 'original title');
 
     if (title) {
+      const originalTitleElement = originalTitleSelectors
+        .map(selector => document.querySelector(selector))
+        .find(element => element && element.textContent.trim());
+      if (originalTitleElement?.querySelector('.filmCoverSection__year, .serialCoverSection__year')) {
+        // Filmweb nests the release year in the original-title heading without
+        // a text separator. Remove that metadata from a clone, never the page.
+        const titleClone = originalTitleElement.cloneNode(true);
+        titleClone.querySelectorAll('.filmCoverSection__year, .serialCoverSection__year')
+          .forEach(element => element.remove());
+        title = titleClone.textContent.trim();
+      }
       title = title
           .replace(/\s*\(\d{4}\)\s*$/g, '') // Remove year in parentheses
           .trim();
