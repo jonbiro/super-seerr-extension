@@ -63,8 +63,16 @@ test('save, switch, edit, and remove a second Seerr site without mixing API keys
     await popup.setViewportSize({ width: 320, height: 400 });
     await popup.goto(`chrome-extension://${id}/src/popup/popup.html`);
     await expect(popup.locator('#activeSeerrSite')).toHaveValue(second.origin);
+    await options.locator('#apiKey').fill('unsaved-family-key');
     await popup.locator('#activeSeerrSite').selectOption(first.origin);
     await expect(popup.locator('#siteSwitchStatus')).toContainText('Site switched');
+    await expect(options.locator('#activeSeerrSite')).toContainText('Active site: Home');
+    await expect(options.locator('#savedSeerrSites')).toHaveValue(second.origin);
+    await expect(options.locator('#serverUrl')).toHaveValue(second.origin);
+    await expect(options.locator('#apiKey')).toHaveValue('unsaved-family-key');
+    await expect(options.getByRole('button', { name: 'Use selected site', exact: true })).toBeEnabled();
+    expect(await options.locator('.connection-options').evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await options.locator('.connection-options').screenshot({ path: '/tmp/super-seerr-multiple-sites-settings.png' });
     await expect(popup.locator('#diagnosticChecks')).toContainText('API key: OK');
     const result = await popup.evaluate(async () => chrome.runtime.sendMessage({ action: 'testConnection' }));
     expect(result.success).toBe(true);

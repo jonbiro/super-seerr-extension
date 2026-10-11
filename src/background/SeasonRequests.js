@@ -13,8 +13,9 @@
       if (media.mediaType !== 'tv') throw new Error('Season selection is only available for TV');
       const server = this.baseUrl;
       const key = this.apiKey;
+      const connectionToken = this.connectionToken();
       const assertCurrent = () => {
-        if (this.baseUrl !== server || this.apiKey !== key) throw new Error('Settings changed. Review seasons again.');
+        if (this.baseUrl !== server || this.apiKey !== key || this.connectionToken() !== connectionToken) throw new Error('Settings changed. Review seasons again.');
       };
       let tmdbId = media.tmdbId;
       const identityMatches = tmdbId && await this.tmdbIdentityMatches(media);

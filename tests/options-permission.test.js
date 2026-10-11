@@ -16,6 +16,7 @@ function openOptions({ granted = true, synced = {}, local = {} } = {}) {
   const localRemovals = [];
   const requested = [];
   const order = [];
+  const storageListeners = [];
 
   // Mutable stores: a read after a write must see the write, or a test can
   // pass against a page that never actually changed anything.
@@ -23,6 +24,7 @@ function openOptions({ granted = true, synced = {}, local = {} } = {}) {
   const localStore = { ...local };
   window.chrome = {
     storage: {
+      onChanged: { addListener: listener => storageListeners.push(listener) },
       sync: {
         get: async () => ({ ...syncStore }),
         set: async value => { order.push('sync.set'); syncWrites.push(value); Object.assign(syncStore, value); }
@@ -49,7 +51,7 @@ function openOptions({ granted = true, synced = {}, local = {} } = {}) {
     } }
   };
   window.eval(fs.readFileSync('src/options/options.js', 'utf8'));
-  return { dom, window, syncWrites, localWrites, localRemovals, requested, order };
+  return { dom, window, syncWrites, localWrites, localRemovals, requested, order, storageListeners };
 }
 
 const warningHidden = window => window.document.getElementById('permissionWarning').classList.contains('hidden');
@@ -398,4 +400,103 @@ test('a failed saved-site read restores the selector to the site whose fields re
   assert.equal(ctx.window.document.getElementById('apiKey').value, 'home-key');
   assert.equal(ctx.window.document.getElementById('serverUrl').value, home.url);
   assert.match(ctx.window.document.getElementById('status').textContent, /Could not load this site/);
+});
+
+for (const timing of ['initial load', 'external switch']) {
+  test(`saved-site metadata preserves the edited site during ${timing}`, async t => {
+    const home = { id: 'https://home.example', url: 'https://home.example', apiKey: 'home-key', name: 'Home' };
+    const family = { id: 'https://family.example', url: 'https://family.example', apiKey: 'family-key', name: 'Family' };
+    let activeId = timing === 'initial load' ? family.id : home.id;
+    const ctx = openOptions({ local: { seerrConnectionsV1: { activeId: home.id, sites: [home, family] } } });
+    t.after(() => ctx.window.close());
+    ctx.window.chrome.runtime.sendMessage = async () => ({ success: true, data: { activeId, sites: [home, family] } });
+    await flush();
+    const doc = ctx.window.document;
+    if (timing === 'external switch') {
+      doc.getElementById('apiKey').value = 'unsaved-key';
+      activeId = family.id;
+      ctx.storageListeners.forEach(listener => listener({ seerrConnectionsV1: { newValue: { activeId } } }, 'local'));
+      await flush();
+    }
+    assert.equal(doc.getElementById('savedSeerrSites').value, home.id);
+    assert.equal(doc.getElementById('serverUrl').value, home.url);
+    assert.equal(doc.getElementById('apiKey').value, timing === 'initial load' ? 'home-key' : 'unsaved-key');
+    assert.match(doc.getElementById('activeSeerrSite').textContent, /Active site: Family/);
+    assert.equal(doc.getElementById('useSeerrSite').disabled, false);
+  });
+}
+
+test('saving a renamed site keeps its confirmed identity when another site becomes active', async t => {
+  const home = { id: 'https://home.example', url: 'https://home.example', apiKey: 'home-key', name: 'Home' };
+  const family = { id: 'https://family.example', url: 'https://family.example', apiKey: 'family-key', name: 'Family' };
+  const ctx = openOptions({ local: { seerrConnectionsV1: { activeId: home.id, sites: [home, family] } } });
+  t.after(() => ctx.window.close());
+  let sites = [home, family], activeId = home.id;
+  const saves = [];
+  ctx.window.chrome.runtime.sendMessage = async ({ action, data }) => {
+    if (action === 'saveSeerrConnection') {
+      saves.push(data);
+      const saved = { ...data, id: data.url };
+      sites = [saved, family]; activeId = family.id;
+      return { success: true, data: { activeId: saved.id, sites } };
+    }
+    return { success: true, data: { activeId, sites } };
+  };
+  await flush();
+  const doc = ctx.window.document;
+  doc.getElementById('serverUrl').value = 'https://moved.example';
+  doc.getElementById('settingsForm').dispatchEvent(new ctx.window.Event('submit'));
+  await flush();
+  assert.equal(doc.getElementById('savedSeerrSites').value, 'https://moved.example');
+  assert.match(doc.getElementById('activeSeerrSite').textContent, /Active site: Family/);
+  doc.getElementById('settingsForm').dispatchEvent(new ctx.window.Event('submit'));
+  await flush();
+  assert.equal(saves[1].id, 'https://moved.example', 'the next save must edit the same site as the visible fields');
+});
+
+test('a background site-list refresh preserves a new-site draft', async t => {
+  const home = { id: 'https://home.example', url: 'https://home.example', apiKey: 'home-key', name: 'Home' };
+  const ctx = openOptions({ local: { seerrConnectionsV1: { activeId: home.id, sites: [home] } } });
+  t.after(() => ctx.window.close());
+  ctx.window.chrome.runtime.sendMessage = async () => ({ success: true, data: { activeId: home.id, sites: [home] } });
+  await flush();
+  const doc = ctx.window.document;
+  doc.getElementById('addSeerrSite').click();
+  doc.getElementById('serverUrl').value = 'https://draft.example';
+  doc.getElementById('apiKey').value = 'draft-key';
+  ctx.storageListeners.forEach(listener => listener({ seerrConnectionsV1: {} }, 'local'));
+  await flush();
+  assert.equal(doc.getElementById('savedSeerrSites').value, '');
+  assert.match(doc.getElementById('savedSeerrSites').selectedOptions[0].textContent, /New site/);
+  assert.equal(doc.getElementById('serverUrl').value, 'https://draft.example');
+  assert.equal(doc.getElementById('apiKey').value, 'draft-key');
+  assert.equal(doc.getElementById('useSeerrSite').disabled, true);
+  assert.equal(doc.getElementById('removeSeerrSite').disabled, true);
+});
+
+test('an open legacy Settings window saves to profiles after another window adds a site', async t => {
+  const home = { id: 'https://home.example', url: 'https://home.example', apiKey: 'home-key', name: 'Home' };
+  const family = { id: 'https://family.example', url: 'https://family.example', apiKey: 'family-key', name: 'Family' };
+  const ctx = openOptions({ synced: { seerrUrl: home.url }, local: { seerrApiKey: home.apiKey } });
+  t.after(() => ctx.window.close());
+  let connections = { revision: 0, activeId: home.id, sites: [home] };
+  let saved;
+  ctx.window.chrome.runtime.sendMessage = async ({ action, data }) => {
+    if (action === 'saveSeerrConnection') {
+      saved = data;
+      connections = { ...connections, revision: 2, activeId: home.id };
+    }
+    return { success: true, data: connections };
+  };
+  await flush();
+  connections = { revision: 1, activeId: family.id, sites: [home, family] };
+  ctx.storageListeners.forEach(listener => listener({ seerrConnectionsV1: { newValue: connections } }, 'local'));
+  await flush();
+  const doc = ctx.window.document;
+  doc.getElementById('apiKey').value = 'edited-home-key';
+  doc.getElementById('settingsForm').dispatchEvent(new ctx.window.Event('submit'));
+  await flush();
+  assert.equal(saved?.id, home.id);
+  assert.equal(saved?.apiKey, 'edited-home-key');
+  assert.ok(ctx.localWrites.every(write => !Object.hasOwn(write, 'seerrApiKey')), 'retired legacy keys must not receive edits');
 });

@@ -11,6 +11,25 @@ async function setup() {
 }
 const addSecond = worker => message(worker, 'saveSeerrConnection', { url: second, apiKey: 'family-secret', name: 'Family' });
 
+for (const action of ['requestMedia', 'addToWatchlist', 'getSeasonOptions']) {
+  for (const stage of ['identity', 'search']) {
+    test(`${action} stops an in-flight ${stage} check after switching away and back`, async () => {
+      const w = await setup(); await addSecond(w);
+      let finish, calls = 0;
+      const gate = new Promise(resolve => { finish = resolve; });
+      w.api.tmdbIdentityMatches = () => gate;
+      w.api.resolveMediaMatch = () => gate;
+      w.api.makeAPIRequest = w.api.sendAPIRequest = async () => { calls++; return { id: 1, seasons: [] }; };
+      const pending = w.api[action]({ title: 'Example', mediaType: action === 'getSeasonOptions' ? 'tv' : 'movie', ...(stage === 'identity' ? { tmdbId: 1 } : {}) });
+      await message(w, 'activateSeerrConnection', { id: first });
+      await message(w, 'activateSeerrConnection', { id: second });
+      finish(stage === 'identity' ? true : { id: 1 });
+      await assert.rejects(pending, /Settings changed/);
+      assert.equal(calls, 0, 'a new review is required before any further API call');
+    });
+  }
+}
+
 test('adding a second site retains legacy credentials, switches atomically, and survives restart', async () => {
   const w = await setup();
   const before = await message(w, 'getSeerrConnections');

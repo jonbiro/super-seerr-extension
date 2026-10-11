@@ -29,6 +29,14 @@ class OptionsManager {
   }
 
   async init() {
+    chrome.storage.onChanged?.addListener((changes, area) => {
+      if ((area === 'local' && changes.seerrConnectionsV1) || (area === 'sync' && changes.seerrUrl)) {
+        // Refresh the active label and available actions without discarding
+        // the site (or unsaved credentials) this window is editing.
+        this.loadConnectionChoices();
+        this.refreshPermissionWarning().catch(() => {});
+      }
+    });
     // Load existing settings
     await this.loadSettings();
     await this.loadConnectionChoices();
@@ -126,12 +134,14 @@ class OptionsManager {
   // never blocks on the grant, so this is the standing reminder to fix that.
   async refreshPermissionWarning() {
     if (!this.permissionWarning) return;
+    const generation = this.permissionGeneration = (this.permissionGeneration || 0) + 1;
     const [{ seerrUrl }, local] = await Promise.all([chrome.storage.sync.get(['seerrUrl']), chrome.storage.local.get('seerrConnectionsV1')]);
     const connections = local.seerrConnectionsV1;
     const activeUrl = connections ? connections.sites.find(site => site.id === connections.activeId)?.url : seerrUrl;
     const pattern = this.originPattern(activeUrl || '');
-    this.savedPermissionPattern = pattern;
     const missing = !!pattern && !(await this.hasOverlayPermission(pattern));
+    if (generation !== this.permissionGeneration) return;
+    this.savedPermissionPattern = pattern;
     this.permissionWarning.classList.toggle('hidden', !missing);
   }
 
@@ -171,6 +181,9 @@ class OptionsManager {
       this.connectionMode = !!connections;
       this.connectionId = active?.id;
       this.serverUrlInput.value = active?.url || settings.seerrUrl || '';
+      if (!connections && settings.seerrUrl) {
+        this.connectionId = new URL(settings.seerrUrl).href.replace(/\/+$/, '');
+      }
       this.apiKeyInput.value = active ? active.apiKey : local.seerrApiKey || '';
       if (document.getElementById('seerrSiteName')) document.getElementById('seerrSiteName').value = active?.name || '';
       if (this.plexTokenInput) this.plexTokenInput.value = local.plexToken || '';
@@ -254,6 +267,9 @@ class OptionsManager {
         const response = await chrome.runtime.sendMessage({ action: 'saveSeerrConnection', data: { id: connectionId, name: connectionName, url: serverUrl, apiKey } });
         if (!response?.success) throw new Error(response?.error || 'Could not save this site');
         this.connectionMode = true;
+        // Keep the identity confirmed by this save even if another window
+        // activates a different site before the following metadata refresh.
+        this.connectionId = response.data.activeId;
         await chrome.storage.sync.set({ overlayFeatures: Object.fromEntries(Array.from(document.querySelectorAll('[data-overlay-feature]'), input => [input.dataset.overlayFeature, input.checked])) });
         await chrome.storage.local.set({ plexToken, debugLogging: this.debugLoggingInput?.checked === true });
       } else await Promise.all([
@@ -263,6 +279,8 @@ class OptionsManager {
         }),
         chrome.storage.local.set({ seerrApiKey: apiKey, plexToken, debugLogging: this.debugLoggingInput?.checked === true })
       ]);
+
+      if (!this.connectionMode) this.connectionId = new URL(serverUrl).href.replace(/\/+$/, '');
 
       await this.loadConnectionChoices();
       // The worker re-registers off this storage change, so no nudge here.
@@ -282,10 +300,15 @@ class OptionsManager {
   }
 
   async loadConnectionChoices() {
+    const generation = this.connectionChoicesGeneration = (this.connectionChoicesGeneration || 0) + 1;
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getSeerrConnections' });
+      if (generation !== this.connectionChoicesGeneration) return;
       if (!response?.success || !Array.isArray(response.data?.sites)) return;
       this.connectionChoices = response.data;
+      // Another window may have migrated the legacy URL/key into profiles.
+      // Future saves must update that authoritative record, preserving this draft.
+      if (response.data.revision > 0) this.connectionMode = true;
       const select = document.getElementById('savedSeerrSites');
       if (!select) return;
       select.replaceChildren();
@@ -294,12 +317,20 @@ class OptionsManager {
         option.value = site.id; option.textContent = `${site.name} — ${site.url}`;
         select.append(option);
       }
-      this.connectionId = response.data.activeId;
+      if (!response.data.sites.some(site => site.id === this.connectionId)) {
+        const draft = document.createElement('option');
+        draft.value = this.connectionId || '';
+        draft.textContent = this.connectionId ? 'Removed site (unsaved edits)' : 'New site (not saved)';
+        draft.disabled = true;
+        select.append(draft);
+      }
       select.value = this.connectionId || '';
-      const active = response.data.sites.find(site => site.id === this.connectionId);
+      const active = response.data.sites.find(site => site.id === response.data.activeId);
       document.getElementById('activeSeerrSite').textContent = active ? `Active site: ${active.name} (${active.url})` : 'No site saved yet.';
       this.updateConnectionControls();
-    } catch (_) { this.showStatus('error', 'Could not load saved sites. Reload Settings.'); }
+    } catch (_) {
+      if (generation === this.connectionChoicesGeneration) this.showStatus('error', 'Could not load saved sites. Reload Settings.');
+    }
   }
 
   updateConnectionControls() {
@@ -316,7 +347,13 @@ class OptionsManager {
 
   newConnection() {
     this.connectionMode = true; this.connectionId = null;
-    document.getElementById('savedSeerrSites').value = '';
+    const select = document.getElementById('savedSeerrSites');
+    if (!Array.from(select.options).some(option => option.value === '')) {
+      const draft = document.createElement('option');
+      draft.value = ''; draft.textContent = 'New site (not saved)'; draft.disabled = true;
+      select.append(draft);
+    }
+    select.value = '';
     document.getElementById('seerrSiteName').value = '';
     this.serverUrlInput.value = ''; this.apiKeyInput.value = '';
     this.apiKeyInput.type = 'password'; this.toggleButton.textContent = 'Show';

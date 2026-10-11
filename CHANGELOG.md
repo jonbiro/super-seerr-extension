@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.70]
+
+- Keep the site being edited aligned with its URL and API key when another window changes the active site, including during initial loading and saving a renamed site.
+- Refresh Settings' active-site label, action buttons, and permission notice across windows without discarding unsaved edits; identify new and removed site drafts in the selector.
+- Save edits from an already-open single-site Settings window to the saved profiles after another window adds a second site, instead of silently writing retired fields.
+- Stop in-flight title, watchlist, and season checks after switching away and back, requiring a fresh review before further API calls.
+- Add Settings and worker race regressions, plus Chromium coverage for switching sites while another window has unsaved credentials.
+
 ## [3.5.69]
 
 - Keep the popup's active-site selector and diagnostics synchronized with changes made in Settings, and discard delayed lists from older configurations.

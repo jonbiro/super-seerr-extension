@@ -450,6 +450,12 @@ class SeerrAPI {
 
     const requestServer = this.baseUrl;
     const requestKey = this.apiKey;
+    const connectionToken = this.connectionToken();
+    const assertCurrent = () => {
+      if (this.baseUrl !== requestServer || this.apiKey !== requestKey || this.connectionToken() !== connectionToken) {
+        throw new Error('Settings changed. Review the title and request again.');
+      }
+    };
     this.log('🎬 [Background] Requesting media:', mediaData);
 
     // Use TMDB ID directly if provided — skip search entirely, unless the id
@@ -461,10 +467,12 @@ class SeerrAPI {
       this.log('Provided TMDB ID contradicts the page title; resolving by search instead');
       tmdbId = null;
     }
+    assertCurrent();
     if (tmdbId && !isNaN(tmdbId)) {
       this.log('✅ [Background] Using provided TMDB ID:', tmdbId);
     } else {
       const bestMatch = await this.resolveMediaMatch(mediaData);
+      assertCurrent();
       if (!bestMatch) {
         throw new Error(`No unambiguous match for "${mediaData.title}". Choose this title in Seerr before requesting.`);
       }
@@ -482,9 +490,7 @@ class SeerrAPI {
       seasons: mediaData.mediaType === 'tv' ? await this.validateRequestSeasons(mediaData, tmdbId) : undefined
     };
 
-    if (this.baseUrl !== requestServer || this.apiKey !== requestKey) {
-      throw new Error('Settings changed. Review the title and request again.');
-    }
+    assertCurrent();
     this.log('📡 [Background] Sending request to Seerr:', requestData);
     const historyServer = this.baseUrl;
     const response = await this.makeAPIRequest('POST', '/api/v1/request', requestData);
@@ -765,8 +771,9 @@ class SeerrAPI {
     }
     const historyServer = this.baseUrl;
     const apiKey = this.apiKey;
+    const connectionToken = this.connectionToken();
     const assertCurrent = () => {
-      if (this.baseUrl !== historyServer || this.apiKey !== apiKey) {
+      if (this.baseUrl !== historyServer || this.apiKey !== apiKey || this.connectionToken() !== connectionToken) {
         throw new Error('Settings changed. Review the title and add it again.');
       }
     };
