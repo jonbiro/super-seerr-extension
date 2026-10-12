@@ -308,7 +308,7 @@
   .seerr-threshold-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   /* One two-column grid for every action: Reset pairs with Refresh, Load with
      Select. Without Select, Load spans the row rather than leaving a gap. */
-  .seerr-filter-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .seerr-filter-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; gap: 8px; }
   .seerr-filter-secondary-actions { display: contents; }
   .seerr-filter-actions button { width: 100%; min-width: 0; }
   .seerr-filter-secondary-actions > :last-child:nth-child(even) { grid-column: 1 / -1; }

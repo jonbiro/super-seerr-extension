@@ -131,6 +131,24 @@ for (const width of [600, 390, 320]) test(`narrow filter actions stay paired wit
   expect(Math.abs(loadBounds.width - actionsBounds.width)).toBeLessThanOrEqual(1);
 });
 
+for (const apiConfigured of [true, false]) test(`narrow action rows align when a label wraps (Select titles: ${apiConfigured})`, async ({ page }) => {
+  await showFilter(page, 320, { apiConfigured });
+  const refresh = page.getByRole('button', { name: 'Refresh scores' });
+  // Reproduce different system-font metrics without depending on an OS font.
+  await refresh.evaluate(button => {
+    button.textContent = 'Refresh\nscores';
+    button.style.whiteSpace = 'pre-line';
+    button.style.lineHeight = '20px';
+  });
+  const refreshBounds = await refresh.boundingBox();
+  const resetBounds = await page.getByRole('button', { name: 'Reset', exact: true }).boundingBox();
+  const loadBounds = await page.getByRole('button', { name: /Load 500 more/ }).boundingBox();
+  const actionsBounds = await page.locator('.seerr-filter-actions').boundingBox();
+  expect(refreshBounds.height).toBeGreaterThan(36);
+  expectActionGrid({ resetBounds, refreshBounds, loadBounds, actionsBounds });
+  expect(Math.abs(resetBounds.height - refreshBounds.height)).toBeLessThanOrEqual(1);
+});
+
 for (const [label, key, max] of [['Critics ≥', 'minCritics', 100], ['Audience ≥', 'minAudience', 100], ['TMDB ≥', 'minTmdb', 10], ['IMDb ≥', 'minImdb', 10]]) {
   const high = key === 'minAudience' ? 90.5 : max === 100 ? 80.5 : 8.5;
   for (const [form, value, expected, visible] of [
