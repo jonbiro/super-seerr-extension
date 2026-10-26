@@ -15,6 +15,8 @@ heading per change.
 - Correct Firefox's data-transmission disclosure for configured service credentials and title metadata, and cover newly added site permissions during upgrades.
 - Normalize Chromium and Firefox Seerr network failures to the same actionable reconnect message.
 - Release TV season-picker lifecycle state even when the picker rejects instead of completing normally.
+- Collapse repeated trailing slashes when building Seerr API, diagnostics, history, and tracker search URLs, including legacy single-site settings.
+- Add an explicit `noopener noreferrer` relationship to the Settings issue-report link.
 
 ## [3.5.240]
 
