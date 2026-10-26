@@ -10,14 +10,33 @@
     }
     return url.href.replace(/\/+$/, '');
   };
+  const sanitize = stored => {
+    if (!stored || typeof stored !== 'object' || !Array.isArray(stored.sites) || stored.sites.length === 0 || stored.sites.length > MAX_SITES || typeof stored.activeId !== 'string') {
+      throw new Error('Saved sites could not be loaded');
+    }
+    const ids = new Set();
+    const urls = new Set();
+    const sites = stored.sites.map(site => {
+      if (!site || typeof site !== 'object' || typeof site.id !== 'string' || typeof site.url !== 'string') {
+        throw new Error('Saved sites could not be loaded');
+      }
+      let url;
+      try { url = normalize(site.url); } catch (_) { throw new Error('Saved sites could not be loaded'); }
+      if (!site.id || ids.has(site.id) || urls.has(url) || (site.apiKey !== undefined && typeof site.apiKey !== 'string')) {
+        throw new Error('Saved sites could not be loaded');
+      }
+      ids.add(site.id);
+      urls.add(url);
+      return { id: site.id, url, name: typeof site.name === 'string' ? site.name.slice(0, 80) : new URL(url).host, apiKey: site.apiKey || '' };
+    });
+    if (!sites.some(site => site.id === stored.activeId)) throw new Error('Saved sites could not be loaded');
+    return { revision: Number.isSafeInteger(stored.revision) && stored.revision >= 0 ? stored.revision : 0, activeId: stored.activeId, sites };
+  };
   root.SeerrConnections = {
     async readSeerrConnections() {
       const stored = (await chrome.storage.local.get(KEY))[KEY];
-      if (stored) {
-        if (!Array.isArray(stored.sites) || !stored.sites.some(site => site.id === stored.activeId)) {
-          throw new Error('Saved sites could not be loaded');
-        }
-        return JSON.parse(JSON.stringify(stored));
+      if (stored !== undefined && stored !== null) {
+        return sanitize(stored);
       }
       const [synced, local] = await Promise.all([
         chrome.storage.sync.get('seerrUrl'), chrome.storage.local.get('seerrApiKey')
@@ -25,6 +44,7 @@
       const url = synced.seerrUrl ? normalize(synced.seerrUrl) : null;
       return { revision: 0, activeId: url, sites: url ? [{ id: url, url, name: new URL(url).host, apiKey: local.seerrApiKey || '' }] : [] };
     },
+    sanitizeSavedConnections: sanitize,
     publicSeerrConnections(value) {
       return { revision: value.revision, activeId: value.activeId, maxSites: MAX_SITES, sites: value.sites.map(({ id, name, url }) => ({ id, name, url })) };
     },

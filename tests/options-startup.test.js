@@ -58,3 +58,12 @@ test('a failed startup permission read does not skip cache count or popup repair
   assert.equal(f.doc.activeElement.id, 'apiKey');
   assert.equal(f.doc.getElementById('apiKey').disabled, false);
 });
+
+test('a malformed saved site profile fails closed instead of restoring legacy settings', async t => {
+  const malformed = { revision: 4, activeId: 'broken', sites: [{ id: 'broken', url: 'javascript:alert(1)', apiKey: 'unsafe-secret' }] };
+  const f = fixture(t, async () => ({ seerrConnectionsV1: malformed, seerrApiKey: 'legacy-secret' }));
+  await settle();
+  assert.equal(f.doc.getElementById('serverUrl').value, '');
+  assert.equal(f.doc.getElementById('apiKey').value, '');
+  assert.equal(f.doc.getElementById('permissionWarning').classList.contains('hidden'), true);
+});

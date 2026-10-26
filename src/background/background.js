@@ -128,10 +128,21 @@ class SeerrAPI {
         chrome.storage.local.get(['seerrApiKey', 'plexToken', 'debugLogging', 'mediaServerName', 'seerrConnectionsV1'])
       ]);
       if (generation !== this.settingsLoadGeneration) return;
-      this.connections = local.seerrConnectionsV1 || null;
+      const hasSavedConnections = local.seerrConnectionsV1 !== undefined && local.seerrConnectionsV1 !== null;
+      let invalidSavedConnections = false;
+      try {
+        this.connections = hasSavedConnections ? this.sanitizeSavedConnections(local.seerrConnectionsV1) : null;
+      } catch (error) {
+        invalidSavedConnections = true;
+        this.connections = null;
+        console.error('Error loading saved Seerr sites:', error);
+      }
       const selected = this.connections?.sites?.find(site => site.id === this.connections.activeId);
-      const baseUrl = this.connections ? selected?.url : synced.seerrUrl;
-      const apiKey = this.connections ? selected?.apiKey : local.seerrApiKey;
+      // A present but corrupt profile must not silently fall back to a legacy
+      // URL or key; that could target an unintended server. A missing profile
+      // still uses the pre-multi-site settings for backwards compatibility.
+      const baseUrl = invalidSavedConnections ? null : this.connections ? selected?.url : synced.seerrUrl;
+      const apiKey = invalidSavedConnections ? null : this.connections ? selected?.apiKey : local.seerrApiKey;
       if (this.baseUrl !== baseUrl || this.apiKey !== apiKey) this.invalidateSeerrReads();
       this.baseUrl = baseUrl;
       this.apiKey = apiKey;

@@ -139,6 +139,24 @@ class OptionsManager {
     }
   }
 
+  parseSavedConnections(value) {
+    if (!value || typeof value !== 'object' || !Array.isArray(value.sites) || value.sites.length === 0 || value.sites.length > 10 || typeof value.activeId !== 'string') return null;
+    const urls = new Set();
+    const sites = value.sites.map(site => {
+      if (!site || typeof site !== 'object' || typeof site.id !== 'string' || typeof site.url !== 'string' ||
+          (site.apiKey !== undefined && typeof site.apiKey !== 'string')) return null;
+      try {
+        const url = new URL(site.url);
+        if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) return null;
+        const normalized = url.href.replace(/\/+$/, '');
+        if (urls.has(normalized)) return null;
+        urls.add(normalized);
+        return { ...site, url: site.url, apiKey: site.apiKey || '' };
+      } catch (_) { return null; }
+    });
+    return sites.every(Boolean) && sites.some(site => site.id === value.activeId) ? { ...value, sites } : null;
+  }
+
   async hasOverlayPermission(pattern = this.originPattern()) {
     if (!pattern) return false;
     try {
@@ -154,8 +172,9 @@ class OptionsManager {
     if (!this.permissionWarning) return;
     const generation = this.permissionGeneration = (this.permissionGeneration || 0) + 1;
     const [{ seerrUrl }, local] = await Promise.all([chrome.storage.sync.get(['seerrUrl']), chrome.storage.local.get('seerrConnectionsV1')]);
-    const connections = local.seerrConnectionsV1;
-    const activeUrl = connections ? connections.sites.find(site => site.id === connections.activeId)?.url : seerrUrl;
+    const hasSavedConnections = local.seerrConnectionsV1 !== undefined && local.seerrConnectionsV1 !== null;
+    const connections = this.parseSavedConnections(local.seerrConnectionsV1);
+    const activeUrl = hasSavedConnections ? connections?.sites.find(site => site.id === connections.activeId)?.url : seerrUrl;
     const pattern = this.originPattern(activeUrl || '');
     const missing = !!pattern && !(await this.hasOverlayPermission(pattern));
     if (generation !== this.permissionGeneration) return;
@@ -194,17 +213,18 @@ class OptionsManager {
         chrome.storage.local.get(['seerrApiKey', 'plexToken', 'debugLogging', 'seerrConnectionsV1'])
       ]);
 
-      const connections = local.seerrConnectionsV1;
+      const hasSavedConnections = local.seerrConnectionsV1 !== undefined && local.seerrConnectionsV1 !== null;
+      const connections = this.parseSavedConnections(local.seerrConnectionsV1);
       const active = connections?.sites.find(site => site.id === connections.activeId);
-      const serverUrl = active?.url || settings.seerrUrl || '';
-      const connectionId = active?.id ?? (!connections && settings.seerrUrl
+      const serverUrl = hasSavedConnections ? active?.url || '' : settings.seerrUrl || '';
+      const connectionId = active?.id ?? (!hasSavedConnections && settings.seerrUrl
         ? new URL(settings.seerrUrl).href.replace(/\/+$/, '') : undefined);
-      const apiKey = active ? active.apiKey : local.seerrApiKey || '';
+      const apiKey = hasSavedConnections ? active?.apiKey || '' : local.seerrApiKey || '';
       // Revealing one credential does not authorize revealing its replacement
       // after a site removal, activation, or settings reload.
       if (this.apiKeyInput.type !== 'password' && (this.connectionId !== connectionId ||
           this.serverUrlInput.value !== serverUrl || this.apiKeyInput.value !== apiKey)) this.toggleApiKeyVisibility();
-      this.connectionMode = !!connections;
+      this.connectionMode = hasSavedConnections;
       this.connectionId = connectionId;
       this.serverUrlInput.value = serverUrl;
       this.apiKeyInput.value = apiKey;
@@ -458,8 +478,10 @@ class OptionsManager {
     try {
       const id = this.editingConnectionId;
       const local = await chrome.storage.local.get('seerrConnectionsV1');
-      const site = local.seerrConnectionsV1?.sites.find(item => item.id === id);
-      if (local.seerrConnectionsV1 && !site) throw new Error('Site removed');
+      const hasSavedConnections = local.seerrConnectionsV1 !== undefined && local.seerrConnectionsV1 !== null;
+      const connections = this.parseSavedConnections(local.seerrConnectionsV1);
+      const site = connections?.sites.find(item => item.id === id);
+      if (hasSavedConnections && !site) throw new Error('Site removed');
       if (site) {
         this.connectionMode = true; this.connectionId = site.id;
         this.serverUrlInput.value = site.url; this.apiKeyInput.value = site.apiKey;

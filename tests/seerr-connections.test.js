@@ -134,6 +134,23 @@ test('site management is trusted-only and rejects duplicate or unsafe destinatio
   assert.equal(w.localStore.seerrConnectionsV1, undefined);
 });
 
+for (const malformed of [
+  { revision: 4, activeId: 'broken', sites: [{ id: 'broken', url: 'javascript:alert(1)', apiKey: 'unsafe-secret' }] },
+  { revision: 4, activeId: 'home', sites: [{ id: 'home', url: 'https://home.example', apiKey: '' }, { id: 'family', url: 'https://home.example/', apiKey: '' }] },
+  0, 'not-a-profile', []
+]) test(`a malformed saved site (${typeof malformed}) fails closed instead of becoming the active destination`, async () => {
+  const w = loadWorker({ get: async () => ({ seerrUrl: 'https://legacy.example' }), local: {
+    seerrApiKey: 'legacy-secret', seerrConnectionsV1: malformed
+  }});
+  await w.ready;
+  const config = await message(w, 'getConfigState');
+  assert.equal(config.success, true);
+  assert.equal(config.data.serverUrl, null);
+  assert.equal(config.data.apiConfigured, false);
+  assert.equal(w.api.baseUrl, null);
+  assert.equal(w.api.apiKey, null);
+});
+
 test('site edits, removals, and queued concurrent additions preserve other credentials', async () => {
   const w = await setup();
   const results = await Promise.all([addSecond(w), message(w, 'saveSeerrConnection', { url: 'https://third.example', apiKey: 'third-secret' })]);

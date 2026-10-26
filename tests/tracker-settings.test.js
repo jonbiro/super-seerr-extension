@@ -133,6 +133,28 @@ test('manual watchlist reads expose literal titles, skip unsupported entries, an
   assert.equal(f.messages.some(message => message.action === 'requestMedia'), false);
 });
 
+test('a Seerr site switch while Find in Seerr is reading config cannot open the old destination', async t => {
+  let finishConfig, configReads = 0;
+  const f = await fixture(t, (message, state) => {
+    if (message.action === 'getConfigState') {
+      const server = state.server;
+      if (++configReads === 1) return new Promise(resolve => { finishConfig = () => resolve(state.reply({ serverUrl: server, connectionToken: server })); });
+      return state.reply({ serverUrl: state.server, connectionToken: state.server });
+    }
+  });
+  const card = f.card('trakt');
+  card.connect.click(); await settle();
+  card.sync.click(); await settle();
+  const find = card.list.querySelector('button');
+  find.click(); await settle();
+  assert.equal(typeof finishConfig, 'function');
+  finishConfig();
+  f.server = 'https://family.example/seerr/';
+  await settle();
+  assert.equal(f.opened.length, 0, 'a stale config must not open a previous Seerr site');
+  assert.match(card.status.textContent, /changed|active site/i);
+});
+
 for (const server of ['javascript:alert(1)', 'https://user:secret@seerr.example/', 'https://seerr.example/?token=secret', null]) {
   test(`tracker title search rejects an unsafe or missing Seerr destination (${server})`, async t => {
     const f = await fixture(t);

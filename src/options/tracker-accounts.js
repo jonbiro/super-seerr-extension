@@ -19,6 +19,7 @@
       this.root = root;
       this.cards = new Map();
       this.readGeneration = 0;
+      this.seerrConnectionGeneration = 0;
       this.accountsRefreshPending = false;
       root.append(element('h2', { id: 'trackerAccountsHeading', textContent: 'Trakt & Simkl watchlists' }),
         element('p', { textContent: 'Connect your own app to read its watchlist when you choose Sync. Sync imports titles into this review only; it does not change your provider watchlist or send Seerr requests. Find a title in Seerr to review availability and request it separately. Account tokens stay on this device.' }));
@@ -28,6 +29,9 @@
       root.append(this.status, this.retry);
       for (const provider of PROVIDERS) this.createCard(provider);
       chrome.storage?.onChanged?.addListener((changes, area) => {
+        if (area === 'local' && Object.prototype.hasOwnProperty.call(changes, 'seerrConnectionsV1')) {
+          this.seerrConnectionGeneration++;
+        }
         if (area !== 'local' || !Object.prototype.hasOwnProperty.call(changes, 'trackerAccountsV1')) return;
         // Inspect public state only. Token rotations and last-sync stamps do
         // not replace an account or invalidate the list currently being read.
@@ -294,13 +298,20 @@
     async findInSeerr(card, item, button) {
       if (button.disabled || !card.account?.connected) return;
       const generation = card.watchGeneration;
+      const seerrGeneration = this.seerrConnectionGeneration;
       button.disabled = true;
       try {
         // Read the active destination at activation time, never from an old sync.
         const config = await this.message('getConfigState');
-        if (generation !== card.watchGeneration || !card.account.connected) return;
-        if (typeof config?.serverUrl !== 'string' || !config.serverUrl) throw new Error('Save a Seerr server URL in Settings first.');
-        const url = new URL(config.serverUrl);
+        if (generation !== card.watchGeneration || !card.account.connected || seerrGeneration !== this.seerrConnectionGeneration) return;
+        const latest = await this.message('getConfigState');
+        if (generation !== card.watchGeneration || !card.account.connected || seerrGeneration !== this.seerrConnectionGeneration) return;
+        const tokenChanged = config?.connectionToken !== undefined && latest?.connectionToken !== undefined
+          && config.connectionToken !== latest.connectionToken;
+        const serverChanged = config?.serverUrl !== latest?.serverUrl;
+        if (tokenChanged || serverChanged) throw new Error('The active Seerr site changed. Choose Find in Seerr again.');
+        if (typeof latest?.serverUrl !== 'string' || !latest.serverUrl) throw new Error('Save a Seerr server URL in Settings first.');
+        const url = new URL(latest.serverUrl);
         if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('Save a valid Seerr server URL in Settings first.');
         url.pathname = `${url.pathname.replace(/\/$/, '')}/search`;
         url.searchParams.set('query', item.title);
