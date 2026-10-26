@@ -28,7 +28,7 @@ test('exploration remains keyboard accessible when Seerr fails and fits a narrow
   const country = page.getByRole('combobox', { name: 'Streaming region' });
   await expect(country).toBeFocused();
   await country.selectOption('de');
-  await expect(page.getByRole('link', { name: 'Where to watch' })).toHaveAttribute('href', 'https://www.justwatch.com/de/search?q=Am%C3%A9lie+%26+friends');
+  await expect(page.getByRole('link', { name: 'Where to watch' })).toHaveAttribute('href', 'https://www.justwatch.com/de/search?q=Am%C3%A9lie+%26+friends+2001');
   await expect(page.getByRole('link', { name: 'Search Trakt' })).toHaveAttribute('href', 'https://app.trakt.tv/search?q=Am%C3%A9lie+%26+friends+2001');
   await expect(page.getByRole('link', { name: 'Search Simkl' })).toHaveAttribute('href', 'https://simkl.com/search/');
   await expect(page.locator('.seerr-action-button')).toHaveText('Retry status');

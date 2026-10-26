@@ -319,7 +319,10 @@ class UIComponents {
     const updateStreaming = () => {
       const value = validCountry(country.value) ? country.value : 'us';
       const url = new URL(`https://www.justwatch.com/${value}/search`);
-      url.searchParams.set('q', title);
+      // Keep the release year in the provider search when it is known. A
+      // title-only search can otherwise land on a remake or similarly named
+      // series, especially for localized JustWatch catalogues.
+      url.searchParams.set('q', query);
       streaming.href = url.href;
     };
     updateStreaming();

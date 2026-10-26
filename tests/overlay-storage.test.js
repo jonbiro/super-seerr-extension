@@ -160,3 +160,9 @@ test('local storage uses trusted access when available and preserves unsupported
   assert.equal(await worker.api.restrictLocalStorage(), true);
   assert.equal(level, 'TRUSTED_CONTEXTS');
 });
+
+test('a rejected storage access restriction does not block worker startup', async () => {
+  const worker = await setup();
+  worker.context.chrome.storage.local.setAccessLevel = async () => { throw new Error('unsupported'); };
+  await assert.doesNotReject(() => worker.api.restrictLocalStorage());
+});

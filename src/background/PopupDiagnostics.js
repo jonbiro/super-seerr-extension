@@ -10,7 +10,8 @@
         checks[name] = ['ok', 'warning', 'error'].includes(state) ? state : 'unknown';
       }
       return { schema: 1, version: chrome.runtime.getManifest().version, checkedAt: new Date().toISOString(),
-        localStorageIsolationSupported: typeof chrome.storage.local.setAccessLevel === 'function', checks };
+        localStorageIsolationSupported: this.localStorageIsolationSupported === true ||
+          (this.localStorageIsolationSupported === undefined && typeof chrome.storage.local.setAccessLevel === 'function'), checks };
     },
     async getPopupDiagnostics() {
       // A settings reload invalidates this report even when values change back.

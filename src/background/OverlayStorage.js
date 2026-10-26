@@ -13,8 +13,18 @@
   root.OverlayStorage = {
     async restrictLocalStorage() {
       if (!chrome.storage.local.setAccessLevel) return false;
-      await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
-      return true;
+      try {
+        await chrome.storage.local.setAccessLevel({ accessLevel: 'TRUSTED_CONTEXTS' });
+        this.localStorageIsolationSupported = true;
+        return true;
+      } catch (_) {
+        // The API is optional (notably on Firefox) and can also reject on a
+        // browser policy/version mismatch. The worker-side bridge still
+        // protects secrets and cache payloads, so keep the extension usable.
+        this.localStorageIsolationSupported = false;
+        console.warn('Could not restrict extension storage to trusted contexts; continuing with bridge validation.');
+        return false;
+      }
     },
     overlayStorageServer(sender) {
       this.assertConnectionTarget({}, sender);

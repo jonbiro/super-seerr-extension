@@ -76,6 +76,15 @@ test('diagnostic export allowlists only states and metadata and rejects content 
   assert.equal(response.success, false);
 });
 
+test('diagnostic export reports rejected storage isolation instead of claiming support', async () => {
+  const w = await worker();
+  w.context.chrome.runtime.getManifest = () => ({ version: '3.5.10' });
+  w.context.chrome.storage.local.setAccessLevel = async () => { throw new Error('unsupported'); };
+  assert.equal(await w.api.restrictLocalStorage(), false);
+  const report = await w.api.exportDiagnostics();
+  assert.equal(report.localStorageIsolationSupported, false);
+});
+
 test('cancelled session reads stop before the next endpoint and are not cached as unrated', async () => {
   const controller = new AbortController(); let calls = 0;
   const { loadOverlay } = require('./helpers/overlay');

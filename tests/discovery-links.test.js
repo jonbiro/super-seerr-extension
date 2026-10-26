@@ -25,7 +25,7 @@ test('discovery links encode title text inside fixed provider URLs and disclose 
   assert.equal(details.querySelector('img'), null);
   assert.equal(new URL(links['Search Trakt'].href).origin, 'https://app.trakt.tv');
   assert.equal(new URL(links['Search Trakt'].href).searchParams.get('q'), `${title} 1999`);
-  assert.equal(new URL(links['Where to watch'].href).searchParams.get('q'), title);
+  assert.equal(new URL(links['Where to watch'].href).searchParams.get('q'), `${title} 1999`);
   assert.equal(links['Search Simkl'].href, 'https://simkl.com/search/');
   for (const link of Object.values(links)) {
     assert.equal(link.target, '_blank');
