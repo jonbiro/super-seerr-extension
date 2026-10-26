@@ -19,6 +19,7 @@ class MetacriticIntegration extends BaseIntegration {
    */
   async extractMediaData() {
     this.log('Extracting media data from Metacritic page...');
+    if (this.isBlockedProviderPage()) return null;
 
     // Determine if this is a movie or TV show based on URL
     const url = window.location.pathname;

@@ -19,6 +19,7 @@ class IMDBIntegration extends BaseIntegration {
    */
   async extractMediaData() {
     this.log('Extracting media data from IMDB page...');
+    if (this.isBlockedProviderPage()) return null;
 
     // Extract IMDB ID from URL
     const urlMatch = window.location.pathname.match(/^\/title\/(tt\d+)\/?$/);

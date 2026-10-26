@@ -120,14 +120,17 @@ class TraktIntegration extends BaseIntegration {
     // literal title such as "Space: 1999" as a release year.
     if (!title || /^(?:Trakt(?: Web)?|Track Your Shows & Movies)$/i.test(title.trim()) || title.trim() === '') {
       this.log('Title extraction failed, trying to extract from URL slug');
-      if (decodedSlug) {
+      // Trakt also accepts numeric media IDs in the URL. A generic shell or
+      // edge-error page at such a route has no human-readable identity, so
+      // displaying the ID as a requestable title would create a false flyout.
+      if (decodedSlug && !/^\d+$/.test(decodedSlug)) {
         fallbackYear = slugYear;
         // Convert URL slug to title (e.g., "peacemaker-2022" -> "Peacemaker")
         title = (fallbackYear === null ? decodedSlug : slugTitle)
           .replace(/-/g, ' ') // Replace dashes with spaces
           .replace(/(^|\s)\p{L}/gu, l => l.toUpperCase()).trim(); // Preserve Unicode letters within words.
         this.log('Extracted title from URL slug:', title);
-      } else return null; // A generic application title cannot identify an invalid slug.
+      } else return null; // A generic application title cannot identify an invalid slug or numeric ID.
     } else if (slugYear !== null) {
       const normalize = value => value.normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N}]/gu, '');
       if (normalize(slugTitle.replace(/[-_]+/g, ' ')) === normalize(title)) fallbackYear = slugYear;

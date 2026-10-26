@@ -19,6 +19,7 @@ class LetterboxdIntegration extends BaseIntegration {
    */
   async extractMediaData() {
     this.log('Extracting media data from Letterboxd page...');
+    if (this.isBlockedProviderPage()) return null;
 
     // Check if we're on a film page
     const url = window.location.pathname;

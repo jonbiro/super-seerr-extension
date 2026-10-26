@@ -52,6 +52,19 @@ class BaseIntegration {
     console.error(`🚨 [${this.siteName}]`, ...args);
   }
 
+  // Provider edge pages sometimes keep a title-shaped URL while replacing the
+  // document with a challenge or denial page. Adapters should stay inert in
+  // that case instead of turning the provider's error text into a requestable
+  // media title.
+  isBlockedProviderPage() {
+    const looksLikeChallenge = value => {
+      const text = typeof value === 'string' ? value.trim() : '';
+      return /^(?:403\s+forbidden|access\s+denied|attention\s+required|just\s+a\s+moment\.?|verify\s+you\s+are\s+human|sorry,?\s+you\s+have\s+been\s+blocked)(?:\s*[|:!.-].*)?$/i.test(text);
+    };
+    if (looksLikeChallenge(document.title)) return true;
+    return [...document.querySelectorAll('h1, h2')].some(node => looksLikeChallenge(node.textContent));
+  }
+
   /**
    * Check if flyout is currently expanded
    */

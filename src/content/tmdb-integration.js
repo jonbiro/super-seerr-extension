@@ -19,6 +19,7 @@ class TMDbIntegration extends BaseIntegration {
    */
   async extractMediaData() {
     this.log('Extracting media data from TMDb page...');
+    if (this.isBlockedProviderPage()) return null;
 
     // Determine media type from URL
     const url = window.location.pathname;

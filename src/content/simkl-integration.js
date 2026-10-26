@@ -12,6 +12,7 @@ class SimklIntegration extends BaseIntegration {
   async extractMediaData() {
     const route = this.simklRoute(window.location.href);
     if (!route) return null;
+    if (this.isBlockedProviderPage()) return null;
     if (/^(?:just a moment\.*|403 forbidden|access denied|attention required!?)(?:\s|$)/i.test(document.title.trim())) return null;
     const canonical = document.querySelector('link[rel="canonical"]')?.href;
     if (canonical && !this.sameRecord(canonical, route)) return null;

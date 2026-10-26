@@ -19,6 +19,7 @@ class FilmwebIntegration extends BaseIntegration {
    */
   async extractMediaData() {
     this.log('Extracting media data from Filmweb page...');
+    if (this.isBlockedProviderPage()) return null;
 
     // Determine media type first to use correct selectors
     const route = window.location.pathname.match(/^\/(film|serial)\/[^/]+\/?$/);

@@ -62,6 +62,30 @@ test('Trakt generic application title cannot become the movie identity', async t
   assert.equal(media.title, 'Fight Club');
 });
 
+test('Trakt numeric media IDs do not become false titles on generic pages', async t => {
+  const page = loadIntegration({ site: 'trakt', url: 'https://app.trakt.tv/movies/550', title: 'Trakt Web: Track Your Shows & Movies', html: '<main></main>' });
+  t.after(() => page.window.close());
+  assert.equal(await page.integration().extractMediaData(), null);
+});
+
+const blockedFixtures = {
+  imdb: 'https://www.imdb.com/title/tt0137523/',
+  tmdb: 'https://www.themoviedb.org/movie/550-fight-club',
+  rt: 'https://www.rottentomatoes.com/m/fight_club',
+  metacritic: 'https://www.metacritic.com/movie/fight-club',
+  filmweb: 'https://www.filmweb.pl/film/Fight+Club-1999-837',
+  letterboxd: 'https://letterboxd.com/film/fight-club/',
+  simkl: 'https://simkl.com/movies/53894/fight-club',
+  justwatch: 'https://www.justwatch.com/us/movie/fight-club'
+};
+for (const [site, url] of Object.entries(blockedFixtures)) {
+  test(`${site} ignores a provider challenge page on a title route`, async t => {
+    const page = loadIntegration({ site, url, title: '403 Forbidden', html: '<h1>Sorry, you have been blocked</h1>' });
+    t.after(() => page.window.close());
+    assert.equal(await page.integration().extractMediaData(), null);
+  });
+}
+
 for (const title of ['Attention Required! | Cloudflare', 'Just a moment...']) {
   test(`Trakt rejects an edge challenge titled ${title}`, async t => {
     const page = loadIntegration({ site: 'trakt', url: 'https://trakt.tv/movies/fight-club-1999', title,

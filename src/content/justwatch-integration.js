@@ -12,6 +12,7 @@ class JustWatchIntegration extends BaseIntegration {
 
   async extractMediaData() {
     const current = new URL(window.location.href);
+    if (this.isBlockedProviderPage()) return null;
     // JustWatch uses both path-localized www URLs and country subdomains
     // (for example br.justwatch.com). Keep the boundary on the provider's
     // registrable domain so a lookalike host can never receive a flyout.
