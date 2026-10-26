@@ -20,6 +20,7 @@ heading per change.
 - Capture the reviewed Seerr site token explicitly for watchlist writes, matching request and Plex actions during multi-site switches.
 - Canonicalize numeric-string TMDB IDs across shared public ratings, server-scoped ratings, and the persisted title index so equivalent IDs cannot split caches.
 - Reject zero, unsafe, and non-primitive TMDB IDs at the live and persisted catalogue-index boundaries so malformed records cannot hydrate or identify cards.
+- Bound and cancel oversized Plex error responses before retaining a short diagnostic message.
 - Bound and cancel oversized Seerr error responses before parsing them in the background worker, and release refused diagnostic/metadata responses promptly so proxy error pages cannot consume the worker indefinitely.
 
 ## [3.5.240]

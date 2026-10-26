@@ -266,6 +266,32 @@ test('plex rejects Plex-origin requests outside the allowlist', async () => {
   await assert.rejects(() => worker.api.plexFetch('https://evil.example/watchlist', { token: 't' }), /allowed origins/);
 });
 
+test('plex cancels oversized HTTP error bodies before retaining them', async () => {
+  let reads = 0;
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() {
+          reads++;
+          return { done: false, value: new Uint8Array(64 * 1024 + 1) };
+        },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  const worker = loadWorker({
+    get: async () => ({}),
+    local: { plexToken: 't' },
+    fetch: async () => ({ ok: false, status: 502, headers: { get: () => null }, body })
+  });
+  await worker.ready;
+  await assert.rejects(() => worker.api.plexFetch('https://plex.tv/api/v2/user', { token: 't' }), /Plex returned HTTP 502/);
+  assert.equal(reads, 1);
+  assert.equal(cancelled, true);
+});
+
 test('plex encodes ratingKeys used in URL paths', async () => {
   const seen = [];
   const worker = loadWorker({

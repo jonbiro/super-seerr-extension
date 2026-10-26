@@ -14,6 +14,46 @@
   const PLEX_PRODUCT = 'Super Seerr';
   const PLEX_VERSION = '1.0';
   const PLEX_CLIENT_ID = 'super-seerr-extension';
+  const MAX_ERROR_BODY_BYTES = 64 * 1024;
+
+  async function readBoundedErrorText(response) {
+    const announced = Number(response.headers?.get?.('Content-Length'));
+    if (Number.isFinite(announced) && announced > MAX_ERROR_BODY_BYTES) {
+      try { await response.body?.cancel(); } catch (_) { /* Preserve the HTTP error. */ }
+      return null;
+    }
+    if (response.body?.getReader) {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let size = 0;
+      try {
+        while (true) {
+          const part = await reader.read();
+          if (part.done) break;
+          const length = part.value?.byteLength || 0;
+          size += length;
+          if (size > MAX_ERROR_BODY_BYTES) {
+            await reader.cancel().catch(() => {});
+            return null;
+          }
+          if (length) chunks.push(part.value);
+        }
+      } catch (_) {
+        await reader.cancel().catch(() => {});
+        return null;
+      } finally { reader.releaseLock(); }
+      if (typeof TextDecoder !== 'function') return null;
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      return new TextDecoder().decode(bytes);
+    }
+    if (typeof response.text !== 'function') return null;
+    try {
+      const text = await response.text();
+      return typeof text === 'string' && text.length <= MAX_ERROR_BODY_BYTES ? text : null;
+    } catch (_) { return null; }
+  }
 
   function releaseYear(metadata) {
     const year = metadata.year;
@@ -76,10 +116,8 @@
       }
       if (!response.ok) {
         let detail = '';
-        try {
-          const body = await response.text();
-          detail = body.slice(0, 200);
-        } catch (_) {}
+        const body = await readBoundedErrorText(response);
+        if (typeof body === 'string') detail = body.slice(0, 200);
         throw new Error(`Plex returned HTTP ${response.status}${detail ? `: ${detail}` : ''}`);
       }
       const contentType = response.headers.get('Content-Type') || '';
