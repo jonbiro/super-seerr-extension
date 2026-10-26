@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.248]
+
+- Deduplicate normalized multi-site ratings cache entries in Settings so migration-time duplicate server records cannot inflate the displayed cache count.
+
 ## [3.5.247]
 
 - Use the newest standard Seerr request when embedded request relations arrive in an unspecified order, preventing stale declined or failed requests from masking a newer request state.

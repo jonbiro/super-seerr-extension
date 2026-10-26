@@ -103,14 +103,26 @@ class OptionsManager {
           return url.href.replace(/\/+$/, '');
         } catch (_) { return null; }
       };
-      const siteServerKeys = new Set(Object.entries(siteCaches).map(([key, cache]) => cacheServer(cache) || cacheServer({ server: key }) || key));
-      const siteCount = Object.values(siteCaches).reduce((count, cache) => count + Object.keys(cache?.entries || {}).length, 0);
       const legacy = stored[RATINGS_CACHE_KEY];
-      // A legacy record is retired lazily by the worker after migration. Do
-      // not show its entries twice while that retirement is pending.
-      const legacyCount = legacy && cacheServer(legacy) && siteServerKeys.has(cacheServer(legacy))
-        ? 0 : Object.keys(legacy?.entries || {}).length;
-      held = legacyCount + siteCount +
+      // The worker normalizes server keys while migrating. Settings may read
+      // the raw records before that migration write completes, so union title
+      // keys per normalized server instead of counting duplicate slash forms.
+      const entriesByServer = new Map();
+      for (const [key, cache] of Object.entries(siteCaches)) {
+        const server = cacheServer(cache) || cacheServer({ server: key }) || `key:${key}`;
+        const entries = entriesByServer.get(server) || new Set();
+        for (const entry of Object.keys(cache?.entries || {})) entries.add(entry);
+        entriesByServer.set(server, entries);
+      }
+      const legacyServer = cacheServer(legacy);
+      const legacyEntries = Object.keys(legacy?.entries || {});
+      if (legacyServer) {
+        const entries = entriesByServer.get(legacyServer) || new Set();
+        for (const entry of legacyEntries) entries.add(entry);
+        entriesByServer.set(legacyServer, entries);
+      }
+      const siteCount = [...entriesByServer.values()].reduce((count, entries) => count + entries.size, 0);
+      held = siteCount + (!legacyServer ? legacyEntries.length : 0) +
         Object.keys(stored[RT_CACHE_KEY]?.entries || {}).length + Object.keys(stored.publicRatingsV1?.entries || {}).length;
       this.hasRatingsAvailability = !!stored[RATINGS_UNAVAILABLE_KEY];
     } catch (_) {
