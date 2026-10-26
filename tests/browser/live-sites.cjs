@@ -21,7 +21,11 @@ async function verifySmallViewportFlyout(page, result) {
     return !!bounds && bounds.x >= 0 && bounds.y >= 0 && bounds.x + bounds.width <= 391 && bounds.y + bounds.height <= 601;
   }, { timeout: 3000, message: 'Flyout extends outside the viewport after opening' }).toBe(true);
   result.layout = '390x600';
-  await page.keyboard.press('Escape');
+  // A provider can open its own consent/login dialog while the panel is open,
+  // moving focus outside the extension. Restore the panel's documented focus
+  // target so this assertion tests the extension's Escape handling rather than
+  // whichever host dialog happened to win focus during the live check.
+  await panel.press('Escape');
   await expect(page.locator('.seerr-tab')).toHaveAttribute('aria-expanded', 'false');
 }
 
