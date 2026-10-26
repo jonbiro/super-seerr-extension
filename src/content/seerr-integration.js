@@ -2015,6 +2015,7 @@
   function setupCardObserver() {
     if (cardObserver || !window.MutationObserver) return;
     cardObserver = new MutationObserver(records => {
+      noteHostDisplayMutations(records);
       // Host layout attributes affect visibility, but mutations inside our
       // toolbar/badges must not schedule another pass of their own.
       let cards;
@@ -2034,7 +2035,7 @@
       }, 250);
     });
     cardObserver.observe(document.body, { childList: true, characterData: true, subtree: true, attributes: true,
-      attributeFilter: ['href', 'src', 'srcset', 'alt', 'class', 'style', 'hidden'] });
+      attributeOldValue: true, attributeFilter: ['href', 'src', 'srcset', 'alt', 'class', 'style', 'hidden'] });
   }
 
   // ──────────────── Sort & Filter ────────────────
@@ -2109,24 +2110,87 @@
 
   // Own only the display override used to hide a filtered card. Host styles
   // (including initially hidden cards and inline layout rules) survive Reset.
+  const pendingFilterDisplayWrites = new WeakMap();
+
+  function readInlineDisplay(node) {
+    return {
+      value: node?.style?.display || '',
+      priority: node?.style?.getPropertyPriority?.('display') || ''
+    };
+  }
+
+  function readInlineDisplayFromText(styleText) {
+    if (!styleText) return { value: '', priority: '' };
+    const match = /(?:^|;)\s*display\s*:\s*([^;]*?)(?:\s*!important)?\s*(?:;|$)/i.exec(styleText);
+    if (!match) return { value: '', priority: '' };
+    const declaration = match[1].trim();
+    const important = /\s*!important\s*(?:;|$)/i.test(match[0]);
+    return { value: declaration, priority: important ? 'important' : '' };
+  }
+
+  function rememberFilterDisplayWrite(node) {
+    pendingFilterDisplayWrites.set(node, (pendingFilterDisplayWrites.get(node) || 0) + 1);
+  }
+
+  function noteHostDisplayMutations(records) {
+    const counts = new Map();
+    for (const record of records) {
+      if (record.type !== 'attributes' || record.attributeName !== 'style') continue;
+      const before = readInlineDisplayFromText(record.oldValue);
+      const after = readInlineDisplay(record.target);
+      if (before.value === after.value && before.priority === after.priority) continue;
+      counts.set(record.target, (counts.get(record.target) || 0) + 1);
+    }
+    for (const [node, count] of counts) {
+      const state = filterDisplayState.get(node);
+      const pending = pendingFilterDisplayWrites.get(node) || 0;
+      if (state && count > pending) {
+        // A host write can use the same value/priority as our !important
+        // override, so the mutation count is the only reliable ownership
+        // signal. Preserve the host declaration when the filter is reset.
+        state.host = readInlineDisplay(node);
+        state.hostChanged = true;
+        state.extensionOwned = false;
+      }
+      if (pending > count) pendingFilterDisplayWrites.set(node, pending - count);
+      else pendingFilterDisplayWrites.delete(node);
+    }
+  }
+
   function setFilterHidden(node, hidden) {
     if (hidden) {
-      if (!filterDisplayState.has(node) || node.style.display !== 'none') {
-        filterDisplayState.set(node, { value: node.style.display, priority: node.style.getPropertyPriority?.('display') || '' });
+      let state = filterDisplayState.get(node);
+      if (!state) {
+        state = { original: readInlineDisplay(node), host: null, hostChanged: false, extensionOwned: false };
+        filterDisplayState.set(node, state);
+      } else if (state.extensionOwned && node.style.setProperty) {
+        const current = readInlineDisplay(node);
+        if (current.value !== 'none' || current.priority !== 'important') {
+          state.host = current;
+          state.hostChanged = true;
+          state.extensionOwned = false;
+        }
       }
       if (node.style.setProperty) {
-        if (node.style.display !== 'none' || node.style.getPropertyPriority('display') !== 'important') {
+        if (node.style.display !== 'none') {
           node.style.setProperty('display', 'none', 'important');
+          state.extensionOwned = true;
+          rememberFilterDisplayWrite(node);
         }
-      } else if (node.style.display !== 'none') node.style.display = 'none';
+      } else if (node.style.display !== 'none') {
+        node.style.display = 'none';
+        state.extensionOwned = true;
+        rememberFilterDisplayWrite(node);
+      }
     } else if (filterDisplayState.has(node)) {
-      const original = filterDisplayState.get(node);
-      // A host update made while hidden takes precedence over our snapshot.
-      if (node.style.display === 'none') {
-        if (original.priority) node.style.setProperty('display', original.value, original.priority);
-        else node.style.display = original.value;
+      const state = filterDisplayState.get(node);
+      const restore = state.hostChanged ? state.host : state.original;
+      if (state.extensionOwned && restore) {
+        if (restore.priority) node.style.setProperty('display', restore.value, restore.priority);
+        else node.style.display = restore.value;
       }
       filterDisplayState.delete(node);
+      pendingFilterDisplayWrites.delete(node);
     }
   }
 

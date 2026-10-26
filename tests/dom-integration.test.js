@@ -1469,6 +1469,28 @@ test('rating filters override important host layout rules and restore them on Re
   assert.equal(low.style.display, ''); assert.equal(item.style.display, '');
 });
 
+test('host display:none updates while filtered survive Reset', async t => {
+  const f = createOverlay({ wrapped: true });
+  t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
+  await settle();
+  const doc = f.window.document;
+  const low = doc.querySelector('[data-id="1"]');
+  const item = low.parentElement;
+  const input = doc.querySelector('.seerr-min-critics');
+  input.value = '80'; input.dispatchEvent(new f.window.Event('input'));
+  assert.equal(low.style.display, 'none');
+  assert.equal(item.style.display, 'none');
+
+  // Seerr can hide the same card while the threshold remains active. The
+  // extension must not erase that host-owned state when the filter resets.
+  low.style.setProperty('display', 'none');
+  item.style.setProperty('display', 'none');
+  await new Promise(resolve => setTimeout(resolve, 300));
+  doc.querySelector('.seerr-reset-sort').click();
+  assert.equal(low.style.display, 'none');
+  assert.equal(item.style.display, 'none');
+});
+
 test('coverage follows rendered display when host CSS overrides the hidden attribute', async t => {
   const f = createOverlay({ wrapped: true });
   t.after(() => { f.window.dispatchEvent(new f.window.Event('pagehide')); f.window.close(); });
