@@ -45,3 +45,25 @@ test('JustWatch country site keeps query-only navigation on the same title', asy
   assert.equal(adapter.getNavigationKey(), key);
   assert.equal((await adapter.extractMediaData()).title, 'Clube da Luta');
 });
+
+test('JustWatch accepts a localized country subdomain without accepting a lookalike host', async t => {
+  const page = loadIntegration({ site: 'justwatch', url: 'https://de.justwatch.com/de/film/fight-club',
+    html: '<h1 class="title-detail-hero__details__title">Fight Club<span class="release-year"> (1999)</span></h1>' });
+  t.after(() => page.window.close());
+  const media = await page.integration().extractMediaData();
+  assert.equal(media.title, 'Fight Club');
+  assert.equal(media.mediaType, 'movie');
+
+  const lookalike = loadIntegration({ site: 'justwatch', url: 'https://de.justwatch.com.evil.test/de/film/fight-club',
+    html: '<h1 class="title-detail-hero__details__title">Fight Club</h1>' });
+  t.after(() => lookalike.window.close());
+  assert.equal(await lookalike.integration().extractMediaData(), null);
+});
+
+test('the manifest injects JustWatch on localized provider hosts', () => {
+  const manifest = require('../manifest.base.json');
+  const entry = manifest.content_scripts.find(script => script.js.includes('src/content/justwatch-integration.js'));
+  assert.ok(entry, 'JustWatch content script entry should exist');
+  assert.ok(entry.matches.includes('https://*.justwatch.com/*/*/*'));
+  assert.ok(manifest.host_permissions.includes('https://*.justwatch.com/*'));
+});

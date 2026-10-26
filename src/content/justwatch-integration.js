@@ -12,7 +12,11 @@ class JustWatchIntegration extends BaseIntegration {
 
   async extractMediaData() {
     const current = new URL(window.location.href);
-    if (!['www.justwatch.com', 'justwatch.com', 'br.justwatch.com'].includes(current.hostname)) return null;
+    // JustWatch uses both path-localized www URLs and country subdomains
+    // (for example br.justwatch.com). Keep the boundary on the provider's
+    // registrable domain so a lookalike host can never receive a flyout.
+    const host = current.hostname.toLowerCase();
+    if (!(host === 'justwatch.com' || host === 'www.justwatch.com' || /^[a-z]{2}\.justwatch\.com$/.test(host))) return null;
     const segments = current.pathname.replace(/\/+$/, '').split('/').slice(1);
     // A season/episode, search, list, or provider page cannot identify a title.
     if (segments.length !== 3 || !/^[a-z]{2}$/i.test(segments[0]) || !segments[2]) return null;

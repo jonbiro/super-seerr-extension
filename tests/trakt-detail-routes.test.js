@@ -15,3 +15,13 @@ for (const path of ['/movies/fight-club', '/movie/fight-club/', '/shows/breaking
     assert.equal((await f.integration().extractMediaData()).title, 'Example');
   });
 }
+
+test('the manifest injects Trakt on singular detail routes supported by the adapter', () => {
+  const manifest = require('../manifest.base.json');
+  const entry = manifest.content_scripts.find(script => script.js.includes('src/content/trakt-integration.js'));
+  assert.ok(entry, 'Trakt content script entry should exist');
+  for (const pattern of [
+    'https://trakt.tv/movie/*', 'https://www.trakt.tv/movie/*', 'https://app.trakt.tv/movie/*',
+    'https://trakt.tv/show/*', 'https://www.trakt.tv/show/*', 'https://app.trakt.tv/show/*'
+  ]) assert.ok(entry.matches.includes(pattern), `missing manifest match ${pattern}`);
+});

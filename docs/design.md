@@ -12,13 +12,13 @@ This document describes the implemented system. For installation and controls, s
 | `UIComponents.js` | Shared flyout controls, status display, notifications, styling |
 | `RatingsModel.js` | Partial bundles; invalid or nonfinite numeric scores become null |
 | `RatingsConfig.js` | Confidence, summary thresholds, cache limits, and network deadlines |
-| Seven site integrations | Site-specific selectors and themes |
+| Nine site integrations | Site-specific selectors and themes |
 | `seerr-integration.js` | Seerr routes, ratings resolution, card/detail rendering, sorting, filtering, bulk selection, Plex Watchlist button on detail pages |
 | `seerr-api-observer.js` | Page-world observer forwarding the title lists Seerr fetches for itself |
 | `background.js` | Seerr REST requests, Plex Watchlist writes via plex.tv Discover, RT search and scorecard parsing, settings migration, toolbar badge |
 | Options and popup | Explicit settings save, temporary connection tests, preferences, status |
 
-The seven site integrations are static `content_scripts` entries and load their shared scripts in manifest order. The Seerr overlay is not: a self-hosted server's origin is only known at runtime, so the worker registers it with `chrome.scripting` against the saved origin. The worker is an ES module and imports shared ratings configuration. Browser manifests are shallow-merged with `manifest.base.json` by Make.
+The nine site integrations are static `content_scripts` entries and load their shared scripts in manifest order. The Seerr overlay is not: a self-hosted server's origin is only known at runtime, so the worker registers it with `chrome.scripting` against the saved origin. The worker is an ES module and imports shared ratings configuration. Browser manifests are shallow-merged with `manifest.base.json` by Make.
 
 ## Worker startup and messaging
 
@@ -44,7 +44,7 @@ Migration reads historical keys only in the worker. It fills active keys only wh
 
 ## Host permissions
 
-The seven supported sites are static `content_scripts` matches. Access to the Seerr server is an optional host permission, requested from the options page at the moment a URL is saved, because that origin is arbitrary. `permissions.request` must be the first await after the user gesture or Chrome rejects it.
+The nine supported sites are static `content_scripts` matches. Access to the Seerr server is an optional host permission, requested from the options page at the moment a URL is saved, because that origin is arbitrary. `permissions.request` must be the first await after the user gesture or Chrome rejects it.
 
 Declining still saves settings; the options page then shows a standing notice above the form, since it explains why the overlay is not running and would be missed below the actions. The worker reconciles registration on startup, on storage changes, and on `permissions.onAdded`/`onRemoved`, so revoking access removes the registration. Match patterns cannot carry a port, so the saved origin is reduced to `protocol//hostname/*`, which matches every port — a server on `:5055` would otherwise produce an invalid pattern.
 
@@ -122,4 +122,4 @@ The batch accepts valid positive IDs with movie/TV types regardless of ratings. 
 
 Make has one shared version prerequisite, so a combined parallel build increments once. Development dependencies stay outside packages. LICENSE is included in distribution files. The lockfile is committed for reproducible installation.
 
-Tests include fast-check properties, worker execution in a VM, jsdom execution of production UI code and of the shared integration layer, and builds in temporary directories. Mocked API/DOM tests do not prove production site compatibility or authenticated server behavior. Firefox 147.0.3 passes the real-extension local-fixture smoke test; authenticated live-site and seven-site coverage remain separate gates (see README).
+Tests include fast-check properties, worker execution in a VM, jsdom execution of production UI code and of the shared integration layer, and builds in temporary directories. Mocked API/DOM tests do not prove production site compatibility or authenticated server behavior. Firefox 157.0.1 passes the real-extension local-fixture smoke test; authenticated live-site and nine-site coverage remain separate gates (see README).

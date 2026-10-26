@@ -28,7 +28,7 @@
     "https://www.simkl.com/*",
     "https://www.justwatch.com/*",
     "https://justwatch.com/*",
-    "https://br.justwatch.com/*"
+    "https://*.justwatch.com/*"
   ],
   "optional_host_permissions": [
     "http://*/*",
@@ -126,9 +126,15 @@
         "https://trakt.tv/movies/*",
         "https://www.trakt.tv/movies/*",
         "https://app.trakt.tv/movies/*",
+        "https://trakt.tv/movie/*",
+        "https://www.trakt.tv/movie/*",
+        "https://app.trakt.tv/movie/*",
         "https://trakt.tv/shows/*",
         "https://www.trakt.tv/shows/*",
-        "https://app.trakt.tv/shows/*"
+        "https://app.trakt.tv/shows/*",
+        "https://trakt.tv/show/*",
+        "https://www.trakt.tv/show/*",
+        "https://app.trakt.tv/show/*"
       ],
       "js": [
         "src/shared/SeerrClient.js",
@@ -183,7 +189,7 @@
       "matches": [
         "https://www.justwatch.com/*/*/*",
         "https://justwatch.com/*/*/*",
-        "https://br.justwatch.com/*/*/*"
+        "https://*.justwatch.com/*/*/*"
       ],
       "js": [
         "src/shared/SeerrClient.js",

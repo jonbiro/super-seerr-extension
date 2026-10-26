@@ -31,7 +31,7 @@ No new requests are automatically submitted on ambiguous matching, page navigati
 
 ## Permissions and active origin
 
-The extension's manifest declares content scripts for **IMDb, Rotten Tomatoes, TMDB, Letterboxd, Metacritic, Trakt and Filmweb**. The supported paths are more specific than permission to run on all websites.
+The extension's manifest declares content scripts for **IMDb, Rotten Tomatoes, TMDB, Letterboxd, Metacritic, Trakt, Filmweb, Simkl and JustWatch**. The supported paths are more specific than permission to run on all websites.
 
 Because your Seerr instance can be hosted on any domain or under a path, the extension requests permission for the specific server origin when you save its URL, then dynamically registers the overlay for that origin/path. It does **not** require the broad `<all_urls>` host permission.
 
