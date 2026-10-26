@@ -10,6 +10,13 @@
   const bytes = value => new TextEncoder().encode(JSON.stringify(value)).length;
   const text = (value, max = 300) => typeof value === 'string' ? value.slice(0, max) : '';
   const number = (value, max = Infinity) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max ? value : null;
+  const safeTmdbId = value => {
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    const textValue = String(value);
+    if (!/^\d+$/.test(textValue)) return null;
+    const id = Number(textValue);
+    return Number.isSafeInteger(id) && id > 0 ? String(id) : null;
+  };
   const cacheFreshness = value => Object.values(value?.entries || {}).reduce((latest, entry) =>
     Math.max(latest, number(entry?.cachedAt) ?? 0), 0);
   const boundedSiteCaches = caches => Object.fromEntries(Object.entries(caches)
@@ -75,10 +82,12 @@
         entries[key] = { bundle, cachedAt: number(entry.cachedAt, Date.now() + 60000), retryAt: number(entry.retryAt, Date.now() + root.RatingsConfig.ratingsFreshMs),
           ...(number(entry.publicCheckedAt, Date.now() + 60000) !== null ? { publicCheckedAt: entry.publicCheckedAt } : {}), diagnostics, ...(Object.keys(nativeRemovedAt).length ? { nativeRemovedAt } : {}) };
       }
-      const index = (Array.isArray(value.index) ? value.index : []).filter(item =>
-        item && /^(movie|tv)$/.test(item.mediaType) && /^[1-9]\d*$/.test(String(item.tmdbId)) && Number.isSafeInteger(Number(item.tmdbId))
-      ).slice(-root.RatingsConfig.listIndexMaxEntries).map(item => ({ tmdbId: String(item.tmdbId), mediaType: item.mediaType, title: text(item.title), originalTitle: text(item.originalTitle),
-        year: number(item.year, 9999), posterPath: text(item.posterPath, 500) || null, releaseDate: text(item.releaseDate, 20), firstAirDate: text(item.firstAirDate, 20) }));
+      const index = (Array.isArray(value.index) ? value.index : []).map(item => {
+        const tmdbId = safeTmdbId(item?.tmdbId);
+        if (!item || !/^(movie|tv)$/.test(item.mediaType) || !tmdbId) return null;
+        return { tmdbId, mediaType: item.mediaType, title: text(item.title), originalTitle: text(item.originalTitle),
+          year: number(item.year, 9999), posterPath: text(item.posterPath, 500) || null, releaseDate: text(item.releaseDate, 20), firstAirDate: text(item.firstAirDate, 20) };
+      }).filter(Boolean).slice(-root.RatingsConfig.listIndexMaxEntries);
       return { server, epoch, matcher: number(value.matcher), entries, index };
     },
     boundedOverlayCache(value) {

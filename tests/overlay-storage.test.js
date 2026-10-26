@@ -218,6 +218,24 @@ test('invalid title-index records cannot consume the index bound', async () => {
   }
 });
 
+test('title-index sanitization canonicalizes IDs and rejects unsafe values', async () => {
+  const worker = await setup();
+  const previous = worker.context.RatingsConfig.listIndexMaxEntries;
+  worker.context.RatingsConfig.listIndexMaxEntries = 10;
+  const value = blob({ index: [
+    { tmdbId: '000123', mediaType: 'movie', title: 'Leading zeros' },
+    { tmdbId: [456], mediaType: 'movie', title: 'Array ID' },
+    { tmdbId: '999999999999999999', mediaType: 'movie', title: 'Unsafe ID' },
+    { tmdbId: '789', mediaType: 'tv', title: 'Valid series' }
+  ] });
+  try {
+    const clean = worker.api.sanitizeOverlayCache(value, server, 0);
+    assert.deepEqual(clean.index.map(item => `${item.mediaType}:${item.tmdbId}`), ['movie:123', 'tv:789']);
+  } finally {
+    worker.context.RatingsConfig.listIndexMaxEntries = previous;
+  }
+});
+
 test('site cache retention keeps the newest sites when storage object order is stale', async () => {
   const records = {};
   const order = [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];

@@ -356,6 +356,17 @@
     return Number.isSafeInteger(id) && id > 0 ? String(id) : text;
   }
 
+  // Persisted and page-observed catalogue records are identity-bearing data.
+  // Unlike a display/cache key, they must never retain zero or an unsafe
+  // integer that could collapse to a different TMDB title after coercion.
+  function safeCanonicalTmdbId(value) {
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    const text = String(value);
+    if (!/^\d+$/.test(text)) return null;
+    const id = Number(text);
+    return Number.isSafeInteger(id) && id > 0 ? String(id) : null;
+  }
+
   function mediaTypeOf(obj, fallback = null) {
     const type = obj?.mediaType || obj?.type || obj?.media?.mediaType || obj?.mediaInfo?.mediaType;
     if (type === 'movie' || type === 'tv') return type;
@@ -506,8 +517,8 @@
   function mediaInfoFromListItem(item) {
     if (!item || typeof item !== 'object') return null;
     const candidate = item.media || item.mediaInfo || item.movie || item.tv || item;
-    const tmdbId = objectTmdbId(candidate);
-    if (tmdbId === null || tmdbId === undefined) return null;
+    const tmdbId = safeCanonicalTmdbId(objectTmdbId(candidate));
+    if (!tmdbId) return null;
 
     const mediaType = mediaTypeOf(candidate, mediaTypeOf(item,
       /^\/discover\/tv/.test(serverPath()) ? 'tv' : /^\/discover\/movies/.test(serverPath()) ? 'movie' : null));
@@ -517,7 +528,7 @@
       link: null,
       href: `/${mediaType}/${tmdbId}`,
       mediaType,
-      tmdbId: canonicalTmdbId(tmdbId),
+      tmdbId,
       title: objectTitle(candidate),
       year: objectYear(candidate)
     };
@@ -541,9 +552,9 @@
     for (const item of items) {
       if (!item || typeof item !== 'object') continue;
       const info = mediaInfoFromListItem(item);
-      if (!info || !/^\d+$/.test(String(info.tmdbId))) continue;
+      if (!info) continue;
       if (info.mediaType !== 'movie' && info.mediaType !== 'tv') continue;
-      const key = `${info.mediaType}:${canonicalTmdbId(info.tmdbId)}`;
+      const key = `${info.mediaType}:${info.tmdbId}`;
       const previous = projected.get(key);
       const raw = item.media || item.mediaInfo || item.movie || item.tv || item;
       const poster = item.posterPath || item.poster_path || raw.posterPath || raw.poster_path || null;
@@ -552,7 +563,7 @@
       projected.delete(key);
       projected.set(key, {
         ...previous,
-        tmdbId: canonicalTmdbId(info.tmdbId),
+        tmdbId: info.tmdbId,
         mediaType: info.mediaType,
         title: info.title || previous?.title || '',
         originalTitle: objectOriginalTitle(item) || previous?.originalTitle || '',
@@ -575,10 +586,9 @@
     const seen = new Set();
     for (const entry of stored) {
       if (!entry || typeof entry !== 'object') continue;
-      const rawTmdbId = String(entry.tmdbId ?? '');
-      const tmdbId = canonicalTmdbId(rawTmdbId);
+      const tmdbId = safeCanonicalTmdbId(entry.tmdbId);
       const mediaType = entry.mediaType;
-      if (!/^\d+$/.test(rawTmdbId) || (mediaType !== 'movie' && mediaType !== 'tv')) continue;
+      if (!tmdbId || (mediaType !== 'movie' && mediaType !== 'tv')) continue;
       const key = `${mediaType}:${tmdbId}`;
       if (seen.has(key)) continue;
       seen.add(key);

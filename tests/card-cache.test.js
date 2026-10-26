@@ -372,6 +372,8 @@ test('malformed index entries never identify a card', async t => {
     local: seedBlob({ index: [
       null, 'nonsense', 42,
       { tmdbId: 'abc', mediaType: 'movie', title: 'Evil', posterPath: '/p123.jpg' },
+      { tmdbId: '0', mediaType: 'movie', title: 'Zero ID', posterPath: '/p123.jpg' },
+      { tmdbId: '999999999999999999', mediaType: 'movie', title: 'Unsafe ID', posterPath: '/p123.jpg' },
       { tmdbId: '123', mediaType: 'song', title: 'Evil', posterPath: '/p123.jpg' },
       { tmdbId: '123', mediaType: 'movie', title: 'Evil', posterPath: '/p123.jpg' }
     ] }),
@@ -379,6 +381,12 @@ test('malformed index entries never identify a card', async t => {
   });
   t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
   await flush(fixture.window);
+
+  fixture.window.testOverlay.restoreListIndex([
+    { tmdbId: '0', mediaType: 'movie', title: 'Zero ID' },
+    { tmdbId: '999999999999999999', mediaType: 'movie', title: 'Unsafe ID' }
+  ]);
+  assert.equal(fixture.window.testOverlay.projectListIndex().map(item => `${item.mediaType}:${item.tmdbId}`).join(','), 'movie:123');
 
   fixture.window.testOverlay.hydrateCardsFromListItems();
   fixture.window.testOverlay.injectPlexCardButtons();
@@ -414,6 +422,21 @@ test('the projected index canonicalizes equivalent numeric-string IDs', async t 
   assert.equal(projected.length, 1);
   assert.equal(projected[0].tmdbId, '123');
   assert.equal(projected[0].title, 'Dune');
+});
+
+test('the projected index rejects non-positive and unsafe IDs', async t => {
+  const fixture = openGrid();
+  t.after(() => { fixture.dom.window.close(); });
+  await flush(fixture.window);
+
+  const projected = fixture.window.testOverlay.projectListIndex([
+    { id: '0', mediaType: 'movie', title: 'Zero ID' },
+    { id: '999999999999999999', mediaType: 'movie', title: 'Unsafe ID' },
+    { id: [456], mediaType: 'movie', title: 'Array ID' },
+    { id: 123, mediaType: 'movie', title: 'Valid title' }
+  ]);
+  assert.equal(projected.length, 1);
+  assert.equal(projected[0].tmdbId, '123');
 });
 
 test('new catalogue observations replace stale identities while preserving missing metadata on reload', async t => {
