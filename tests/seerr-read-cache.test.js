@@ -35,16 +35,55 @@ test('different titles share request history but never their status result', asy
   assert.equal(results[0].tmdbId, 1); assert.equal(results[1].tmdbId, 2);
 });
 
-test('localized titles with the same TMDB identity share one status read', async () => {
-  const { api } = await fixture(); let calls = 0;
-  api.getMediaStatusUncached = async () => { calls++; return { status: 'available', tmdbId: 550 }; };
+test('verified localized titles share the underlying detail and request-history reads', async () => {
+  const { api } = await fixture(); const calls = [];
+  api.sendAPIRequest = async (method, endpoint) => {
+    calls.push(endpoint);
+    return endpoint.includes('/request?') ? { results: [] }
+      : { id: 550, title: 'The Movie', originalTitle: 'La película', releaseDate: '1999-01-01', mediaInfo: { status: 1 } };
+  };
   const [english, localized] = await Promise.all([
     api.getMediaStatus({ tmdbId: 550, mediaType: 'movie', title: 'The Movie', year: 1999 }),
     api.getMediaStatus({ tmdbId: 550, mediaType: 'movie', title: 'La película', year: 1999 })
   ]);
-  assert.equal(calls, 1);
+  assert.equal(calls.filter(path => path === '/api/v1/movie/550').length, 1);
+  assert.equal(calls.filter(path => path.includes('/request?')).length, 1);
   assert.equal(english.status, 'available');
   assert.equal(localized.status, 'available');
+});
+
+for (const mismatchFirst of [false, true]) test(`a reused supplied ID cannot mix status results between titles (mismatch first: ${mismatchFirst})`, async () => {
+  const { api } = await fixture();
+  api.sendAPIRequest = async (method, endpoint) => {
+    if (endpoint.includes('/request?')) return { results: [] };
+    if (endpoint === '/api/v1/movie/999') return { id: 999, title: 'The Suicide Squad', releaseDate: '2021-08-05', mediaInfo: { status: 5 } };
+    if (endpoint === '/api/v1/movie/438631') return { id: 438631, title: 'Dune', releaseDate: '2021-09-15', mediaInfo: { status: 1 } };
+    if (endpoint.startsWith('/api/v1/search?')) return { results: [{ id: 438631, title: 'Dune', mediaType: 'movie', releaseDate: '2021-09-15' }] };
+    throw new Error(`Unexpected endpoint ${endpoint}`);
+  };
+  const original = { tmdbId: 999, mediaType: 'movie', title: 'The Suicide Squad', year: 2021 };
+  const mismatch = { ...original, title: 'Dune' };
+  for (const media of mismatchFirst ? [mismatch, original] : [original, mismatch]) {
+    const result = await api.getMediaStatus(media);
+    assert.equal(result.tmdbId, media === mismatch ? 438631 : 999);
+    assert.equal(result.status, media === mismatch ? 'available' : 'available_watch');
+  }
+});
+
+test('release-year evidence cannot reuse the cached status of another remake', async () => {
+  const { api } = await fixture();
+  api.sendAPIRequest = async (method, endpoint) => {
+    if (endpoint.includes('/request?')) return { results: [] };
+    if (endpoint === '/api/v1/movie/841') return { id: 841, title: 'Dune', releaseDate: '1984-12-14', mediaInfo: { status: 5 } };
+    if (endpoint === '/api/v1/movie/438631') return { id: 438631, title: 'Dune', releaseDate: '2021-09-15', mediaInfo: { status: 1 } };
+    if (endpoint.startsWith('/api/v1/search?')) return { results: [{ id: 438631, title: 'Dune', mediaType: 'movie', releaseDate: '2021-09-15' }] };
+    throw new Error(`Unexpected endpoint ${endpoint}`);
+  };
+  const original = { tmdbId: 841, mediaType: 'movie', title: 'Dune', year: 1984 };
+  assert.equal((await api.getMediaStatus(original)).tmdbId, 841);
+  const remake = await api.getMediaStatus({ ...original, year: 2021 });
+  assert.equal(remake.tmdbId, 438631);
+  assert.equal(remake.status, 'available');
 });
 
 test('write completion invalidates reads started before and during it, even on failure', async () => {

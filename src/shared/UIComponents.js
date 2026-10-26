@@ -218,9 +218,11 @@ class UIComponents {
     };
     tab.addEventListener('click', () => flyout.setExpanded(!flyout.classList.contains('expanded')));
     flyout.addEventListener('keydown', event => {
+      // These keys belong to the focused extension control. Host shortcuts
+      // must not cancel native button activation or Tab navigation.
+      event.stopPropagation();
       if (event.key === 'Escape' && flyout.classList.contains('expanded')) {
         event.preventDefault();
-        event.stopPropagation();
         flyout.setExpanded(false);
       }
     });
@@ -479,12 +481,12 @@ class UIComponents {
         z-index: 9999;
         transition: all 0.15s ease-in-out;
         outline: none;
-        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
         color: white;
       }
 
       .seerr-request-button:hover:not(:disabled) {
-        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+        background: linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%);
         border-color: #7c3aed;
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
@@ -514,13 +516,13 @@ class UIComponents {
       }
 
       .seerr-request-button.watch {
-        background: rgba(16, 185, 129, 0.9);
+        background: #047857;
         border-color: #10b981;
         color: white;
       }
 
       .seerr-request-button.watch:hover:not(:disabled) {
-        background: rgba(5, 150, 105, 1);
+        background: #065f46;
         border-color: #059669;
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
@@ -666,7 +668,7 @@ class UIComponents {
         transform: translateY(-50%);
         width: 60px;
         height: 120px;
-        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
         border: 2px solid #8b5cf6;
         border-radius: 8px 0 0 8px;
         display: flex;
@@ -691,7 +693,7 @@ class UIComponents {
         background: transparent; color: inherit; cursor: pointer;
       }
       .seerr-tab:hover {
-        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+        background: linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%);
         border-color: #7c3aed;
         transform: translateY(-50%) translateX(-4px);
         box-shadow: -6px 0 16px rgba(139, 92, 246, 0.4);
@@ -822,7 +824,7 @@ class UIComponents {
       .seerr-action-button {
         width: 100%;
         padding: 14px 20px;
-        background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
         border: 2px solid #8b5cf6;
         color: white;
         border-radius: 0 0 0 8px;
@@ -838,7 +840,7 @@ class UIComponents {
       }
 
       .seerr-action-button:hover:not(:disabled) {
-        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+        background: linear-gradient(135deg, #6d28d9 0%, #5b21b6 100%);
         border-color: #7c3aed;
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
@@ -851,12 +853,12 @@ class UIComponents {
       }
 
       .seerr-action-button.watch {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        background: linear-gradient(135deg, #047857 0%, #065f46 100%);
         border-color: #10b981;
       }
 
       .seerr-action-button.watch:hover:not(:disabled) {
-        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        background: linear-gradient(135deg, #065f46 0%, #064e3b 100%);
         border-color: #059669;
         transform: translateY(-1px);
         box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
@@ -927,7 +929,7 @@ class UIComponents {
         padding: 10px 20px;
         background: transparent;
         border: 2px solid #8b5cf6;
-        color: #8b5cf6;
+        color: #6d28d9;
         border-radius: 0 0 0 8px;
         font-size: 14px;
         font-weight: 600;
@@ -945,12 +947,16 @@ class UIComponents {
         transform: translateY(-1px);
       }
 
+      .seerr-theme-dark .seerr-watchlist-button {
+        color: #c4b5fd;
+      }
+
       .seerr-plex-button {
         width: 100%;
         padding: 10px 20px;
         background: transparent;
         border: 2px solid #e5a00d;
-        color: #e5a00d;
+        color: #854d0e;
         border-radius: 0 0 0 8px;
         font-size: 14px;
         font-weight: 600;
@@ -968,6 +974,10 @@ class UIComponents {
         transform: translateY(-1px);
       }
 
+      .seerr-theme-dark .seerr-plex-button {
+        color: #fbbf24;
+      }
+
       .seerr-plex-button:disabled {
         opacity: 0.75;
         cursor: default;
@@ -977,7 +987,7 @@ class UIComponents {
         display: inline-flex;
         align-items: center;
         gap: 4px;
-        background: #10b981;
+        background: #047857;
         color: white;
         font-size: 11px;
         font-weight: 600;

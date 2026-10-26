@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.254]
+
+- Keep title and release-year evidence in Seerr status-cache keys so a reused or incorrect page-supplied ID cannot mix results between titles or remakes. Continue sharing underlying detail and request-history reads.
+- Reject Plex connection-test responses without a valid account identity, including proxy HTML and unrelated JSON, and show a readable verified account name.
+- Protect flyout keyboard controls from host-page shortcuts that cancel button activation or Tab navigation.
+- Improve flyout text contrast across provider themes, light/dark watchlist controls, playback buttons, and library badges.
+- Update the test tooling's transitive `source-map-js` and `undici` dependencies to patched versions; the dependency audit reports no known vulnerabilities.
+
 ## [3.5.253]
 
 - Ignore scoreless persisted Seerr bundles so malformed multi-site cache records cannot consume the site cap or suppress a fresh lookup.

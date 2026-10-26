@@ -63,7 +63,7 @@ test('plexTestConnection accepts an unsaved token without storing it', async () 
     fetch: async (url, options) => {
       calls.push({ url: String(url), token: options.headers['X-Plex-Token'] });
       assert.ok(String(url).startsWith('https://plex.tv/api/v2/user'));
-      return jsonResponse({ username: 'plex-user' });
+      return jsonResponse({ id: 123, username: 'plex-user' });
     }
   });
   await worker.ready;
@@ -74,6 +74,27 @@ test('plexTestConnection accepts an unsaved token without storing it', async () 
   assert.equal(response.data.user, 'plex-user');
   assert.equal(calls[0].token, 'unsaved-token');
   assert.equal(worker.localStore.plexToken, undefined, 'test must not save');
+});
+
+test('Plex connection tests reject proxy HTML and responses without an account identity', async () => {
+  const worker = loadWorker();
+  await worker.ready;
+  for (const value of [null, {}, [], { message: 'Proxy fallback' }, { id: 0 }, { id: true }, { id: [123] }, { id: '123junk' }]) {
+    worker.context.fetch = async () => jsonResponse(value);
+    await assert.rejects(worker.api.plexTestConnection({ plexToken: 't' }), /unexpected account response/);
+  }
+  worker.context.fetch = async () => ({ ok: true, status: 200,
+    headers: { get: () => 'text/html' }, text: async () => '<html>Sign in to this proxy</html>' });
+  await assert.rejects(worker.api.plexTestConnection({ plexToken: 't' }), /unexpected account response/);
+});
+
+test('Plex account names use readable strings and fall back to the verified user ID', async () => {
+  const worker = loadWorker();
+  await worker.ready;
+  worker.context.fetch = async () => jsonResponse({ id: '123', username: '  ', title: ' Plex Viewer ' });
+  assert.equal((await worker.api.plexTestConnection({ plexToken: 't' })).user, 'Plex Viewer');
+  worker.context.fetch = async () => jsonResponse({ id: 123, username: { unexpected: true } });
+  assert.equal((await worker.api.plexTestConnection({ plexToken: 't' })).user, 'Plex user 123');
 });
 
 test('plex resolution matches TMDB GUID even when it is not ranked first', async () => {

@@ -607,14 +607,11 @@ class SeerrAPI {
 
   async getMediaStatus(mediaData) {
     const media = MediaValidation.media(mediaData);
-    // A TMDB id is the server's stable title identity. Discovery sites can
-    // provide localized or otherwise different display titles for the same
-    // id; including those labels in the short-lived read key made one status
-    // lookup scan request history once per spelling. Keep the title/year
-    // fallback for the genuinely title-only matching path.
-    const identity = media.tmdbId !== undefined
-      ? [media.mediaType, media.tmdbId]
-      : [media.mediaType, media.title, media.year];
+    // A page-supplied ID is still unverified: contradictory title/year
+    // evidence can resolve to a different ID. Retain that evidence in the
+    // status key so one page cannot reuse another title's resolved verdict.
+    // Raw detail and request-history reads remain shared across spellings.
+    const identity = [media.mediaType, media.tmdbId ?? null, media.title, media.year];
     const key = `status:${JSON.stringify(identity)}`;
     const generation = this.seerrReadGeneration || 0;
     return this.cachedSeerrRead(key, async () => {

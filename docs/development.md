@@ -88,3 +88,8 @@ Trakt's generic SPA page title previously became the movie name; its existing
 route-title fallback now recognizes that generic title. Automated regressions
 cover both cases. Synthetic browser fixtures still cover IMDb's supported markup;
 they do not bypass or stand in for the live-site block.
+
+The [October 26 review](reviews/2026-10-26.md) records the newer nine-site run,
+including HTTP access blocks, the RT TV consent dialog, and an intermittent
+Letterboxd Escape failure that passed follow-up checks. Keep the separate live
+and fixture results distinct when assessing compatibility.

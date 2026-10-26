@@ -47,6 +47,19 @@ test('diagnostics preserve independent Plex and Seerr failures and successes', a
   assert.doesNotMatch(JSON.stringify(second), /plex-secret/);
 });
 
+test('Plex proxy success pages cannot verify the account in popup diagnostics', async () => {
+  const w = await worker({ plex: 'plex-secret' });
+  w.context.fetch = async url => ({ ok: true, status: 200,
+    headers: { get: name => name === 'Content-Type' ? 'text/html' : null },
+    text: async () => '<html>Proxy sign-in</html>',
+    json: async () => url.includes('/auth/me') ? { id: 1 } : { initialized: true } });
+  const result = await w.api.getPopupDiagnostics();
+  assert.equal(result.checks.seerr.state, 'ok');
+  assert.equal(result.checks.plex.state, 'error');
+  assert.equal(result.checks.plex.fix, 'plexToken');
+  assert.doesNotMatch(JSON.stringify(result), /plex-secret|Proxy sign-in/);
+});
+
 for (const field of ['baseUrl', 'apiKey', 'plexToken', 'settingsLoadGeneration']) {
   test(`diagnostics discard a report when ${field} changes during a check`, async () => {
     const w = await worker();

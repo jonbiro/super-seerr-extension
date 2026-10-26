@@ -184,6 +184,11 @@ class LetterboxdIntegration extends BaseIntegration {
         box-shadow: 0 4px 12px rgba(0, 215, 53, 0.3) !important;
       }
       
+      /* Dark labels stay readable across both bright gradient stops. */
+      .seerr-tab, .seerr-tab-text, .seerr-action-button, .seerr-request-button {
+        color: #07140c !important;
+      }
+
       /* Letterboxd-specific status colors - optimized for green theme */
       .seerr-status-icon.available {
         background: #52c41a !important; /* Bright green (similar but distinct) */

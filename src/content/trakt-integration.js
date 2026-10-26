@@ -258,7 +258,7 @@ class TraktIntegration extends BaseIntegration {
       /* Trakt Purple/Pink Theme Override */
       
       .seerr-tab {
-        background: linear-gradient(135deg, #ed1c24 0%, #932b86 100%) !important;
+        background: linear-gradient(135deg, #dc1b23 0%, #932b86 100%) !important;
         border-color: #ed1c24 !important;
         box-shadow: -2px 0 12px rgba(237, 28, 36, 0.3) !important;
       }
@@ -270,7 +270,7 @@ class TraktIntegration extends BaseIntegration {
       }
       
       .seerr-action-button {
-        background: linear-gradient(135deg, #ed1c24 0%, #932b86 100%) !important;
+        background: linear-gradient(135deg, #dc1b23 0%, #932b86 100%) !important;
         border-color: #ed1c24 !important;
         color: white !important;
       }
@@ -282,7 +282,7 @@ class TraktIntegration extends BaseIntegration {
       }
       
       .seerr-request-button {
-        background: linear-gradient(135deg, #ed1c24 0%, #932b86 100%) !important;
+        background: linear-gradient(135deg, #dc1b23 0%, #932b86 100%) !important;
         border-color: #ed1c24 !important;
         color: white !important;
       }

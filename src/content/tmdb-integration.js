@@ -161,6 +161,11 @@ class TMDbIntegration extends BaseIntegration {
         box-shadow: 0 4px 12px rgba(1, 180, 228, 0.4) !important;
       }
       
+      /* Dark labels stay readable across both bright gradient stops. */
+      .seerr-tab, .seerr-tab-text, .seerr-action-button, .seerr-request-button {
+        color: #102217 !important;
+      }
+
       /* TMDb-specific status indicator colors (Issue #2 fix) */
       .seerr-status-icon.available {
         background: #90cea1 !important; /* TMDb green accent */

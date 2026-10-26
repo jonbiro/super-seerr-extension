@@ -160,13 +160,13 @@ class RottenTomatoesIntegration extends BaseIntegration {
       /* Rotten Tomatoes Red Theme Override */
       
       .seerr-tab {
-        background: linear-gradient(135deg, #fa320a 0%, #d42009 100%) !important;
+        background: linear-gradient(135deg, #d42009 0%, #b71c08 100%) !important;
         border-color: #fa320a !important;
         box-shadow: -2px 0 12px rgba(250, 50, 10, 0.3) !important;
       }
       
       .seerr-tab:hover {
-        background: linear-gradient(135deg, #d42009 0%, #b71c08 100%) !important;
+        background: linear-gradient(135deg, #b71c08 0%, #991b1b 100%) !important;
         border-color: #d42009 !important;
         box-shadow: -6px 0 16px rgba(250, 50, 10, 0.4) !important;
       }
@@ -174,26 +174,26 @@ class RottenTomatoesIntegration extends BaseIntegration {
       /* RT red theme for default/request states only */
       .seerr-action-button:not(.available):not(.ready):not(.partial):not(.pending):not(.error),
       .seerr-action-button.request {
-        background: linear-gradient(135deg, #fa320a 0%, #d42009 100%) !important;
+        background: linear-gradient(135deg, #d42009 0%, #b71c08 100%) !important;
         border-color: #fa320a !important;
       }
       
       .seerr-action-button:not(.available):not(.ready):not(.partial):not(.pending):not(.error):hover:not(:disabled),
       .seerr-action-button.request:hover:not(:disabled) {
-        background: linear-gradient(135deg, #d42009 0%, #b71c08 100%) !important;
+        background: linear-gradient(135deg, #b71c08 0%, #991b1b 100%) !important;
         border-color: #d42009 !important;
         box-shadow: 0 4px 12px rgba(250, 50, 10, 0.3) !important;
       }
       
       .seerr-request-button:not(.available):not(.ready):not(.partial):not(.pending):not(.error),
       .seerr-request-button.request {
-        background: linear-gradient(135deg, #fa320a 0%, #d42009 100%) !important;
+        background: linear-gradient(135deg, #d42009 0%, #b71c08 100%) !important;
         border-color: #fa320a !important;
       }
       
       .seerr-request-button:not(.available):not(.ready):not(.partial):not(.pending):not(.error):hover:not(:disabled),
       .seerr-request-button.request:hover:not(:disabled) {
-        background: linear-gradient(135deg, #d42009 0%, #b71c08 100%) !important;
+        background: linear-gradient(135deg, #b71c08 0%, #991b1b 100%) !important;
         border-color: #d42009 !important;
         box-shadow: 0 4px 12px rgba(250, 50, 10, 0.3) !important;
       }

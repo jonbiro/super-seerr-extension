@@ -180,11 +180,18 @@
     async plexTestConnection(data = null) {
       const token = (data && data.plexToken) || this.plexToken;
       if (!token) throw new Error('Plex token is required');
-      const user = await this.plexFetch(`${PLEX_TV}/api/v2/user`, { token });
-      const account = user || {};
+      const account = await this.plexFetch(`${PLEX_TV}/api/v2/user`, { token });
+      const id = account?.id;
+      if (!account || typeof account !== 'object' || Array.isArray(account) ||
+          !['number', 'string'].includes(typeof id) || !/^\d+$/.test(String(id)) ||
+          !Number.isSafeInteger(Number(id)) || Number(id) <= 0) {
+        throw new Error('Plex returned an unexpected account response. Check the network and try again.');
+      }
+      const user = [account.username, account.email, account.title]
+        .find(value => typeof value === 'string' && value.trim());
       return {
         connected: true,
-        user: account.username || account.email || account.title || 'Plex account'
+        user: user?.trim() || `Plex user ${id}`
       };
     },
 

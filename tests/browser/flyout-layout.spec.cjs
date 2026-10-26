@@ -83,6 +83,35 @@ test('injected request buttons never submit a host page form', async ({ page }) 
   expect(await page.evaluate(() => window.submitted)).toBe(0);
 });
 
+test('flyout keyboard actions work without triggering host shortcuts', async ({ page }) => {
+  await page.evaluate(() => {
+    window.hostKeys = 0; window.titleActions = 0;
+    document.body.insertAdjacentHTML('beforeend', '<button id="host-shortcut">Host action</button>');
+    document.addEventListener('keydown', event => {
+      if (['Enter', ' ', 'Tab'].includes(event.key)) { window.hostKeys++; event.preventDefault(); }
+    });
+    const ui = new UIComponents({ siteName: 'Keyboard' }); ui.injectStyles();
+    const { flyout, panel } = ui.createFlyout();
+    const controls = ui.createFlyoutContent({ title: 'Example film', mediaType: 'movie' }, panel);
+    ui.updateFlyoutStatus(controls, { status: 'available', buttonClass: 'request', buttonText: 'Review title' });
+    controls.button.addEventListener('click', () => { window.titleActions++; });
+    document.body.append(flyout);
+  });
+  const tab = page.getByRole('button', { name: 'Open Super Seerr', exact: true });
+  await tab.focus(); await page.keyboard.press('Enter');
+  await expect(page.locator('.seerr-panel')).toBeFocused();
+  const action = page.getByRole('button', { name: 'Review title', exact: true });
+  await action.focus(); await page.keyboard.press('Space');
+  expect(await page.evaluate(() => window.titleActions)).toBe(1);
+  await page.keyboard.press('Tab');
+  await expect(action).not.toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(tab).toBeFocused();
+  expect(await page.evaluate(() => window.hostKeys)).toBe(0);
+  await page.locator('#host-shortcut').focus(); await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => window.hostKeys)).toBe(1);
+});
+
 test('notification timers pause for hover and focus; errors wait for dismissal', async ({ page }) => {
   await page.clock.install();
   await page.evaluate(() => {
