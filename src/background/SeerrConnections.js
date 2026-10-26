@@ -78,7 +78,21 @@
       const sites = this.savedSites();
       if (!sites.some(site => {
         try { return new URL(site.url).origin === original.origin; } catch (_) { return false; }
-      })) return sender;
+      })) {
+        // Match patterns cannot include ports, so a registration for
+        // https://host:5055 also reaches https://host:1234. That other-port
+        // page is not a discovery site: it is a sibling origin that must not
+        // inherit the active server credentials. Keep genuinely unrelated
+        // discovery pages working, but fail closed for the saved host/scheme.
+        const sameSavedHost = sites.some(site => {
+          try {
+            const saved = new URL(site.url);
+            return saved.protocol === original.protocol && saved.hostname === original.hostname;
+          } catch (_) { return false; }
+        });
+        if (sameSavedHost) throw new Error('The Seerr page changed. Reload it before trying again.');
+        return sender;
+      }
       // MessageSender.url can remain the original document URL after pushState.
       // The browser's tab URL determines which installation owns this message.
       const tab = await chrome.tabs.get(sender.tab.id);

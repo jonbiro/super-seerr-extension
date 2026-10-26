@@ -271,6 +271,19 @@ test('same-origin pages outside a saved nested site cannot use its active config
   assert.equal(writes, 0);
 });
 
+test('a sibling port on the saved host cannot inherit the active configuration', async () => {
+  const w = await setup();
+  const sender = { id: 'test', tab: { id: 1 }, frameId: 0, url: 'https://home.example:5055/discover' };
+  w.context.chrome.tabs = { get: async () => ({ id: 1, url: sender.url }) };
+
+  const config = await message(w, 'getConfigState', undefined, sender);
+  assert.equal(config.success, false);
+  assert.match(config.error, /page changed/i);
+  const request = await message(w, 'requestMedia', { tmdbId: 1, mediaType: 'movie', title: 'Example' }, sender);
+  assert.equal(request.success, false);
+  assert.match(request.error, /page changed/i);
+});
+
 test('inactive nested pages cannot invoke Plex watchlist actions', async () => {
   const w = await setup();
   await addSecond(w);
