@@ -1,6 +1,44 @@
 // Session-authenticated Seerr reads and per-title ratings resolution.
 (function (root) {
   root.createSeerrSession = function ({ Config, Model, log, getServer, bundleFromRatingObject, mergeBundles, isBundleComplete }) {
+    const cancelResponseBody = async response => {
+      try { await response.body?.cancel(); } catch (_) { /* Preserve the transport error. */ }
+    };
+    const readBoundedJson = async response => {
+      const maxBytes = Config.seerrMaxResponseBytes;
+      const announced = Number(response.headers?.get?.('Content-Length'));
+      if (Number.isFinite(announced) && announced > maxBytes) {
+        await cancelResponseBody(response);
+        throw new Error('Seerr returned a response that is too large.');
+      }
+      if (response.body?.getReader) {
+        const reader = response.body.getReader();
+        const chunks = [];
+        let size = 0;
+        try {
+          while (true) {
+            const part = await reader.read();
+            if (part.done) break;
+            const length = part.value?.byteLength || 0;
+            size += length;
+            if (size > maxBytes) {
+              await reader.cancel().catch(() => {});
+              throw new Error('Seerr returned a response that is too large.');
+            }
+            if (length) chunks.push(part.value);
+          }
+        } finally { reader.releaseLock(); }
+        if (typeof TextDecoder !== 'function') throw new Error('Seerr response could not be decoded.');
+        const bytes = new Uint8Array(size);
+        let offset = 0;
+        for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+        return JSON.parse(new TextDecoder().decode(bytes));
+      }
+      // Lightweight test doubles and old response shims may only expose json.
+      // Browser Responses use the bounded streaming path above.
+      if (typeof response.json === 'function') return response.json();
+      throw new Error('Seerr response body is unreadable.');
+    };
     async function fetchJsonFromSeerr(endpoint, signal) {
       const basePath = getServer()?.pathname.replace(/\/+$/, '') || '';
       const url = new URL(`${basePath}${endpoint}`, window.location.origin);
@@ -22,7 +60,7 @@
         return { ok: false, status: response.status, data: null };
       }
 
-      return { ok: true, status: response.status, data: await response.json() };
+      return { ok: true, status: response.status, data: await readBoundedJson(response) };
     }
 
     // What each endpoint can contribute. Asking one whose fields are all known

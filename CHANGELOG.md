@@ -23,6 +23,7 @@ heading per change.
 - Bound and cancel oversized Plex error responses before retaining a short diagnostic message.
 - Reuse an empty Simkl watchlist when its valid null activity marker is unchanged, instead of downloading the feeds again on every manual sync.
 - Bound successful Rotten Tomatoes HTML responses and cancel oversized pages before retaining them in the worker.
+- Bound successful Seerr ratings/detail responses and cancel oversized JSON before parsing it in the page or worker.
 - Bound and cancel oversized Seerr error responses before parsing them in the background worker, and release refused diagnostic/metadata responses promptly so proxy error pages cannot consume the worker indefinitely.
 
 ## [3.5.240]

@@ -52,6 +52,11 @@ const RatingsConfig = {
 
   requestTimeoutMs: 10000,
 
+  // Ratings/detail responses should be small JSON documents. Bound the body
+  // before parsing so a broken proxy cannot make a page worker retain an
+  // unbounded successful response.
+  seerrMaxResponseBytes: 2 * 1024 * 1024,
+
   // No single lookup may hold a card hostage: if the whole resolution has not
   // settled by then, the title is treated as inconclusive (retried soon, never
   // stored) and the late answer is dropped. Without this a hung message

@@ -62,6 +62,41 @@
     try { return typeof response.json === 'function' ? await response.json() : null; }
     catch (_) { return null; }
   };
+  const readBoundedJson = async response => {
+    const maxBytes = RatingsConfig.seerrMaxResponseBytes;
+    const announced = Number(response.headers?.get?.('Content-Length'));
+    if (Number.isFinite(announced) && announced > maxBytes) {
+      await cancelResponseBody(response);
+      throw new Error('Seerr returned a response that is too large.');
+    }
+    if (response.body?.getReader) {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let size = 0;
+      try {
+        while (true) {
+          const part = await reader.read();
+          if (part.done) break;
+          const length = part.value?.byteLength || 0;
+          size += length;
+          if (size > maxBytes) {
+            await reader.cancel().catch(() => {});
+            throw new Error('Seerr returned a response that is too large.');
+          }
+          if (length) chunks.push(part.value);
+        }
+      } finally { reader.releaseLock(); }
+      if (typeof TextDecoder !== 'function') throw new Error('Seerr response could not be decoded.');
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      return JSON.parse(new TextDecoder().decode(bytes));
+    }
+    // Lightweight test doubles and older response shims may only expose json.
+    // Browser Responses use the bounded streaming path above.
+    if (typeof response.json === 'function') return response.json();
+    throw new Error('Seerr response body is unreadable.');
+  };
   const isNetworkFailure = error => {
     const name = String(error?.name || '').toLowerCase();
     const message = String(error?.message || '').toLowerCase();
@@ -136,7 +171,7 @@
           throw error;
         }
 
-        return response.status === 204 ? null : await response.json();
+        return response.status === 204 ? null : await readBoundedJson(response);
       } catch (error) {
         if (isNetworkFailure(error)) {
           throw new Error('Could not connect to Seerr server. Please check the URL and your network connection.');

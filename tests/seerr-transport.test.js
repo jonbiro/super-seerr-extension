@@ -1,5 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const Config = require('../src/shared/RatingsConfig');
 const { loadWorker } = require('./helpers/worker');
 
 for (const [label, name, message] of [
@@ -57,4 +58,30 @@ test('cancels an oversized streaming HTTP error before reading it into the worke
   }), { status: 503 });
   await assert.rejects(worker.api.sendAPIRequest('GET', '/api/v1/auth/me'), /HTTP 503/);
   assert.equal(cancelled, 1, 'an oversized provider error must release its unread body');
+});
+
+test('cancels an oversized successful JSON body before parsing it', async () => {
+  const worker = loadWorker();
+  await worker.ready;
+  worker.api.baseUrl = 'https://seerr.example';
+  worker.api.apiKey = 'key';
+  let reads = 0;
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() {
+          reads++;
+          return { done: false, value: new Uint8Array(Config.seerrMaxResponseBytes + 1) };
+        },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  worker.context.fetch = async () => ({ ok: true, status: 200, headers: { get: () => null }, body });
+
+  await assert.rejects(worker.api.sendAPIRequest('GET', '/api/v1/auth/me'), /too large/);
+  assert.equal(reads, 1, 'the reader must stop at the first oversized chunk');
+  assert.equal(cancelled, true, 'an oversized successful body must be cancelled');
 });
