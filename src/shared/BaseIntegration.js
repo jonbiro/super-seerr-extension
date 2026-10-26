@@ -59,7 +59,7 @@ class BaseIntegration {
   isBlockedProviderPage() {
     const looksLikeChallenge = value => {
       const text = typeof value === 'string' ? value.trim() : '';
-      return /^(?:403\s+forbidden|access\s+denied|attention\s+required|just\s+a\s+moment\.?|verify\s+you\s+are\s+human|sorry,?\s+you\s+have\s+been\s+blocked)(?:\s*[|:!.-].*)?$/i.test(text);
+      return /^(?:(?:error\s*)?403\s*(?:[-:|]\s*)?forbidden|access\s+denied|attention\s+required|just\s+a\s+moment\.?|verify\s+you\s+are\s+human|sorry,?\s+you\s+have\s+been\s+blocked)(?:\s*[|:!.-].*)?$/i.test(text);
     };
     if (looksLikeChallenge(document.title)) return true;
     return [...document.querySelectorAll('h1, h2')].some(node => looksLikeChallenge(node.textContent));

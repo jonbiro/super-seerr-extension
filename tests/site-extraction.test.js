@@ -47,7 +47,7 @@ test('every integration returns null rather than guessing on an unrelated page',
   }
 });
 
-for (const title of ['403 Forbidden', 'Just a moment...', 'Access Denied']) {
+for (const title of ['403 Forbidden', '403 - Forbidden', 'Error 403: Forbidden', 'Just a moment...', 'Access Denied']) {
   test(`IMDb rejects a non-media page titled ${title}`, async t => {
     const page = loadIntegration({ site: 'imdb', title, html: `<h1>${title}</h1>` });
     t.after(() => page.window.close());
