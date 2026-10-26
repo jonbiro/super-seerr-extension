@@ -30,6 +30,25 @@ test('verified public scores survive restart and reuse an ID across servers and 
     ['confidence', 'matchedTitle', 'matchedYear', 'rtAudienceScore', 'rtCriticsScore', 'source', 'url'].sort());
 });
 
+test('numeric-string IDs with leading zeroes share one worker and overlay identity', async () => {
+  const worker = await seed();
+  const calls = provider(worker, { critics: 12 });
+  const result = await worker.api.getRottenTomatoesRatings({ ...input, tmdbId: '000550', title: 'El club de la lucha' });
+  assert.equal(result.rtCriticsScore, 80);
+  assert.equal(calls.length, 0, 'the equivalent numeric-string ID must reuse the verified public score');
+  assert.equal(worker.api.publicRatingKey({ tmdbId: '000550', mediaType: 'movie' }), 'movie:550');
+
+  const overlay = loadOverlay({ pathname: '/discover', settings: { seerrUrl: 'https://seerr.example/' },
+    local: worker.localStore,
+    sendMessage: async message => { throw new Error(`Unexpected network lookup: ${message.action}`); }
+  });
+  const bundle = await overlay.getRatings('000550', 'Fight Club', 1999, 'movie');
+  assert.equal(bundle.rtCriticsScore, 80);
+  assert.equal(overlay.ratingsCacheKey('000550', 'Fight Club', 1999, 'movie'), 'movie:550');
+  assert.equal(overlay.ratingsCache.has('movie:550'), true);
+  assert.equal(overlay.ratingsCache.has('movie:000550'), false);
+});
+
 test('movies, TV series, different IDs and contradictory years cannot collide', async () => {
   for (const override of [{ mediaType: 'tv' }, { tmdbId: 551 }, { year: 2000 }]) {
     const saved = await seed(); const worker = loadWorker({ local: saved.localStore }); await worker.ready;

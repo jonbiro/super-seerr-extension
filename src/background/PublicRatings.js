@@ -2,13 +2,22 @@
 // Seerr-native/session bundles and catalogue indexes never enter it.
 (function (root) {
   const Config = root.RatingsConfig;
+  // TMDB IDs can arrive from page JSON as either numbers or digit strings.
+  // Treat equivalent representations (including harmless leading zeroes) as
+  // one identity so a shared score is not stranded under a different key.
+  function canonicalTmdbId(value) {
+    const text = String(value);
+    if (!/^\d+$/.test(text)) return null;
+    const id = Number(text);
+    return Number.isSafeInteger(id) && id > 0 ? String(id) : null;
+  }
+
   root.PublicRatings = {
     publicRatingKey(data) {
       if (!data || (data.mediaType !== 'movie' && data.mediaType !== 'tv') ||
           (typeof data.tmdbId !== 'number' && typeof data.tmdbId !== 'string')) return null;
-      const id = String(data.tmdbId);
-      return /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id))
-        ? `${data.mediaType}:${id}` : null;
+      const id = canonicalTmdbId(data.tmdbId);
+      return id ? `${data.mediaType}:${id}` : null;
     },
     sanitizePublicRating(entry, mediaType = null) {
       if (!entry || entry.source !== 'rotten-tomatoes' || entry.value?.source !== 'rotten-tomatoes' ||

@@ -18,6 +18,7 @@ heading per change.
 - Collapse repeated trailing slashes when building Seerr API, diagnostics, history, and tracker search URLs, including legacy single-site settings.
 - Add an explicit `noopener noreferrer` relationship to the Settings issue-report link.
 - Capture the reviewed Seerr site token explicitly for watchlist writes, matching request and Plex actions during multi-site switches.
+- Canonicalize numeric-string TMDB IDs across shared public ratings, server-scoped ratings, and the persisted title index so equivalent IDs cannot split caches.
 
 ## [3.5.240]
 

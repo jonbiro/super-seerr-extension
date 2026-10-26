@@ -346,6 +346,16 @@
     return obj.tmdbId ?? obj.mediaInfo?.tmdbId ?? obj.media?.tmdbId ?? obj.media?.id ?? obj.id ?? null;
   }
 
+  // Seerr sometimes serializes the same TMDB ID as a number and sometimes as
+  // a digit string. Canonicalizing safe positive IDs keeps page indexes,
+  // server-scoped ratings, and the shared public tier on one identity.
+  function canonicalTmdbId(value) {
+    const text = String(value);
+    if (!/^\d+$/.test(text)) return text;
+    const id = Number(text);
+    return Number.isSafeInteger(id) && id > 0 ? String(id) : text;
+  }
+
   function mediaTypeOf(obj, fallback = null) {
     const type = obj?.mediaType || obj?.type || obj?.media?.mediaType || obj?.mediaInfo?.mediaType;
     if (type === 'movie' || type === 'tv') return type;
@@ -354,7 +364,7 @@
     return fallback;
   }
 
-  function ratingKey(id, mediaType) { return `${mediaType || 'unknown'}:${id}`; }
+  function ratingKey(id, mediaType) { return `${mediaType || 'unknown'}:${canonicalTmdbId(id)}`; }
 
   function objectTitle(obj) {
     if (!obj || typeof obj !== 'object') return '';
@@ -507,7 +517,7 @@
       link: null,
       href: `/${mediaType}/${tmdbId}`,
       mediaType,
-      tmdbId: String(tmdbId),
+      tmdbId: canonicalTmdbId(tmdbId),
       title: objectTitle(candidate),
       year: objectYear(candidate)
     };
@@ -533,7 +543,7 @@
       const info = mediaInfoFromListItem(item);
       if (!info || !/^\d+$/.test(String(info.tmdbId))) continue;
       if (info.mediaType !== 'movie' && info.mediaType !== 'tv') continue;
-      const key = `${info.mediaType}:${info.tmdbId}`;
+      const key = `${info.mediaType}:${canonicalTmdbId(info.tmdbId)}`;
       const previous = projected.get(key);
       const raw = item.media || item.mediaInfo || item.movie || item.tv || item;
       const poster = item.posterPath || item.poster_path || raw.posterPath || raw.poster_path || null;
@@ -542,7 +552,7 @@
       projected.delete(key);
       projected.set(key, {
         ...previous,
-        tmdbId: String(info.tmdbId),
+        tmdbId: canonicalTmdbId(info.tmdbId),
         mediaType: info.mediaType,
         title: info.title || previous?.title || '',
         originalTitle: objectOriginalTitle(item) || previous?.originalTitle || '',
@@ -565,9 +575,10 @@
     const seen = new Set();
     for (const entry of stored) {
       if (!entry || typeof entry !== 'object') continue;
-      const tmdbId = String(entry.tmdbId ?? '');
+      const rawTmdbId = String(entry.tmdbId ?? '');
+      const tmdbId = canonicalTmdbId(rawTmdbId);
       const mediaType = entry.mediaType;
-      if (!/^\d+$/.test(tmdbId) || (mediaType !== 'movie' && mediaType !== 'tv')) continue;
+      if (!/^\d+$/.test(rawTmdbId) || (mediaType !== 'movie' && mediaType !== 'tv')) continue;
       const key = `${mediaType}:${tmdbId}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -923,7 +934,8 @@
 
   function ratingsCacheKey(tmdbId, title = '', year = null, mediaType = null) {
     const cacheYear = year ?? splitDisplayTitle(title).year;
-    return `${mediaType || 'unknown'}:${tmdbId || `${title}:${cacheYear || ''}`}`;
+    const identity = tmdbId ? canonicalTmdbId(tmdbId) : null;
+    return `${mediaType || 'unknown'}:${identity || `${title}:${cacheYear || ''}`}`;
   }
 
   // Drop the given titles so the next lookup resolves them again. Scoped to

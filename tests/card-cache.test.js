@@ -402,6 +402,20 @@ test('the projected index is bounded and deduplicated', async t => {
   assert.equal(new Set(projected.map(entry => `${entry.mediaType}:${entry.tmdbId}`)).size, projected.length);
 });
 
+test('the projected index canonicalizes equivalent numeric-string IDs', async t => {
+  const fixture = openGrid();
+  t.after(() => { fixture.dom.window.close(); });
+  await flush(fixture.window);
+
+  const projected = fixture.window.testOverlay.projectListIndex([
+    { id: '000123', mediaType: 'movie', title: 'Dune (legacy)' },
+    { id: 123, mediaType: 'movie', title: 'Dune' }
+  ]);
+  assert.equal(projected.length, 1);
+  assert.equal(projected[0].tmdbId, '123');
+  assert.equal(projected[0].title, 'Dune');
+});
+
 test('new catalogue observations replace stale identities while preserving missing metadata on reload', async t => {
   const fixture = openGrid({ plexConfigured: true });
   t.after(() => { fixture.window.dispatchEvent(new fixture.window.Event('pagehide')); fixture.dom.window.close(); });
