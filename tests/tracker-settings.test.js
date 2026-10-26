@@ -141,7 +141,7 @@ test('manual watchlist reads expose literal titles, skip unsupported entries, an
   card.sync.click(); await settle();
   assert.equal(card.items.length, 1);
   assert.match(card.list.textContent, /Film & television \/ 日本語/);
-  f.server = 'https://family.example/seerr/';
+  f.server = 'https://family.example/seerr///';
   card.list.querySelector('button').click(); await settle();
   const url = new URL(f.opened[0].url);
   assert.equal(url.origin, 'https://family.example');

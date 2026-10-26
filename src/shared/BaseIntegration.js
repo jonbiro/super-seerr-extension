@@ -430,7 +430,7 @@ class BaseIntegration {
           panel.prepend(destination);
         }
         const url = new URL(serverUrl);
-        destination.textContent = `Seerr: ${url.host}${url.pathname.replace(/\/$/, '')}`;
+        destination.textContent = `Seerr: ${url.host}${url.pathname.replace(/\/+$/, '')}`;
         destination.style.cssText = 'font-size:12px;overflow-wrap:anywhere;margin:8px 12px;';
       }
 

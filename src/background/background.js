@@ -241,7 +241,7 @@ class SeerrAPI {
       return;
     }
     try {
-      const url = `${baseUrl.replace(/\/$/, '')}/api/v1/settings/public`;
+      const url = `${baseUrl.replace(/\/+$/, '')}/api/v1/settings/public`;
       const response = await fetch(url, {
         method: 'GET',
         redirect: 'error',

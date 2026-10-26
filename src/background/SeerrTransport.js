@@ -44,7 +44,9 @@
         throw new Error('Server URL and API key must be configured');
       }
 
-      const url = `${this.baseUrl.replace(/\/$/, '')}${endpoint}`;
+      // Legacy settings can retain multiple trailing slashes. Collapse them
+      // before appending an API route so the server sees one canonical path.
+      const url = `${this.baseUrl.replace(/\/+$/, '')}${endpoint}`;
       const options = {
         method,
         redirect: 'error',

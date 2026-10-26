@@ -49,7 +49,7 @@
           const index = cursor++, entry = rows[index];
           const result = { ...entry, status: 'Status unavailable', url: null };
           if (server && entry.server === new URL(server).href && entry.tmdbId) {
-            result.url = `${server.replace(/\/$/, '')}/${entry.mediaType}/${entry.tmdbId}`;
+            result.url = `${server.replace(/\/+$/, '')}/${entry.mediaType}/${entry.tmdbId}`;
             try {
               const state = await this.getMediaStatus({ tmdbId: entry.tmdbId, mediaType: entry.mediaType });
               // The shared pending state includes approved requests and media

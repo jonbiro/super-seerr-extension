@@ -335,7 +335,7 @@
         if (typeof latest?.serverUrl !== 'string' || !latest.serverUrl) throw new Error('Save a Seerr server URL in Settings first.');
         const url = new URL(latest.serverUrl);
         if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) throw new Error('Save a valid Seerr server URL in Settings first.');
-        url.pathname = `${url.pathname.replace(/\/$/, '')}/search`;
+        url.pathname = `${url.pathname.replace(/\/+$/, '')}/search`;
         url.searchParams.set('query', item.title);
         await chrome.tabs.create({ url: url.href });
       } catch (error) {

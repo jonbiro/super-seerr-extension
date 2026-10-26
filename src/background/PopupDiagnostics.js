@@ -45,7 +45,7 @@
         (async () => {
           if (!permission) return;
           try {
-            const response = await fetch(`${snapshot.baseUrl.replace(/\/$/, '')}/api/v1/settings/public`, {
+            const response = await fetch(`${snapshot.baseUrl.replace(/\/+$/, '')}/api/v1/settings/public`, {
               redirect: 'error', credentials: 'omit', signal: AbortSignal.timeout(root.RatingsConfig.requestTimeoutMs),
               headers: { Accept: 'application/json' }
             });

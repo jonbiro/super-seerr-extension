@@ -55,6 +55,21 @@ test('the server type is read without needing an API key', async () => {
   assert.equal(call.options.redirect, 'error', 'and without following redirects');
 });
 
+test('legacy URLs with repeated trailing slashes still address the public settings route', async () => {
+  const requested = [];
+  const worker = loadWorker({
+    get: async () => ({ seerrUrl: 'https://seerr.example/base///' }),
+    local: { seerrApiKey: 'key' },
+    fetch: async url => {
+      requested.push(String(url));
+      return { ok: true, json: async () => ({ mediaServerType: 2 }) };
+    }
+  });
+  await worker.ready;
+  await worker.api.mediaServerReady;
+  assert.ok(requested.includes('https://seerr.example/base/api/v1/settings/public'));
+});
+
 test('a server that will not answer still produces usable wording', async () => {
   const { worker } = workerWith(2, { ok: false });
   await worker.ready;

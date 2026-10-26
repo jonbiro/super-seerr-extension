@@ -16,7 +16,7 @@
       const parts = JSON.parse(entry.key);
       const url = new URL(parts[0]);
       if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) return 'Unknown server';
-      return url.host + url.pathname.replace(/\/$/, '');
+      return url.host + url.pathname.replace(/\/+$/, '');
     } catch (_) { return 'Unknown server'; }
   }
   function render() {

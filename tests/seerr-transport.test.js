@@ -28,3 +28,17 @@ test('does not rewrite unrelated TypeErrors from the Seerr transport', async () 
   await assert.rejects(worker.api.sendAPIRequest('GET', '/api/v1/auth/me'), error =>
     error.name === 'TypeError' && error.message === 'Unexpected test failure');
 });
+
+test('collapses legacy trailing slashes before appending an API route', async () => {
+  const worker = loadWorker();
+  await worker.ready;
+  worker.api.baseUrl = 'https://seerr.example/base///';
+  worker.api.apiKey = 'key';
+  let requested;
+  worker.context.fetch = async url => {
+    requested = String(url);
+    return { ok: true, status: 200, json: async () => ({ id: 1 }) };
+  };
+  await worker.api.sendAPIRequest('GET', '/api/v1/auth/me');
+  assert.equal(requested, 'https://seerr.example/base/api/v1/auth/me');
+});
