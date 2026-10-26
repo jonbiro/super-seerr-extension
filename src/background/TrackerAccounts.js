@@ -255,8 +255,13 @@
           const activities = (await this.trackerApiRead(provider, '/sync/activities', account)).data;
           if (!activities || typeof activities !== 'object' || Array.isArray(activities)) throw new Error('Simkl returned invalid activity information.');
           await this.assertTrackerSnapshot(provider, epoch, account);
-          const activity = typeof activities?.all === 'string' ? activities.all : null;
-          if (!cached || cached.epoch !== epoch || cached.accessToken !== account.accessToken || !activity || cached.activity !== activity) {
+          const activity = typeof activities?.all === 'string' || activities?.all === null ? activities.all : undefined;
+          if (activity === undefined) throw new Error('Simkl returned invalid activity information.');
+          // A null top-level activity is a valid marker for an account with no
+          // recorded activity. Keep it distinct from a deliberately truncated
+          // local snapshot so an empty watchlist does not trigger a full pull
+          // on every manual Sync.
+          if (!cached || cached.epoch !== epoch || cached.accessToken !== account.accessToken || cached.truncated || cached.activity !== activity) {
             const movies = (await this.trackerApiRead(provider, '/sync/all-items/movies/plantowatch', account)).data;
             await this.assertTrackerSnapshot(provider, epoch, account);
             const shows = (await this.trackerApiRead(provider, '/sync/all-items/shows/plantowatch', account)).data;
@@ -267,7 +272,7 @@
             const normalized = [...(movies.movies || []), ...(shows.shows || [])].map(row => normalize(row, provider))
               .concat((anime.anime || []).map(row => normalize(row, provider, true)));
             const valid = [...new Map(normalized.filter(Boolean).map(item => [JSON.stringify([item.mediaType, item.tmdbId || item.imdbId || item.title.toLowerCase(), item.year]), item])).values()];
-            cached = { epoch, accessToken: account.accessToken, activity: valid.length > MAX_ITEMS ? null : activity, items: valid.slice(0, MAX_ITEMS),
+            cached = { epoch, accessToken: account.accessToken, activity, items: valid.slice(0, MAX_ITEMS),
               skipped: normalized.length - valid.length, truncated: valid.length > MAX_ITEMS };
             await this.assertTrackerSnapshot(provider, epoch, account);
             this.trackerLists.set(provider, cached);

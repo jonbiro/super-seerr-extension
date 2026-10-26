@@ -218,6 +218,11 @@ test('Simkl empty objects are valid while malformed lists cannot advance last sy
   malformed = false;
   const result = await f.call('getTrackerWatchlist', { provider: 'simkl' });
   assert.equal(result.items.length, 0);
+  const fullReads = () => f.requests.filter(request => request.url.includes('/sync/all-items/')).length;
+  const requests = fullReads();
+  const repeat = await f.call('getTrackerWatchlist', { provider: 'simkl' });
+  assert.equal(repeat.items.length, 0);
+  assert.equal(fullReads(), requests, 'a valid null activity marker reuses an empty snapshot');
 });
 
 test('provider errors never echo response bodies or tokens', async () => {
