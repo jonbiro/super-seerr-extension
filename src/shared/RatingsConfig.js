@@ -106,6 +106,10 @@ const RatingsConfig = {
   // built to notice, and nothing here is urgent enough to need them all at
   // once, so they queue.
   rtMaxConcurrent: 3,
+  // A title page normally stays well below this (the current page is roughly
+  // 200 KB), but a proxy or bot challenge must not let one worker retain an
+  // unbounded HTML response while parsing a scorecard.
+  rtMaxHtmlBytes: 2 * 1024 * 1024,
   rtFailureLimit: 5,
   rtBackoffMs: 5 * 60 * 1000,
 

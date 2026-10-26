@@ -253,6 +253,30 @@ test('a refusal names the page that was refused', async () => {
   await assert.rejects(() => worker.api.fetchRtHtml('/m/moana_2'), /403 for \/m\/moana_2/);
 });
 
+test('cancels an oversized successful RT body before retaining it', async () => {
+  const worker = loadWorker();
+  await worker.ready;
+  let reads = 0;
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() {
+          reads++;
+          return { done: false, value: new Uint8Array(Config.rtMaxHtmlBytes + 1) };
+        },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  worker.context.fetch = async () => ({ ok: true, headers: { get: () => null }, body });
+
+  await assert.rejects(() => worker.api.fetchRtHtml('/m/huge-page'), /too large/);
+  assert.equal(reads, 1, 'the reader must stop at the first oversized chunk');
+  assert.equal(cancelled, true, 'an oversized successful body must be cancelled');
+});
+
 for (const failBodies of [false, true]) test(`RT concurrency includes response bodies (${failBodies ? 'with failures' : 'successful reads'})`, { timeout: 15000 }, async () => {
   const worker = loadWorker(); await worker.ready;
   let inFlight = 0, peak = 0, started = 0;

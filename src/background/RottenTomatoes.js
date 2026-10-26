@@ -1,6 +1,54 @@
 // Focused worker methods; composed onto SeerrAPI by background.js.
 (function (root) {
   const RatingsConfig = root.RatingsConfig;
+  const cancelResponseBody = async response => {
+    try { await response.body?.cancel(); } catch (_) { /* Preserve the transport error. */ }
+  };
+  const oversizedResponse = () => new Error('Rotten Tomatoes returned a response that is too large.');
+  const readBoundedHtml = async response => {
+    const maxBytes = RatingsConfig.rtMaxHtmlBytes;
+    const announced = Number(response.headers?.get?.('Content-Length'));
+    if (Number.isFinite(announced) && announced > maxBytes) {
+      await cancelResponseBody(response);
+      throw oversizedResponse();
+    }
+
+    if (response.body?.getReader) {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let size = 0;
+      try {
+        while (true) {
+          const part = await reader.read();
+          if (part.done) break;
+          const length = part.value?.byteLength || 0;
+          size += length;
+          if (size > maxBytes) {
+            await reader.cancel().catch(() => {});
+            throw oversizedResponse();
+          }
+          if (length) chunks.push(part.value);
+        }
+      } finally { reader.releaseLock(); }
+      if (typeof root.TextDecoder !== 'function') {
+        throw new Error('Rotten Tomatoes response could not be decoded.');
+      }
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      return new root.TextDecoder().decode(bytes);
+    }
+
+    // Lightweight test doubles and older response shims may not expose a
+    // stream. A real browser Response takes the bounded streaming path above;
+    // this fallback still rejects an oversized string before parsing it.
+    if (typeof response.text === 'function') {
+      const text = await response.text();
+      if (typeof text !== 'string' || text.length > maxBytes) throw oversizedResponse();
+      return text;
+    }
+    throw new Error('Rotten Tomatoes response body is unreadable.');
+  };
   root.RottenTomatoes = {
     // Titles are matched against Rotten Tomatoes by text, so what survives here
     // decides whether a score can be found. Restricting to a-z turned an accent
@@ -173,13 +221,13 @@
         if (!response.ok) {
           // The unread body may still be downloading after headers arrive.
           // Stop it before freeing this slot; cancellation must not mask HTTP errors.
-          try { await response.body?.cancel(); } catch (_) { /* Preserve the refusal below. */ }
+          await cancelResponseBody(response);
           // Keep the refused page in the error so search and detail failures
           // can be distinguished without logging page contents.
           throw new Error(`Rotten Tomatoes returned HTTP ${response.status} for ${target.pathname}${target.search}`);
         }
         // fetch resolves at headers; the slot must also cover the body read.
-        return response.text();
+        return readBoundedHtml(response);
       });
     },
 
