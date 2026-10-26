@@ -67,7 +67,8 @@ test('plexTestConnection accepts an unsaved token without storing it', async () 
   });
   await worker.ready;
   const response = await new Promise(resolve => worker.api.handleMessage(
-    { action: 'plexTestConnection', data: { plexToken: 'unsaved-token' } }, {}, resolve));
+    { action: 'plexTestConnection', data: { plexToken: 'unsaved-token' } },
+    { url: 'chrome-extension://test/src/options/options.html' }, resolve));
   assert.equal(response.success, true);
   assert.equal(response.data.user, 'plex-user');
   assert.equal(calls[0].token, 'unsaved-token');

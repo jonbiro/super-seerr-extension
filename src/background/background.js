@@ -385,6 +385,7 @@ class SeerrAPI {
         }
 
         case 'reloadSettings': {
+          this.requireExtensionPage(sender);
           await this.loadSettings();
           await this.syncOverlayRegistration();
           sendResponse({ success: true, data: 'Settings reloaded' });
@@ -395,11 +396,14 @@ class SeerrAPI {
         // are available rather than reading the secret itself.
         case 'getConfigState': {
           const inactive = this.isInactiveSeerrPage(sender);
-          sendResponse({ success: true, data: { apiConfigured: !inactive && !!(this.baseUrl && this.apiKey), serverUrl: inactive ? null : this.baseUrl ?? null, connectionToken: this.connectionToken(), plexConfigured: !inactive && !!this.plexToken } });
+          sendResponse({ success: true, data: { apiConfigured: !inactive && !!(this.baseUrl && this.apiKey), serverUrl: inactive ? null : this.baseUrl ?? null, connectionToken: inactive ? null : this.connectionToken(), plexConfigured: !inactive && !!this.plexToken } });
           break;
         }
 
         case 'plexTestConnection': {
+          // This accepts a token that has not been saved yet, so it is an
+          // extension-page diagnostic rather than a content-script action.
+          this.requireExtensionPage(sender);
           // A throwaway client keeps the test from touching saved settings.
           const plexClient = new SeerrAPI();
           plexClient.plexToken = (request.data && request.data.plexToken) || this.plexToken;

@@ -126,6 +126,23 @@ test('content scripts cannot proxy arbitrary connection tests', async () => {
   assert.deepEqual(requests, []);
 });
 
+test('content scripts cannot invoke extension-only settings diagnostics', async () => {
+  const worker = loadWorker({ get: async () => ({ seerrUrl: 'https://saved.example', seerrApiKey: 'saved-key' }) });
+  await worker.ready;
+  let reloads = 0;
+  worker.api.loadSettings = async () => { reloads++; };
+  for (const action of ['reloadSettings', 'plexTestConnection']) {
+    const result = await new Promise(resolve => worker.api.handleMessage(
+      { action, data: action === 'plexTestConnection' ? { plexToken: 'probe-token' } : undefined },
+      { id: 'test', url: 'https://www.imdb.com/title/tt0137523', tab: { id: 7 }, frameId: 0 },
+      resolve
+    ));
+    assert.equal(result.success, false);
+    assert.match(result.error, /extension pages/);
+  }
+  assert.equal(reloads, 0);
+});
+
 test('RT cache remains bounded when distinct lookups finish concurrently', async () => {
   const { api } = loadWorker();
   api.fetchRtHtml = async () => '';

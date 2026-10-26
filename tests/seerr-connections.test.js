@@ -220,6 +220,7 @@ test('an inactive nested Seerr site cannot inherit the active parent site config
   const config = await message(w, 'getConfigState', undefined, nestedPage);
   assert.equal(config.data.serverUrl, null);
   assert.equal(config.data.apiConfigured, false);
+  assert.equal(config.data.connectionToken, null, 'inactive pages must not learn the active site identity');
   for (const action of ['getOverlayCache', 'putOverlayCache', 'getFilterPresets']) {
     assert.equal((await message(w, action, {}, nestedPage)).success, false, action);
   }
