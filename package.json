@@ -1,6 +1,6 @@
 {
   "name": "super-seerr",
-  "version": "3.5.245",
+  "version": "3.5.246",
   "private": true,
   "scripts": {
     "test": "node --test tests/**/*.test.js",

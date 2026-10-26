@@ -96,14 +96,15 @@
       const entries = {};
       let remaining = 400_000;
       for (const [key, entry] of Object.entries(value.entries).sort((a, b) =>
-        (number(b[1]?.cachedAt) ?? 0) - (number(a[1]?.cachedAt) ?? 0))) {
+        (number(b[1]?.cachedAt) ?? 0) - (number(a[1]?.cachedAt) ?? 0))
+        .slice(0, root.RatingsConfig.overlayCacheMaxEntries)) {
         const size = bytes({ [key]: entry });
         if (size > remaining) continue;
         entries[key] = entry; remaining -= size;
       }
       const index = [];
       remaining = 200_000;
-      for (const item of [...value.index].reverse()) {
+      for (const item of value.index.slice(-root.RatingsConfig.listIndexMaxEntries).reverse()) {
         const size = bytes(item) + 1;
         if (size > remaining) continue;
         index.push(item); remaining -= size;
@@ -124,11 +125,16 @@
             const bounded = this.boundedOverlayCache(clean);
             const previous = caches[key];
             // Older storage versions could serialize the same server under
-            // both trailing-slash forms. Keep the freshest duplicate instead
-            // of letting object iteration order discard newer ratings. A
-            // tie deliberately favors the later record so a migrated,
-            // per-server entry can supersede an equivalent legacy payload.
-            if (!previous || cacheFreshness(bounded) >= cacheFreshness(previous)) caches[key] = bounded;
+            // both trailing-slash forms. Merge equivalent records per title
+            // so a newer duplicate cannot discard ratings unique to an older
+            // tab. A matcher change still invalidates old entries; retain the
+            // freshest whole record until the current rules repopulate it.
+            if (!previous) caches[key] = bounded;
+            else if (previous.matcher === bounded.matcher) {
+              caches[key] = this.boundedOverlayCache(this.mergeOverlayCache(previous, bounded, [], {}, []));
+            } else if (cacheFreshness(bounded) >= cacheFreshness(previous)) {
+              caches[key] = bounded;
+            }
           }
         } catch (_) { /* Invalid generated cache records can be refetched. */ }
       }

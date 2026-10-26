@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.246]
+
+- Merge duplicate normalized Seerr cache records per title during migration, preserving unique ratings and list entries while enforcing cache bounds.
+
 ## [3.5.245]
 
 - Keep the freshest normalized server cache when legacy and per-server records use different trailing-slash keys.

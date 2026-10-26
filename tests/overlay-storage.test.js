@@ -265,3 +265,21 @@ test('duplicate normalized server records keep the freshest cache regardless of 
   const caches = worker.api.overlayCachesFromStorage(worker.localStore, 0);
   assert.equal(caches['https://seerr.example/base'].entries['movie:1'].bundle.rtCriticsScore, 90);
 });
+
+test('duplicate normalized server records merge disjoint ratings and index entries', async () => {
+  const older = blob({ server: 'https://seerr.example/base/', entries: {
+    'movie:1': { bundle: { rtCriticsScore: 10, confidence: 1 }, cachedAt: 100 },
+    'movie:2': { bundle: { rtCriticsScore: 20, confidence: 1 }, cachedAt: 110 }
+  }, index: [{ tmdbId: '1', mediaType: 'movie', title: 'Older title' }] });
+  const newer = blob({ server: 'https://seerr.example/base', entries: {
+    'movie:3': { bundle: { rtCriticsScore: 90, confidence: 1 }, cachedAt: 200 }
+  }, index: [{ tmdbId: '3', mediaType: 'movie', title: 'Newer title' }] });
+  const worker = await setup({ overlayRatingsByServerV1: {
+    'https://seerr.example/base': newer,
+    'https://seerr.example/base/': older
+  } });
+  const caches = worker.api.overlayCachesFromStorage(worker.localStore, 0);
+  const cache = caches['https://seerr.example/base'];
+  assert.deepEqual(Object.keys(cache.entries).sort(), ['movie:1', 'movie:2', 'movie:3']);
+  assert.equal(cache.index.map(item => item.tmdbId).sort().join(','), '1,3');
+});
