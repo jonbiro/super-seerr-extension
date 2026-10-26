@@ -13,6 +13,8 @@ heading per change.
 - Add title exploration links, a saved JustWatch streaming region, and a copy-title action for Simkl search.
 - Check localized and original titles before trusting a page-supplied TMDB ID, preventing a different title from being requested just because its release year matches.
 - Correct Firefox's data-transmission disclosure for configured service credentials and title metadata, and cover newly added site permissions during upgrades.
+- Normalize Chromium and Firefox Seerr network failures to the same actionable reconnect message.
+- Release TV season-picker lifecycle state even when the picker rejects instead of completing normally.
 
 ## [3.5.240]
 

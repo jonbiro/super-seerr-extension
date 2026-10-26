@@ -312,6 +312,20 @@ for (const focus of ['opener', 'elsewhere', 'removed']) test(`season cancellatio
   assert.equal(doc.activeElement, focus === 'opener' ? opener : focus === 'elsewhere' ? other : doc.body);
 });
 
+test('a rejected season picker retires its controller before the next request', async t => {
+  const f = fixture(t);
+  const opener = f.page.window.document.createElement('button');
+  f.page.window.document.body.append(opener);
+  f.integration.mediaData = { title: 'Series', mediaType: 'tv', tmdbId: 1 };
+  f.integration.uiElements = { button: opener };
+  f.integration.setUILoading = () => {};
+  f.integration.client.sendMessage = async () => ({ success: true, data: { tmdbId: 1, server: 'https://seerr.example', seasons: [] } });
+  f.integration.ui.chooseSeasons = async () => { throw new Error('picker failed'); };
+  f.integration.ui.createNotification = () => {};
+  await f.integration.handleRequestButtonClick();
+  assert.equal(f.integration._seasonPickerController, null);
+});
+
 for (const timing of ['before', 'during']) {
   for (const outcome of ['success', 'failure']) {
     test(`Seerr watchlist stays visible while a status read started ${timing} the write (${outcome})`, async t => {

@@ -1,6 +1,14 @@
 // Focused worker methods; composed onto SeerrAPI by background.js.
 (function (root) {
   const RatingsConfig = root.RatingsConfig;
+  const isNetworkFailure = error => {
+    const name = String(error?.name || '').toLowerCase();
+    const message = String(error?.message || '').toLowerCase();
+    // Chromium reports "Failed to fetch" while Firefox commonly reports
+    // "NetworkError when attempting to fetch resource." Keep both behind the
+    // same actionable message without masking aborts or malformed URLs.
+    return name === 'networkerror' || (name === 'typeerror' && /failed to fetch|fetch failed|network\s*error|load failed/.test(message));
+  };
   root.SeerrTransport = {
     async getSeerrAccount() {
       const account = await this.makeAPIRequest('GET', '/api/v1/auth/me');
@@ -67,7 +75,7 @@
 
         return response.status === 204 ? null : await response.json();
       } catch (error) {
-        if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+        if (isNetworkFailure(error)) {
           throw new Error('Could not connect to Seerr server. Please check the URL and your network connection.');
         }
         throw error;

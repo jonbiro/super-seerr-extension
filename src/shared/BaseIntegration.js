@@ -707,8 +707,16 @@ class BaseIntegration {
         if (!view.isCurrent()) return;
         if (!response?.success) throw new Error(response?.error || 'Could not load seasons');
         const controller = this._seasonPickerController = new AbortController();
-        const seasons = await this.ui.chooseSeasons(response.data, { signal: controller.signal });
-        if (this._seasonPickerController === controller) this._seasonPickerController = null;
+        let seasons;
+        try {
+          seasons = await this.ui.chooseSeasons(response.data, { signal: controller.signal });
+        } finally {
+          // A picker can reject when its dialog is removed or its abort signal
+          // fires. Retire the controller on every exit, not only after a normal
+          // selection, so a failed request cannot leave stale lifecycle state
+          // attached to the next title.
+          if (this._seasonPickerController === controller) this._seasonPickerController = null;
+        }
         if (!view.isCurrent()) return;
         if (!seasons) {
           this.updateUIFromStatus(this.currentStatusData);
