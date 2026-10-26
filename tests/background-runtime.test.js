@@ -94,7 +94,7 @@ test('temporary connection tests do not replace saved worker settings', async ()
     fetch: async (url, options) => { requests.push({ url, options }); return { ok: true, json: async () => ({ id: 1, displayName: 'Tester' }) }; }
   });
   await ready;
-  const result = await new Promise(resolve => api.handleMessage({ action: 'testConnection', data: { seerrUrl: 'https://test.example', seerrApiKey: 'temporary' } }, {}, resolve));
+  const result = await new Promise(resolve => api.handleMessage({ action: 'testConnection', data: { seerrUrl: 'https://test.example', seerrApiKey: 'temporary' } }, { url: 'chrome-extension://test/src/options/options.html' }, resolve));
   assert.equal(result.success, true);
   assert.equal(api.baseUrl, 'https://saved.example');
   assert.equal(api.apiKey, 'saved-key');
@@ -106,6 +106,24 @@ test('temporary connection tests do not replace saved worker settings', async ()
   assert.equal(authRequest.options.headers['X-Api-Key'], 'temporary');
   assert.ok(authRequest.options.signal);
   assert.equal(authRequest.options.redirect, 'error');
+});
+
+test('content scripts cannot proxy arbitrary connection tests', async () => {
+  const requests = [];
+  const { api, ready } = loadWorker({
+    get: async () => ({ seerrUrl: 'https://saved.example', seerrApiKey: 'saved-key' }),
+    fetch: async url => { requests.push(url); return { ok: true, json: async () => ({ id: 1 }) }; }
+  });
+  await ready;
+  requests.length = 0;
+  const result = await new Promise(resolve => api.handleMessage(
+    { action: 'testConnection', data: { seerrUrl: 'https://internal.example', seerrApiKey: 'probe-key' } },
+    { id: 'test', url: 'https://www.imdb.com/title/tt0137523', tab: { id: 7 }, frameId: 0 },
+    resolve
+  ));
+  assert.equal(result.success, false);
+  assert.match(result.error, /extension pages/);
+  assert.deepEqual(requests, []);
 });
 
 test('RT cache remains bounded when distinct lookups finish concurrently', async () => {

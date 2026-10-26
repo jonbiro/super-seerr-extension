@@ -298,6 +298,10 @@ class SeerrAPI {
         }
 
         case 'testConnection': {
+          // Connection tests accept unsaved credentials and an arbitrary
+          // destination from Settings. Never let a discovery content script
+          // turn that diagnostic endpoint into a worker-side proxy.
+          this.requireExtensionPage(sender);
           const connectionClient = request.data ? new SeerrAPI() : this;
           if (request.data) {
             const url = new URL(request.data.seerrUrl);
