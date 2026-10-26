@@ -183,8 +183,10 @@ class SeerrClient {
   }
 
   async addToWatchlist(mediaData) {
+    const connectionToken = this.connectionToken;
     const response = await this.sendMessage({
       action: 'addToWatchlist',
+      ...(connectionToken !== undefined ? { connectionToken } : {}),
       data: { mediaType: mediaData.mediaType, tmdbId: mediaData.tmdbId, title: mediaData.title, year: mediaData.year ?? null }
     });
     if (response && response.success) {

@@ -17,6 +17,7 @@ heading per change.
 - Release TV season-picker lifecycle state even when the picker rejects instead of completing normally.
 - Collapse repeated trailing slashes when building Seerr API, diagnostics, history, and tracker search URLs, including legacy single-site settings.
 - Add an explicit `noopener noreferrer` relationship to the Settings issue-report link.
+- Capture the reviewed Seerr site token explicitly for watchlist writes, matching request and Plex actions during multi-site switches.
 
 ## [3.5.240]
 
