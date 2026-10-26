@@ -61,8 +61,13 @@ class BaseIntegration {
       const text = typeof value === 'string' ? value.trim() : '';
       return /^(?:(?:error\s*)?403\s*(?:[-:|]\s*)?forbidden|access\s+denied|attention\s+required|just\s+a\s+moment\.?|verify\s+you\s+are\s+human|sorry,?\s+you\s+have\s+been\s+blocked)(?:\s*[|:!.-].*)?$/i.test(text);
     };
-    if (looksLikeChallenge(document.title)) return true;
-    return [...document.querySelectorAll('h1, h2')].some(node => looksLikeChallenge(node.textContent));
+    const looksLikeErrorDocument = value => {
+      const text = typeof value === 'string' ? value.trim() : '';
+      return /^(?:(?:error\s*)?[45]\d{2}\b.*(?:not\s+found|forbidden|server\s+error|service\s+unavailable|bad\s+gateway)|(?:page\s+)?not\s+found\b|(?:this\s+)?page\s+(?:is\s+)?(?:not\s+available|unavailable)\b|something\s+went\s+wrong\b|an?\s+error\s+(?:has\s+)?occurred\b)(?:\s*[|:!.-].*)?$/i.test(text);
+    };
+    if (looksLikeChallenge(document.title) || looksLikeErrorDocument(document.title)) return true;
+    return [...document.querySelectorAll('h1, h2')].some(node =>
+      looksLikeChallenge(node.textContent) || looksLikeErrorDocument(node.textContent));
   }
 
   /**

@@ -109,3 +109,17 @@ test('Trakt rejects a blocked heading even when the document title is generic', 
   t.after(() => page.window.close());
   assert.equal(await page.integration().extractMediaData(), null);
 });
+
+const errorPageRoutes = [...new Map(SITES.map(({ site, url }) => [site, url])).entries()];
+for (const [site, url] of errorPageRoutes) {
+  test(`${site} ignores a generic 404 document on a title route`, async t => {
+    const page = loadIntegration({
+      site,
+      url,
+      title: `404 Not Found - ${site}`,
+      html: '<main><h1>404 Not Found</h1></main>'
+    });
+    t.after(() => page.dom.window.close());
+    assert.equal(await page.integration().extractMediaData(), null);
+  });
+}
