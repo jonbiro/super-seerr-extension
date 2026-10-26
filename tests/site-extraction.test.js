@@ -61,3 +61,19 @@ test('Trakt generic application title cannot become the movie identity', async t
   const media = await page.integration().extractMediaData();
   assert.equal(media.title, 'Fight Club');
 });
+
+for (const title of ['Attention Required! | Cloudflare', 'Just a moment...']) {
+  test(`Trakt rejects an edge challenge titled ${title}`, async t => {
+    const page = loadIntegration({ site: 'trakt', url: 'https://trakt.tv/movies/fight-club-1999', title,
+      html: '<h1>Sorry, you have been blocked</h1>' });
+    t.after(() => page.window.close());
+    assert.equal(await page.integration().extractMediaData(), null);
+  });
+}
+
+test('Trakt rejects a blocked heading even when the document title is generic', async t => {
+  const page = loadIntegration({ site: 'trakt', url: 'https://trakt.tv/movies/fight-club-1999', title: 'Trakt',
+    html: '<h1>Sorry, you have been blocked</h1>' });
+  t.after(() => page.window.close());
+  assert.equal(await page.integration().extractMediaData(), null);
+});

@@ -28,6 +28,16 @@ class TraktIntegration extends BaseIntegration {
   async extractMediaData() {
     this.log('Extracting media data from Trakt page...');
 
+    // Cloudflare and other edge challenges can keep a Trakt title-shaped URL
+    // while replacing the document with an error page.  The generic heading
+    // fallback below would otherwise turn messages such as “Sorry, you have
+    // been blocked” into a requestable media title.  Leave the page inert
+    // until the real title document is available.
+    const documentTitle = document.title.trim();
+    if (/^(?:attention required|just a moment|access denied|verify you are human)(?:\s*[|:-]|\s*$)/i.test(documentTitle)) {
+      return null;
+    }
+
     // Determine media type from URL - handle both trakt.tv and app.trakt.tv
     const url = window.location.pathname;
     const fullUrl = window.location.href;
@@ -97,6 +107,10 @@ class TraktIntegration extends BaseIntegration {
         /^Trakt Web:\s*/, // Remove "Trakt Web:" prefix
       ]
     });
+
+    if (/^(?:sorry,?\s+you\s+have\s+been\s+blocked|access denied|forbidden|just a moment\.*|verify you are human)$/i.test(title?.trim() || '')) {
+      return null;
+    }
 
     this.log('Extracted title before cleanup:', title);
 
