@@ -425,6 +425,33 @@ test('granting the standing warning targets the saved server despite unsaved edi
   await flush(); assert.equal(ctx.syncWrites.length, 0);
 });
 
+test('a host access read failure after granting permission stays recoverable', async t => {
+  const ctx = openOptions({ granted: false, synced: { seerrUrl: 'https://saved.example' } });
+  t.after(() => ctx.window.close()); await flush();
+  const doc = ctx.window.document, grant = doc.getElementById('grantPermission');
+  doc.getElementById('apiKey').value = 'unsaved-fixture-key';
+  ctx.window.chrome.permissions.request = async () => true;
+  ctx.window.chrome.storage.local.get = async () => { throw new Error('Temporary storage failure'); };
+  grant.focus(); grant.click(); await flush();
+  assert.match(doc.getElementById('status').textContent, /Host access granted, but.*could not be checked/);
+  assert.equal(grant.disabled, false);
+  assert.equal(doc.activeElement, grant);
+  assert.equal(doc.getElementById('apiKey').value, 'unsaved-fixture-key');
+});
+
+test('a pending host access grant does not open duplicate permission requests', async t => {
+  const ctx = openOptions({ granted: false, synced: { seerrUrl: 'https://saved.example' } });
+  t.after(() => ctx.window.close()); await flush();
+  let release, requests = 0;
+  const pending = new Promise(resolve => { release = resolve; });
+  ctx.window.chrome.permissions.request = () => { requests++; return pending; };
+  const grant = ctx.window.document.getElementById('grantPermission');
+  grant.focus(); grant.click(); grant.click();
+  try { assert.equal(requests, 1); assert.equal(grant.disabled, true); }
+  finally { release(false); await flush(); }
+  assert.equal(grant.disabled, false);
+});
+
 test('cache read failures remain unknown and clearing stays available without duplicate requests', async t => {
   const ctx = openOptions({ local: { rtCacheV1: { entries: { film: {} } } } });
   t.after(() => ctx.window.close()); await flush();

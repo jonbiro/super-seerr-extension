@@ -1,6 +1,17 @@
 # Super Seerr handoff to Claude
 
-## Latest continuation snapshot — 2026-10-25
+## Latest review checkpoint — 2026-10-26
+
+This checkpoint supersedes the delivery, test, and goal status in the older snapshots below. Checkout: `/Users/yoni/super-seerr-extension`, branch `master`, remote `git@github.com:jonbiro/super-seerr-extension.git`. Current source and unpacked builds are **3.5.257**. Check `git status`, `git log -1`, and the matching GitHub Actions run for publishing state.
+
+- The ongoing review goal is **active**, not complete, at this checkpoint. It covers single-site behavior, multiple Seerr sites, shared ratings, and every extension feature. Recheck Codex goal metadata when resuming.
+- Latest fixes restore Settings action focus, retain saved-site Retry focus across competing reads, prevent duplicate host-access requests, and recover from failed permission-state reads. See [the current findings and evidence](reviews/2026-10-26-settings-focus.md).
+- Local verification: **1,811 unit tests**, **325 Chromium tests**, Firefox **157.0.1** runtime harness, source checks, both builds, and generated-file parity passed.
+- Previous review checkpoints: [broad feature review](reviews/2026-10-26.md), [settings/preset races](reviews/2026-10-26-state-races.md), and [atomic connection saves/tracker focus](reviews/2026-10-26-connection-saves.md).
+- Pending acceptance: authenticated live Seerr/Plex actions, provider OAuth consent with registered app IDs, and live sites blocked by access challenges or consent. Continue bounded bug review without claiming these have passed.
+- Preserve the two unstaged workflow deletions, existing evidence and release artifacts, and unrelated files. Stage exact task-owned paths. Do not use VoiceOver or `make clean`.
+
+## Previous continuation snapshot — 2026-10-25 (superseded)
 
 This snapshot supersedes the older status below. Checkout: `/Users/yoni/super-seerr-extension`, branch `master`, remote `git@github.com:jonbiro/super-seerr-extension.git`. Version **3.5.241** includes the new integrations. Use `git status` and `git log -1` for delivery state; this document records local verification before commit/CI.
 

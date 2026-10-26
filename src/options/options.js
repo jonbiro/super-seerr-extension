@@ -24,9 +24,25 @@ class OptionsManager {
     this.debugLoggingInput = document.getElementById('debugLogging');
     this.clearCacheButton = document.getElementById('clearRatingsCache');
     this.cacheCount = document.getElementById('ratingsCacheCount');
+    if (this.cacheCount) this.cacheCount.tabIndex = -1;
     this.grantButton = document.getElementById('grantPermission');
 
     this.init();
+  }
+
+  captureActionFocus(control) {
+    let owned = !!control && document.activeElement === control;
+    const moved = event => {
+      if (event.target !== control && event.target !== document.body) owned = false;
+    };
+    if (owned) document.addEventListener('focusin', moved);
+    return (target = control) => {
+      document.removeEventListener('focusin', moved);
+      // A newer focus choice still owns the user's attention even if that
+      // element is removed later and activeElement returns to the body.
+      if (owned && (document.activeElement === control || document.activeElement === document.body) &&
+          target?.isConnected && !target.disabled) target.focus();
+    };
   }
 
   async init() {
@@ -139,6 +155,7 @@ class OptionsManager {
 
   async clearRatingsCache() {
     if (this.clearingCache) return;
+    const restoreFocus = this.captureActionFocus(this.clearCacheButton);
     this.clearingCache = true;
     const label = this.clearCacheButton?.textContent;
     if (this.clearCacheButton) { this.clearCacheButton.disabled = true; this.clearCacheButton.textContent = 'Clearing…'; }
@@ -153,6 +170,7 @@ class OptionsManager {
     this.clearingCache = false;
     if (this.clearCacheButton) this.clearCacheButton.textContent = label;
     await this.refreshCacheCount();
+    restoreFocus(this.clearCacheButton?.disabled ? this.cacheCount : this.clearCacheButton);
   }
 
   // An origin match pattern for the URL in the form, or null when unusable.
@@ -229,10 +247,26 @@ class OptionsManager {
 
   // The banner's button: nothing to save, so nudge the worker directly.
   async grantOverlayAccess() {
-    const granted = await this.requestOverlayPermission(this.savedPermissionPattern || null);
-    if (granted) await chrome.runtime.sendMessage({ action: 'reloadSettings' }).catch(() => {});
-    await this.refreshPermissionWarning();
-    return granted;
+    if (this._grantingOverlayAccess) return false;
+    const restoreFocus = this.captureActionFocus(this.grantButton);
+    this._grantingOverlayAccess = true;
+    if (this.grantButton) this.grantButton.disabled = true;
+    let granted = false;
+    try {
+      granted = await this.requestOverlayPermission(this.savedPermissionPattern || null);
+      if (granted) await chrome.runtime.sendMessage({ action: 'reloadSettings' }).catch(() => {});
+      await this.refreshPermissionWarning();
+      return granted;
+    } catch (_) {
+      this.showStatus('error', granted
+        ? 'Host access granted, but saved permissions could not be checked. Reload Settings to check access.'
+        : 'Could not check host access. Try Grant access again.');
+      return granted;
+    } finally {
+      this._grantingOverlayAccess = false;
+      if (this.grantButton) this.grantButton.disabled = false;
+      restoreFocus(this.permissionWarning?.classList.contains('hidden') ? this.serverUrlInput : this.grantButton);
+    }
   }
 
   async loadSettings() {
@@ -302,6 +336,7 @@ class OptionsManager {
     // Double submissions would prompt for host permissions twice, and the
     // second prompt arrives with no user gesture left to grant it on.
     if (this._saving || this._connectionBusy) return;
+    const restoreFocus = this.captureActionFocus(this.form.querySelector('button[type=submit]'));
     this._saving = true;
     this.updateConnectionControls();
     try {
@@ -309,6 +344,7 @@ class OptionsManager {
     } finally {
       this._saving = false;
       this.updateConnectionControls();
+      restoreFocus();
     }
   }
 
@@ -406,7 +442,11 @@ class OptionsManager {
   async loadConnectionChoices() {
     const generation = this.connectionChoicesGeneration = (this.connectionChoicesGeneration || 0) + 1;
     const retry = document.getElementById('retrySeerrSites');
-    const restoreRetryFocus = document.activeElement === retry;
+    // A cross-window refresh can supersede this read after disabling Retry.
+    // Keep its focus owner until the newest read finishes.
+    if (!this.connectionChoicesFocus && document.activeElement === retry) {
+      this.connectionChoicesFocus = this.captureActionFocus(retry);
+    }
     this.connectionChoicesLoading = true;
     this.updateConnectionControls();
     if (retry) retry.disabled = true;
@@ -443,10 +483,9 @@ class OptionsManager {
         this.connectionChoicesLoading = false;
         if (retry) retry.disabled = false;
         this.updateConnectionControls();
-        if (restoreRetryFocus && (document.activeElement === retry || document.activeElement === document.body)) {
-          const target = this.connectionChoicesUnavailable ? retry : document.getElementById('savedSeerrSites');
-          target?.focus();
-        }
+        const restoreFocus = this.connectionChoicesFocus;
+        this.connectionChoicesFocus = null;
+        restoreFocus?.(this.connectionChoicesUnavailable ? retry : document.getElementById('savedSeerrSites'));
       }
     }
   }
@@ -516,6 +555,7 @@ class OptionsManager {
   }
 
   async editConnection() {
+    const restoreFocus = this.captureActionFocus(document.getElementById('savedSeerrSites'));
     this.editingConnectionId = document.getElementById('savedSeerrSites').value;
     this.showStatus('loading', 'Loading saved site…');
     this._connectionBusy = true; this.updateConnectionControls();
@@ -546,12 +586,15 @@ class OptionsManager {
       this.editingConnectionId = null;
       this._connectionBusy = false;
       this.updateConnectionControls();
+      restoreFocus();
     }
   }
 
   async useConnection() {
     const selected = this.connectionChoices?.sites.find(site => site.id === this.connectionId);
     if (!selected || this._connectionBusy || this.connectionChoicesLoading || this.connectionChoicesUnavailable) return;
+    const button = document.getElementById('useSeerrSite');
+    const restoreFocus = this.captureActionFocus(button);
     // Request access from this click, before any storage or messaging await.
     const permission = this.requestOverlayPermission(this.originPattern(selected.url));
     this._connectionBusy = true; this.updateConnectionControls();
@@ -572,11 +615,16 @@ class OptionsManager {
         ? `Now using ${selected.name}. Reload its Seerr tab if ratings are not visible yet.`
         : 'Site switched, but the saved settings could not be loaded. Reload this Settings page before saving changes.');
     } catch (error) { this.showStatus('error', error.message); }
-    finally { this._connectionBusy = false; this.updateConnectionControls(); }
+    finally {
+      this._connectionBusy = false; this.updateConnectionControls();
+      restoreFocus(button?.disabled ? document.getElementById('savedSeerrSites') : button);
+    }
   }
 
   async removeConnection() {
     if (this._connectionBusy || this.connectionChoicesLoading || this.connectionChoicesUnavailable) return;
+    const button = document.getElementById('removeSeerrSite');
+    const restoreFocus = this.captureActionFocus(button);
     this._connectionBusy = true; this.updateConnectionControls();
     try {
       const response = await chrome.runtime.sendMessage({ action: 'removeSeerrConnection', data: { id: this.connectionId } });
@@ -587,10 +635,14 @@ class OptionsManager {
         ? 'Saved site removed. Its server and historical actions were not changed.'
         : 'Saved site removed, but the saved settings could not be loaded. Reload this Settings page before saving changes.');
     } catch (error) { this.showStatus('error', error.message); }
-    finally { this._connectionBusy = false; this.updateConnectionControls(); }
+    finally {
+      this._connectionBusy = false; this.updateConnectionControls();
+      restoreFocus(button?.disabled ? document.getElementById('savedSeerrSites') : button);
+    }
   }
 
   async reloadSettings() {
+    const restoreFocus = this.captureActionFocus(this.reloadButton);
     this.reloadButton.disabled = true;
     this.reloadButton.textContent = 'Reloading...';
     this.showStatus('loading', 'Forcing background script to reload settings...');
@@ -610,6 +662,7 @@ class OptionsManager {
     } finally {
       this.reloadButton.disabled = false;
       this.reloadButton.textContent = 'Reload Settings';
+      restoreFocus();
     }
   }
 
@@ -644,6 +697,7 @@ class OptionsManager {
       return;
     }
 
+    const restoreFocus = this.captureActionFocus(this.testButton);
     this._testingSeerr = true;
     this.updateConnectionControls();
     this.testButton.textContent = 'Testing...';
@@ -680,6 +734,7 @@ class OptionsManager {
       this._testingSeerr = false;
       this.updateConnectionControls();
       this.testButton.textContent = 'Test Connection';
+      restoreFocus();
     }
   }
 
@@ -721,6 +776,7 @@ class OptionsManager {
       return;
     }
     if (!this.testPlexButton) return;
+    const restoreFocus = this.captureActionFocus(this.testPlexButton);
     this._testingPlex = true;
     this.updateConnectionControls();
     this.testPlexButton.textContent = 'Testing...';
@@ -752,6 +808,7 @@ class OptionsManager {
       this._testingPlex = false;
       this.updateConnectionControls();
       this.testPlexButton.textContent = 'Test Plex';
+      restoreFocus();
     }
   }
 

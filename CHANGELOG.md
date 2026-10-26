@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.257]
+
+- Restore keyboard focus after Settings saves, connection tests, cache clearing, reloads, and saved-site actions. Keep fallback controls visible when an action disappears or becomes unavailable, and respect focus moved elsewhere while work is pending.
+- Preserve saved-site Retry focus in Settings and the popup when a newer cross-window refresh supersedes the original read, regardless of reply order or failure.
+- Prevent duplicate Grant access requests and recover clearly when saved permission state cannot be read after a grant.
+
 ## [3.5.256]
 
 - Save every Seerr URL/API-key pair atomically in local storage, including a single unnamed site, so slow or failed writes cannot attach one server's key to another URL. Keep legacy settings readable until explicitly saved, and distinguish a committed connection from later preference or refresh failures.

@@ -4,6 +4,10 @@
   const status = document.getElementById('siteSwitchStatus');
   const retry = document.getElementById('retrySeerrSites');
   let connections, generation = 0, switching = false, loading = false, refreshPending = false, pendingChange;
+  let retryFocusOwned = false;
+  document.addEventListener('focusin', event => {
+    if (event.target !== retry && event.target !== document.body) retryFocusOwned = false;
+  });
   const alreadyRendered = value => value && value.revision === connections?.revision && value.activeId === connections?.activeId;
   function render(value) {
     if (!Array.isArray(value?.sites)) throw new Error('Could not load saved sites. Try Retry saved sites.');
@@ -19,7 +23,8 @@
   }
   async function load(changed = false) {
     const current = ++generation;
-    const restoreRetryFocus = document.activeElement === retry;
+    // Superseding reads share the initiating Retry's focus ownership.
+    if (document.activeElement === retry) retryFocusOwned = true;
     loading = true; select.disabled = true; retry.disabled = true;
     try {
       const response = await chrome.runtime.sendMessage({ action: 'getSeerrConnections' });
@@ -37,6 +42,8 @@
     } finally {
       if (current === generation) {
         loading = false; retry.disabled = false;
+        const restoreRetryFocus = retryFocusOwned;
+        retryFocusOwned = false;
         if (restoreRetryFocus && (document.activeElement === retry || document.activeElement === document.body)) {
           const target = !retry.classList.contains('hidden') ? retry
             : connections?.sites.length ? select : document.getElementById('openOptions');
