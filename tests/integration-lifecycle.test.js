@@ -1,6 +1,6 @@
 // BaseIntegration polls for SPA navigation every second and patches history.
 // destroy() existed but nothing called it, so those outlived the page on all
-// seven supported sites.
+// nine supported sites.
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadIntegration } = require('./helpers/integration');

@@ -2186,9 +2186,6 @@
     const route = detectRoute();
     if (!isListRoute(route)) return;
 
-    // Ensure the toggle button exists even if the bar hasn't been injected yet
-    ensureFilterToggle();
-
     if (document.querySelector('[data-seerr-overlay="true"][class*="sort-filter-bar"]')) {
       applyScoreFilters(getCardsGrid());
       return;
@@ -2196,6 +2193,9 @@
 
     const cards = getMediaCards();
     if (cards.length === 0) return;
+    // Do not leave an orphaned "Hide filters" button on an empty/loading list.
+    // The card observer will call this again once Seerr renders its first card.
+    ensureFilterToggle();
     ensureCardIndexes(cards);
 
     const { total, rated } = countCardsWithRatings(cards);

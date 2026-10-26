@@ -8,8 +8,9 @@ const source = file => fs.readFileSync(file, 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
 async function settle() { for (let i = 0; i < 12; i++) await flush(); }
 
-function createOverlay({ settings = {}, path = '/search?query=test', embedded = null, listItems = [], linkless = false, wrapped = false, posters = false, audience = false, tv = false } = {}) {
-  const dom = new JSDOM(`<main><div id="grid">${['Low', 'High', 'Unknown'].map((title, index) => `<article data-testid="title-card" data-id="${index + 1}"><a href="/${tv && index === 0 ? 'tv' : 'movie'}/${index + 1}"><h2>${title}</h2></a></article>`).join('')}</div></main>`, { url: `https://seerr.example${path}`, runScripts: 'outside-only' });
+function createOverlay({ settings = {}, path = '/search?query=test', embedded = null, listItems = [], linkless = false, wrapped = false, posters = false, audience = false, tv = false, empty = false } = {}) {
+  const cards = empty ? '' : ['Low', 'High', 'Unknown'].map((title, index) => `<article data-testid="title-card" data-id="${index + 1}"><a href="/${tv && index === 0 ? 'tv' : 'movie'}/${index + 1}"><h2>${title}</h2></a></article>`).join('');
+  const dom = new JSDOM(`<main><div id="grid">${cards}</div></main>`, { url: `https://seerr.example${path}`, runScripts: 'outside-only' });
   const { window } = dom;
   if (posters) window.document.querySelectorAll('[data-testid="title-card"]').forEach((card, index) => {
     card.innerHTML = `<div role="link"><img alt="" src="https://image.tmdb.org/t/p/w300/poster${index + 1}.jpg"></div>`;
@@ -65,6 +66,14 @@ function createOverlay({ settings = {}, path = '/search?query=test', embedded = 
   window.eval(source('src/content/seerr-integration.js').replace(/\}\)\(\);\s*$/, `window.testOverlay = { injectCardBadges, injectSortFilterControls, handleRouteChange, extractSeerrNativeRatings, loadMoreCards, scoreAllCards, injectPlexWatchlistButton, flushPersistedRatings }; })();`));
   return { dom, window, messages, urls, storage, message: value => messageListeners.forEach(listener => listener(value)), change: changes => storageListeners.forEach(listener => listener(changes, 'sync')) };
 }
+
+test('an empty Seerr list does not leave an orphaned filter toggle', async t => {
+  const fixture = createOverlay({ empty: true });
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  assert.equal(fixture.window.document.querySelector('#seerr-filter-toggle'), null);
+  assert.equal(fixture.window.document.querySelector('#seerr-filter-bar'), null);
+});
 
 test('real DOM sorting follows ratings, stays idempotent and restores original order', async t => {
   const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));

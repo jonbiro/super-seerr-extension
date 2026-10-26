@@ -43,6 +43,8 @@ test('popup ratings-only and request-ready states reflect verified checks', asyn
       seerr: row('ok', 'Reachable'), permission: row('ok', 'Granted'), apiKey: row(state, 'Key state'), plex: row('warning', 'Optional')
     } });
     assert.equal(document.querySelector('.status-text').textContent, expected);
+    assert.doesNotMatch(document.getElementById('configuredDetail').textContent, /five more sites/i);
+    assert.match(document.getElementById('configuredDetail').textContent, /supported discovery sites/i);
     dom.window.close();
   }
 });

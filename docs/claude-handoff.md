@@ -119,7 +119,7 @@ All project paths below are under `/Users/yoni/super-seerr-extension`:
 
 | Location | Purpose |
 | --- | --- |
-| `/Users/yoni/super-seerr-extension/src/content/` | Seven site integrations, Seerr ratings overlay/filter, queue, cache client, session and preset UI |
+| `/Users/yoni/super-seerr-extension/src/content/` | Nine site integrations, Seerr ratings overlay/filter, queue, cache client, session and preset UI |
 | `/Users/yoni/super-seerr-extension/src/content/seerr-integration.js` | Card discovery, filter/sort/count behavior, overlay actions |
 | `/Users/yoni/super-seerr-extension/src/content/seerr-overlay.css` | Overlay and responsive filter styles; narrow four-action grid at <=600px |
 | `/Users/yoni/super-seerr-extension/src/background/` | Worker, providers, storage, permissions, Seerr transport/caches, connection management |

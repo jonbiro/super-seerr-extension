@@ -33,6 +33,18 @@
     return { revision: Number.isSafeInteger(stored.revision) && stored.revision >= 0 ? stored.revision : 0, activeId: stored.activeId, sites };
   };
   root.SeerrConnections = {
+    normalizeSeerrUrl(value) { return normalize(value); },
+    // Legacy single-site settings historically kept the user's trailing path
+    // slash. Validate them with the same strict rules without changing that
+    // serialized form, so existing per-server cache records still match.
+    legacySeerrUrl(value) {
+      const raw = typeof value === 'string' ? value.trim() : '';
+      const url = new URL(raw);
+      if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+        throw new Error('Use an HTTP(S) server URL without credentials, query parameters, or fragments');
+      }
+      return raw;
+    },
     async readSeerrConnections() {
       const stored = (await chrome.storage.local.get(KEY))[KEY];
       if (stored !== undefined && stored !== null) {

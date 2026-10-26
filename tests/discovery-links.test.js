@@ -38,6 +38,9 @@ test('country defaults follow the actual JustWatch page or a supported browser l
   const justwatch = setup(t, { url: 'https://br.justwatch.com/br/filme/clube-da-luta', language: 'en-GB' });
   assert.equal(justwatch.country.value, 'br');
   assert.equal(new URL(justwatch.links['Where to watch'].href).pathname, '/br/search');
+  const localized = setup(t, { url: 'https://de.justwatch.com/de/film/fight-club', language: 'en-US' });
+  assert.equal(localized.country.value, 'de');
+  assert.equal(new URL(localized.links['Where to watch'].href).pathname, '/de/search');
   const british = setup(t, { language: 'en-GB' });
   assert.equal(british.country.value, 'uk');
   const spoof = setup(t, { url: 'https://justwatch.com.example/br/filme/example', language: 'en-US' });

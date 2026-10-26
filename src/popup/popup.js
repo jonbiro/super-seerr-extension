@@ -104,9 +104,9 @@ class PopupManager {
     if (!this.configuredHeading || !this.configuredDetail) return;
     this.configuredHeading.textContent = canRequest ? 'Ready to request' : unverifiedKey ? 'Check your API key' : 'Ratings are on';
     this.configuredDetail.textContent = canRequest
-      ? 'Ratings show on your Seerr pages, and you can request titles from IMDb, Rotten Tomatoes and five more sites.'
+      ? 'Ratings show on your Seerr pages, and you can request titles from the supported discovery sites.'
       : unverifiedKey ? 'Ratings show on your Seerr pages. Your saved API key is not verified. Review the API key check below before requesting titles.'
-      : 'Ratings show on your Seerr pages. Add an API key in Settings to request titles from IMDb, Rotten Tomatoes and five more sites.';
+      : 'Ratings show on your Seerr pages. Add an API key in Settings to request titles from the supported discovery sites.';
   }
 
   showConfiguredState() {

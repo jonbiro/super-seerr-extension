@@ -132,6 +132,7 @@ class OptionsManager {
     try {
       const url = new URL(serverUrl);
       if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+      if (url.username || url.password || url.search || url.hash) return null;
       // Match patterns cannot carry a port; a bare host matches every port.
       return `${url.protocol}//${url.hostname}/*`;
     } catch (_) {

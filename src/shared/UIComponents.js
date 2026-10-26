@@ -312,7 +312,9 @@ class UIComponents {
       const url = new URL(window.location.href);
       const routeCountry = url.pathname.split('/')[1]?.toLowerCase();
       const languageCountry = new Intl.Locale(navigator.language).region?.toLowerCase();
-      if (['justwatch.com', 'www.justwatch.com', 'br.justwatch.com'].includes(url.hostname) && validCountry(routeCountry)) initial = routeCountry;
+      const justWatchHost = url.hostname.toLowerCase();
+      const localizedHost = /^[a-z]{2}\.justwatch\.com$/.test(justWatchHost);
+      if ((justWatchHost === 'justwatch.com' || justWatchHost === 'www.justwatch.com' || localizedHost) && validCountry(routeCountry)) initial = routeCountry;
       else if (validCountry(languageCountry === 'gb' ? 'uk' : languageCountry)) initial = languageCountry === 'gb' ? 'uk' : languageCountry;
     } catch (_) { /* A visible default still lets the user choose a country. */ }
     country.value = initial;

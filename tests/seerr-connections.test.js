@@ -151,6 +151,17 @@ for (const malformed of [
   assert.equal(w.api.apiKey, null);
 });
 
+test('a malformed legacy URL fails closed instead of becoming an active request target', async () => {
+  const w = loadWorker({ get: async () => ({ seerrUrl: 'https://user:pass@legacy.example/path?secret=1' }), local: { seerrApiKey: 'legacy-secret' } });
+  await w.ready;
+  const config = await message(w, 'getConfigState');
+  assert.equal(config.success, true);
+  assert.equal(config.data.serverUrl, null);
+  assert.equal(config.data.apiConfigured, false);
+  assert.equal(w.api.baseUrl, null);
+  assert.equal(w.api.apiKey, null);
+});
+
 test('site edits, removals, and queued concurrent additions preserve other credentials', async () => {
   const w = await setup();
   const results = await Promise.all([addSecond(w), message(w, 'saveSeerrConnection', { url: 'https://third.example', apiKey: 'third-secret' })]);

@@ -21,7 +21,7 @@ For installation and everyday use, start with the [README](../README.md) and the
 | **Your Seerr server** | Read movie/TV status and available data, show ratings/links, submit **explicitly confirmed** media requests, manage Seerr watchlist actions | API-key-based calls use the key you configured; on-Seerr enhancements may use your existing signed-in page session |
 | **Rotten Tomatoes** | Look up external titles and verify potential public critic/audience scores | Titles/years are sent as search terms. Uncertain results are hidden rather than given arbitrary confidence |
 | **Plex / plex.tv** | Resolve items through Discover, check and add them to Plex Universal Watchlist | Happens when you supply your own Plex token and use the feature; this is **not** Seerr's watchlist |
-| **IMDb, TMDB, Metacritic, Trakt, Filmweb, Letterboxd and Rotten Tomatoes pages** | Read the film/TV metadata visible on supported pages to offer a request flyout | Content scripts are limited to the known page patterns listed in the extension manifest |
+| **IMDb, TMDB, Metacritic, Trakt, Filmweb, Letterboxd, Rotten Tomatoes, Simkl and JustWatch pages** | Read the film/TV metadata visible on supported pages to offer a request flyout | Content scripts are limited to the known page patterns listed in the extension manifest |
 
 Seerr may be backed by Plex, Jellyfin or Emby. A playback link, when available, comes from Seerr; Super Seerr does not assume a specific backend.
 

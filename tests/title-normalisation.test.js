@@ -15,7 +15,7 @@ test('an accent does not split the word it sits in', () => {
 });
 
 test('a title in Polish survives, which Filmweb depends on', () => {
-  // Filmweb.pl is one of the seven supported sites.
+  // Filmweb.pl is one of the nine supported sites.
   assert.equal(normalise('Podziemny krąg'), 'podziemny krag');
   assert.equal(normalise('Zimna wojna'), 'zimna wojna');
 });

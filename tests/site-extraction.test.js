@@ -1,4 +1,4 @@
-// The seven site integrations had no direct coverage, yet they are the most
+// The site integrations had no direct coverage, yet they are the most
 // fragile code here: they depend on third-party markup and on the shared
 // extractor. These pin the extraction contract each one is expected to meet.
 const { test } = require('node:test');

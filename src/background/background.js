@@ -138,11 +138,17 @@ class SeerrAPI {
         console.error('Error loading saved Seerr sites:', error);
       }
       const selected = this.connections?.sites?.find(site => site.id === this.connections.activeId);
+      let legacyUrl = null;
+      try {
+        legacyUrl = !hasSavedConnections && synced.seerrUrl ? this.legacySeerrUrl(synced.seerrUrl) : null;
+      } catch (error) {
+        console.error('Error loading the legacy Seerr URL:', error);
+      }
       // A present but corrupt profile must not silently fall back to a legacy
       // URL or key; that could target an unintended server. A missing profile
       // still uses the pre-multi-site settings for backwards compatibility.
-      const baseUrl = invalidSavedConnections ? null : this.connections ? selected?.url : synced.seerrUrl;
-      const apiKey = invalidSavedConnections ? null : this.connections ? selected?.apiKey : local.seerrApiKey;
+      const baseUrl = invalidSavedConnections ? null : this.connections ? selected?.url : legacyUrl;
+      const apiKey = invalidSavedConnections ? null : this.connections ? selected?.apiKey : legacyUrl ? local.seerrApiKey : null;
       if (this.baseUrl !== baseUrl || this.apiKey !== apiKey) this.invalidateSeerrReads();
       this.baseUrl = baseUrl;
       this.apiKey = apiKey;
