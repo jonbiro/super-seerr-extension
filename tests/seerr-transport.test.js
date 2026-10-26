@@ -85,3 +85,24 @@ test('cancels an oversized successful JSON body before parsing it', async () => 
   assert.equal(reads, 1, 'the reader must stop at the first oversized chunk');
   assert.equal(cancelled, true, 'an oversized successful body must be cancelled');
 });
+
+test('cancels a successful JSON body when the stream fails mid-read', async () => {
+  const worker = loadWorker();
+  await worker.ready;
+  worker.api.baseUrl = 'https://seerr.example';
+  worker.api.apiKey = 'key';
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() { throw new Error('body interrupted'); },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  worker.context.fetch = async () => ({ ok: true, status: 200, headers: { get: () => null }, body });
+
+  await assert.rejects(worker.api.sendAPIRequest('GET', '/api/v1/auth/me'), /body interrupted/);
+  assert.equal(cancelled, true, 'a failed successful body must be cancelled');
+});

@@ -162,6 +162,24 @@ test('diagnostics cancel an oversized successful public-settings body before par
   assert.equal(cancelled, true);
 });
 
+test('diagnostics cancel a successful public-settings body when the stream fails', async () => {
+  const w = await worker({ key: null });
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() { throw new Error('body interrupted'); },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  w.context.fetch = async () => ({ ok: true, status: 200, headers: { get: () => null }, body });
+  const report = await w.api.getPopupDiagnostics();
+  assert.equal(report.checks.seerr.state, 'error');
+  assert.equal(cancelled, true);
+});
+
 test('valid authentication does not hide a confirmed incomplete setup', async () => {
   const w = await worker();
   w.context.fetch = async url => ({ ok: true, json: async () => url.includes('/auth/me') ? { id: 1 } : { initialized: false } });

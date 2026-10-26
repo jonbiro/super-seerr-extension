@@ -125,13 +125,20 @@
       if (response.body?.getReader) {
         const reader = response.body.getReader(), chunks = [];
         let size = 0;
+        let cancelled = false;
+        const cancelReader = async () => {
+          if (cancelled) return;
+          cancelled = true;
+          await reader.cancel().catch(() => {});
+        };
         try {
           while (true) {
             let part;
-            try { part = await reader.read(); } catch (_) { throw new Error(`${PROVIDERS[provider].name} returned an unreadable response.`); }
+            try { part = await reader.read(); }
+            catch (_) { await cancelReader(); throw new Error(`${PROVIDERS[provider].name} returned an unreadable response.`); }
             if (part.done) break;
             size += part.value.byteLength;
-            if (size > MAX_BODY) { await reader.cancel().catch(() => {}); throw oversized(); }
+            if (size > MAX_BODY) { await cancelReader(); throw oversized(); }
             chunks.push(part.value);
           }
         } finally { reader.releaseLock(); }

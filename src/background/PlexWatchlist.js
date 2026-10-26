@@ -66,6 +66,12 @@
       const reader = response.body.getReader();
       const chunks = [];
       let size = 0;
+      let cancelled = false;
+      const cancelReader = async () => {
+        if (cancelled) return;
+        cancelled = true;
+        await reader.cancel().catch(() => {});
+      };
       try {
         while (true) {
           const part = await reader.read();
@@ -73,11 +79,14 @@
           const length = part.value?.byteLength || 0;
           size += length;
           if (size > MAX_RESPONSE_BODY_BYTES) {
-            await reader.cancel().catch(() => {});
+            await cancelReader();
             throw new Error('Plex returned a response that is too large.');
           }
           if (length) chunks.push(part.value);
         }
+      } catch (error) {
+        await cancelReader();
+        throw error;
       } finally { reader.releaseLock(); }
       if (typeof TextDecoder !== 'function') throw new Error('Plex response could not be decoded.');
       const bytes = new Uint8Array(size);

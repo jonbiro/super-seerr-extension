@@ -9,6 +9,19 @@ const { loadWorker } = require('./helpers/worker');
 const score = (requested, result) => loadWorker().api.scoreRtSearchResult(result, requested);
 const accepted = c => c >= Config.confidenceThreshold;
 
+test('the RT search parser keeps only title routes of the requested provider type', () => {
+  const worker = loadWorker();
+  const html = [
+    '<search-page-media-row release-year="1999"><a data-qa="info-name" href="/m/fight_club">Fight Club</a></search-page-media-row>',
+    '<search-page-media-row release-year="2008"><a data-qa="info-name" href="/tv/breaking_bad">Breaking Bad</a></search-page-media-row>',
+    '<search-page-media-row release-year="1999"><a data-qa="info-name" href="/celebrity/fight-club">Fight Club</a></search-page-media-row>',
+    '<search-page-media-row release-year="1999"><a data-qa="info-name" href="https://evil.example/m/fight_club">Fake Fight Club</a></search-page-media-row>'
+  ].join('');
+
+  assert.deepEqual(Array.from(worker.api.parseRtSearchResults(html, 'movie'), result => result.href), ['/m/fight_club']);
+  assert.deepEqual(Array.from(worker.api.parseRtSearchResults(html, 'tv'), result => result.href), ['/tv/breaking_bad']);
+});
+
 test('an exact title in the right year is certain', () => {
   const c = score({ title: 'Moana', year: 2016 }, { title: 'Moana', year: 2016 });
   assert.equal(c, 1, 'this is as sure as the method gets, so it must reach 1');

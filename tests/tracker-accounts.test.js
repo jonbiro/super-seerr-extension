@@ -275,6 +275,24 @@ test('provider response bodies are bounded by announced and streamed byte size',
   }
 });
 
+test('tracker response bodies cancel when a stream fails mid-read', async () => {
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() { throw new Error('body interrupted'); },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  const f = load({ accounts: { trakt: account() }, fetch: async () => ({
+    ok: true, status: 200, headers: new Headers({ 'X-Pagination-Page': '1', 'X-Pagination-Page-Count': '0' }), body
+  }) });
+  await assert.rejects(f.call('getTrackerWatchlist', { provider: 'trakt' }), /unreadable response/);
+  assert.equal(cancelled, true);
+});
+
 test('disconnect during rotating refresh cannot restore credentials', async () => {
   const pending = gate();
   const f = load({ accounts: { trakt: account({ expiresAt: 1 }) }, fetch: () => pending.promise });

@@ -179,6 +179,23 @@ test('the saved key is loaded back from local storage into the form', async t =>
   assert.equal(ctx.window.document.getElementById('debugLogging').checked, true);
 });
 
+test('a malformed legacy URL does not discard local settings or crash Settings', async t => {
+  const ctx = openOptions({
+    granted: true,
+    synced: { seerrUrl: 'javascript:alert(1)', overlayFeatures: { cardBadges: false } },
+    local: { seerrApiKey: 'stored-key', plexToken: 'plex-token', debugLogging: true }
+  });
+  t.after(() => ctx.dom.window.close());
+  await flush();
+
+  assert.equal(ctx.window.document.getElementById('serverUrl').value, '');
+  assert.equal(ctx.window.document.getElementById('apiKey').value, 'stored-key');
+  assert.equal(ctx.window.document.getElementById('plexToken').value, 'plex-token');
+  assert.equal(ctx.window.document.getElementById('debugLogging').checked, true);
+  assert.equal(ctx.window.document.querySelector('[data-overlay-feature="cardBadges"]').checked, false);
+  assert.match(ctx.window.document.getElementById('status').textContent, /saved Seerr URL is invalid/i);
+});
+
 test('Settings reports how many ratings are cached and clears them', async t => {
   const ctx = openOptions({
     granted: true,

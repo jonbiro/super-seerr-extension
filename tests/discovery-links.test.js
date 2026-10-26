@@ -32,6 +32,8 @@ test('discovery links encode title text inside fixed provider URLs and disclose 
     assert.equal(link.rel, 'noopener noreferrer');
   }
   assert.match(details.textContent, /search pages in a new tab/);
+  assert.match(details.textContent, /any provider search/);
+  assert.doesNotMatch(details.textContent, /Paste the copied title into Simkl/);
 });
 
 test('country defaults follow the actual JustWatch page or a supported browser locale', async t => {
@@ -92,11 +94,12 @@ test('copy title uses an explicit click and reports denied clipboard access', as
   button.click();
   await settle();
   assert.deepEqual(copied, ['Amélie 2001']);
-  assert.match(page.details.querySelector('[role="status"]').textContent, /Title copied/);
+  assert.match(page.details.querySelector('[role="status"]').textContent, /Title copied\. Paste it into any provider search/);
   Object.defineProperty(page.window.navigator, 'clipboard', { value: { writeText: async () => { throw new Error('denied'); } } });
   button.click();
   await settle();
   assert.match(page.details.querySelector('[role="status"]').textContent, /Could not copy/);
+  assert.doesNotMatch(page.details.querySelector('[role="status"]').textContent, /Simkl search/);
   assert.equal(button.disabled, false);
 });
 

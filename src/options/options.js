@@ -231,12 +231,26 @@ class OptionsManager {
         chrome.storage.local.get(['seerrApiKey', 'plexToken', 'debugLogging', 'seerrConnectionsV1'])
       ]);
 
+      const syncedUrl = typeof settings?.seerrUrl === 'string' ? settings.seerrUrl.trim() : '';
+      let legacyUrl = '';
+      let legacyId;
+      if (syncedUrl) {
+        try {
+          const parsed = new URL(syncedUrl);
+          if (['http:', 'https:'].includes(parsed.protocol) && !parsed.username && !parsed.password && !parsed.search && !parsed.hash) {
+            legacyUrl = syncedUrl;
+            legacyId = parsed.href.replace(/\/+$/, '');
+          }
+        } catch (_) {
+          // A stale or hand-edited sync value must not prevent the rest of
+          // Settings (including local credentials and feature flags) loading.
+        }
+      }
       const hasSavedConnections = local.seerrConnectionsV1 !== undefined && local.seerrConnectionsV1 !== null;
       const connections = this.parseSavedConnections(local.seerrConnectionsV1);
       const active = connections?.sites.find(site => site.id === connections.activeId);
-      const serverUrl = hasSavedConnections ? active?.url || '' : settings.seerrUrl || '';
-      const connectionId = active?.id ?? (!hasSavedConnections && settings.seerrUrl
-        ? new URL(settings.seerrUrl).href.replace(/\/+$/, '') : undefined);
+      const serverUrl = hasSavedConnections ? active?.url || '' : legacyUrl;
+      const connectionId = active?.id ?? (!hasSavedConnections ? legacyId : undefined);
       const apiKey = hasSavedConnections ? active?.apiKey || '' : local.seerrApiKey || '';
       // Revealing one credential does not authorize revealing its replacement
       // after a site removal, activation, or settings reload.
@@ -254,8 +268,11 @@ class OptionsManager {
       }
       if (this.debugLoggingInput) this.debugLoggingInput.checked = local.debugLogging === true;
       document.querySelectorAll('[data-overlay-feature]').forEach(input => {
-        input.checked = settings.overlayFeatures?.[input.dataset.overlayFeature] !== false;
+        input.checked = settings?.overlayFeatures?.[input.dataset.overlayFeature] !== false;
       });
+      if (syncedUrl && !legacyUrl && !hasSavedConnections) {
+        this.showStatus('error', 'The saved Seerr URL is invalid. Enter a new HTTP(S) server URL.');
+      }
       return true;
     } catch (error) {
       console.error('Error loading settings:', error);

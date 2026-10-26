@@ -350,14 +350,14 @@ class UIComponents {
     ]);
     const links = this.el('div', { className: 'seerr-exploration-links' }, [streaming, trakt, simkl]);
     const copy = this.el('button', { type: 'button', textContent: 'Copy title', className: 'seerr-copy-title' });
-    const feedback = this.el('p', { role: 'status', className: 'seerr-exploration-feedback', textContent: 'Paste the copied title into Simkl search. Links open search pages in a new tab.' });
+    const feedback = this.el('p', { role: 'status', className: 'seerr-exploration-feedback', textContent: 'Use the copied title in any provider search. Links open search pages in a new tab.' });
     copy.addEventListener('click', async () => {
       copy.disabled = true;
       try {
         await navigator.clipboard.writeText(query);
-        feedback.textContent = 'Title copied. Paste it into Simkl search.';
+        feedback.textContent = 'Title copied. Paste it into any provider search.';
       } catch (_) {
-        feedback.textContent = 'Could not copy. Copy the title from the heading and paste it into Simkl search.';
+        feedback.textContent = 'Could not copy. Copy the title from the heading and paste it into any provider search.';
       } finally { copy.disabled = false; }
     });
     links.appendChild(copy);

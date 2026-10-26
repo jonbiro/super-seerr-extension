@@ -67,6 +67,27 @@ test('a successful session response cancels an oversized body before parsing it'
   assert.equal(cancelled, true, 'an oversized successful body must be cancelled');
 });
 
+test('a successful session response cancels a body when the stream fails', async () => {
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() { throw new Error('body interrupted'); },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  const origin = 'https://seerr.example';
+  const context = vm.createContext({ URL, AbortSignal, fetch: async () => ({
+    ok: true, status: 200, headers: { get: () => null }, body
+  }), window: { location: { origin } } });
+  vm.runInContext(fs.readFileSync('src/content/SeerrSession.js', 'utf8'), context);
+  const session = context.window.createSeerrSession({ Config, Model, log() {}, getServer: () => new URL(`${origin}/family`) });
+  await assert.rejects(() => session.fetchJsonFromSeerr('/api/v1/movie/550/ratingscombined'), /body interrupted/);
+  assert.equal(cancelled, true);
+});
+
 for (const status of [404, 503]) for (const cancellationFails of [false, true]) {
   test(`session HTTP ${status} releases its unread body even when cancellation ${cancellationFails ? 'rejects' : 'succeeds'}`, async () => {
     let open = 0, cancelled = 0;

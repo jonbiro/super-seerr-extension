@@ -319,6 +319,27 @@ test('plex cancels oversized successful JSON bodies before parsing them', async 
   assert.equal(cancelled, true);
 });
 
+test('plex cancels a successful JSON body when the stream fails mid-read', async () => {
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() { throw new Error('body interrupted'); },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  const worker = loadWorker({
+    get: async () => ({}),
+    local: { plexToken: 't' },
+    fetch: async () => ({ ok: true, status: 200, headers: { get: name => name === 'Content-Type' ? 'application/json' : null }, body })
+  });
+  await worker.ready;
+  await assert.rejects(() => worker.api.plexFetch('https://plex.tv/api/v2/user', { token: 't' }), /body interrupted/);
+  assert.equal(cancelled, true);
+});
+
 test('plex encodes ratingKeys used in URL paths', async () => {
   const seen = [];
   const worker = loadWorker({

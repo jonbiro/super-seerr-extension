@@ -17,6 +17,12 @@
       const reader = response.body.getReader();
       const chunks = [];
       let size = 0;
+      let cancelled = false;
+      const cancelReader = async () => {
+        if (cancelled) return;
+        cancelled = true;
+        await reader.cancel().catch(() => {});
+      };
       try {
         while (true) {
           const part = await reader.read();
@@ -24,11 +30,14 @@
           const length = part.value?.byteLength || 0;
           size += length;
           if (size > maxBytes) {
-            await reader.cancel().catch(() => {});
+            await cancelReader();
             throw oversizedResponse();
           }
           if (length) chunks.push(part.value);
         }
+      } catch (error) {
+        await cancelReader();
+        throw error;
       } finally { reader.releaseLock(); }
       if (typeof root.TextDecoder !== 'function') {
         throw new Error('Rotten Tomatoes response could not be decoded.');
@@ -100,7 +109,13 @@
         if (!hrefMatch || !titleMatch) continue;
 
         const href = this.decodeHtml(hrefMatch[1]);
-        const resultType = href.includes('/tv/') ? 'tv' : 'movie';
+        let resultType;
+        try {
+          const target = new URL(href, 'https://www.rottentomatoes.com');
+          if (!['https://www.rottentomatoes.com', 'https://rottentomatoes.com'].includes(target.origin) ||
+              !/^\/(?:m|tv)\/[^/]+\/?$/.test(target.pathname)) continue;
+          resultType = target.pathname.startsWith('/tv/') ? 'tv' : 'movie';
+        } catch (_) { continue; }
         if (mediaType && resultType !== mediaType) continue;
 
         rows.push({

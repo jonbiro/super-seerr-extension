@@ -277,6 +277,25 @@ test('cancels an oversized successful RT body before retaining it', async () => 
   assert.equal(cancelled, true, 'an oversized successful body must be cancelled');
 });
 
+test('cancels a successful RT body when the stream fails mid-read', async () => {
+  const worker = loadWorker();
+  await worker.ready;
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() { throw new Error('body interrupted'); },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  worker.context.fetch = async () => ({ ok: true, headers: { get: () => null }, body });
+
+  await assert.rejects(worker.api.fetchRtHtml('/m/interrupted'), /body interrupted/);
+  assert.equal(cancelled, true, 'a failed successful body must be cancelled');
+});
+
 for (const failBodies of [false, true]) test(`RT concurrency includes response bodies (${failBodies ? 'with failures' : 'successful reads'})`, { timeout: 15000 }, async () => {
   const worker = loadWorker(); await worker.ready;
   let inFlight = 0, peak = 0, started = 0;
