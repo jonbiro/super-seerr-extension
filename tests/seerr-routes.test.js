@@ -52,6 +52,13 @@ test('pages with no title cards are still ignored', async () => {
   }
 });
 
+test('route detection fails closed when a page location is unavailable during teardown', async () => {
+  const overlay = await at('/discover');
+  Object.defineProperty(overlay.context.window, 'location', { configurable: true, get() { throw new Error('window closed'); } });
+  assert.doesNotThrow(() => overlay.detectRoute());
+  assert.equal(overlay.detectRoute(), null);
+});
+
 test('a collection and a person route carry their id', async () => {
   assert.deepEqual({ ...(await at('/collection/1241')).detectRoute() }, { type: 'collection', id: '1241' });
   assert.deepEqual({ ...(await at('/person/287')).detectRoute() }, { type: 'person', id: '287' });

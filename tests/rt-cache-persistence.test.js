@@ -110,6 +110,44 @@ test('the persisted cache never exceeds the configured entry bound', async () =>
   assert.equal(Object.keys(worker.localStore[RT_KEY].entries).length, Config.rtCacheMaxEntries);
 });
 
+test('a reordered persisted RT cache loads the newest entries before applying its bound', async () => {
+  const now = Date.now();
+  const worker = loadWorker({ local: stored({
+    'movie:new': { value: { rtCriticsScore: 95 }, checkedAt: now - 1, expiresAt: now + 60000 },
+    'movie:old': { value: { rtCriticsScore: 75 }, checkedAt: now - 300, expiresAt: now + 60000 },
+    'movie:middle': { value: { rtCriticsScore: 85 }, checkedAt: now - 100, expiresAt: now + 60000 }
+  }) });
+  const previous = worker.context.RatingsConfig.rtCacheMaxEntries;
+  worker.context.RatingsConfig.rtCacheMaxEntries = 2;
+  try {
+    await worker.api.loadRtCache();
+    assert.equal(worker.api.rtCache.has('movie:new'), true);
+    assert.equal(worker.api.rtCache.has('movie:middle'), true);
+    assert.equal(worker.api.rtCache.has('movie:old'), false);
+  } finally {
+    worker.context.RatingsConfig.rtCacheMaxEntries = previous;
+  }
+});
+
+test('an invalid persisted timestamp cannot consume the RT cache bound', async () => {
+  const now = Date.now();
+  const worker = loadWorker({ local: stored({
+    'movie:invalid': { value: { rtCriticsScore: 99 }, checkedAt: now + 120000, expiresAt: now + 60000 },
+    'movie:new': { value: { rtCriticsScore: 95 }, checkedAt: now - 1, expiresAt: now + 60000 },
+    'movie:middle': { value: { rtCriticsScore: 85 }, checkedAt: now - 100, expiresAt: now + 60000 }
+  }) });
+  const previous = worker.context.RatingsConfig.rtCacheMaxEntries;
+  worker.context.RatingsConfig.rtCacheMaxEntries = 2;
+  try {
+    await worker.api.loadRtCache();
+    assert.equal(worker.api.rtCache.has('movie:new'), true);
+    assert.equal(worker.api.rtCache.has('movie:middle'), true);
+    assert.equal(worker.api.rtCache.has('movie:invalid'), false);
+  } finally {
+    worker.context.RatingsConfig.rtCacheMaxEntries = previous;
+  }
+});
+
 test('results scored under superseded matching rules are not served', async () => {
   // The worker holds an RT result, confidence included, for a day. Tightening
   // the match rules would otherwise leave that day's titles displaying the old

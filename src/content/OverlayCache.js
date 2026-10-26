@@ -72,8 +72,11 @@
           }
           if (!stored.entries || typeof stored.entries !== 'object') return true;
           // Load oldest first so the Map's LRU order keeps recent checks.
-          for (const [key, entry] of Object.entries(stored.entries).slice(-Config.overlayCacheMaxEntries)
-            .sort((a, b) => (a[1]?.cachedAt || 0) - (b[1]?.cachedAt || 0))) {
+          const cacheTime = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : -1;
+          for (const [key, entry] of Object.entries(stored.entries)
+            .sort((a, b) => cacheTime(b[1]?.cachedAt) - cacheTime(a[1]?.cachedAt))
+            .slice(0, Config.overlayCacheMaxEntries)
+            .sort((a, b) => cacheTime(a[1]?.cachedAt) - cacheTime(b[1]?.cachedAt))) {
             // A live entry from this session is fresher than anything stored.
             if (!entry || typeof entry !== 'object') continue;
             const bundle = entry.bundle;

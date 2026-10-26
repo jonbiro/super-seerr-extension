@@ -161,9 +161,15 @@
 
   function serverPath() {
     const base = configuredServer?.pathname.replace(/\/+$/, '') || '';
-    if (base && window.location.pathname === base) return '/';
-    return base && window.location.pathname.startsWith(`${base}/`)
-      ? window.location.pathname.slice(base.length) : window.location.pathname;
+    // A page can tear down while a queued MutationObserver callback is still
+    // running. Browsers keep location readable during unload, but test DOMs
+    // and embedded hosts may clear it first; route detection should simply
+    // stop rather than throw from that late callback.
+    let pathname;
+    try { pathname = window.location?.pathname || ''; } catch (_) { return ''; }
+    if (base && pathname === base) return '/';
+    return base && pathname.startsWith(`${base}/`)
+      ? pathname.slice(base.length) : pathname;
   }
 
   // Every Seerr page that renders title cards. A route that is not recognised

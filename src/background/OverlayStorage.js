@@ -10,6 +10,10 @@
   const bytes = value => new TextEncoder().encode(JSON.stringify(value)).length;
   const text = (value, max = 300) => typeof value === 'string' ? value.slice(0, max) : '';
   const number = (value, max = Infinity) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max ? value : null;
+  const cacheFreshness = value => Object.values(value?.entries || {}).reduce((latest, entry) =>
+    Math.max(latest, number(entry?.cachedAt) ?? 0), 0);
+  const boundedSiteCaches = caches => Object.fromEntries(Object.entries(caches)
+    .sort((a, b) => cacheFreshness(b[1]) - cacheFreshness(a[1])).slice(0, 10));
   root.OverlayStorage = {
     async restrictLocalStorage() {
       if (!chrome.storage.local.setAccessLevel) return false;
@@ -46,7 +50,15 @@
       if (!value || typeof value !== 'object' || Array.isArray(value) || value.server !== server || (value.epoch ?? 0) !== epoch) return null;
       if (JSON.stringify(value).length > 3_000_000) throw new Error('Ratings cache exceeds the size limit');
       const entries = {};
-      for (const [key, entry] of Object.entries(value.entries || {}).slice(-root.RatingsConfig.overlayCacheMaxEntries)) {
+      const cacheTime = value => number(value, Date.now() + 60000) ?? -1;
+      const storedEntries = Object.entries(value.entries || {})
+        // Reject malformed keys/records before applying the cap. Otherwise a
+        // corrupt record can occupy a slot and hide a valid cached title.
+        .filter(([key, entry]) => /^(movie|tv):[1-9]\d*$/.test(key) &&
+          Number.isSafeInteger(Number(key.split(':')[1])) && entry && typeof entry === 'object')
+        .sort((a, b) => cacheTime(b[1]?.cachedAt) - cacheTime(a[1]?.cachedAt))
+        .slice(0, root.RatingsConfig.overlayCacheMaxEntries);
+      for (const [key, entry] of storedEntries) {
         if (!/^(movie|tv):[1-9]\d*$/.test(key) || !Number.isSafeInteger(Number(key.split(':')[1])) || !entry || typeof entry !== 'object') continue;
         const bundle = entry.bundle && typeof entry.bundle === 'object' ? {
           rtCriticsScore: number(entry.bundle.rtCriticsScore, 100), rtAudienceScore: number(entry.bundle.rtAudienceScore, 100),
@@ -63,9 +75,9 @@
         entries[key] = { bundle, cachedAt: number(entry.cachedAt, Date.now() + 60000), retryAt: number(entry.retryAt, Date.now() + root.RatingsConfig.ratingsFreshMs),
           ...(number(entry.publicCheckedAt, Date.now() + 60000) !== null ? { publicCheckedAt: entry.publicCheckedAt } : {}), diagnostics, ...(Object.keys(nativeRemovedAt).length ? { nativeRemovedAt } : {}) };
       }
-      const index = (Array.isArray(value.index) ? value.index : []).slice(-root.RatingsConfig.listIndexMaxEntries).filter(item =>
+      const index = (Array.isArray(value.index) ? value.index : []).filter(item =>
         item && /^(movie|tv)$/.test(item.mediaType) && /^[1-9]\d*$/.test(String(item.tmdbId)) && Number.isSafeInteger(Number(item.tmdbId))
-      ).map(item => ({ tmdbId: String(item.tmdbId), mediaType: item.mediaType, title: text(item.title), originalTitle: text(item.originalTitle),
+      ).slice(-root.RatingsConfig.listIndexMaxEntries).map(item => ({ tmdbId: String(item.tmdbId), mediaType: item.mediaType, title: text(item.title), originalTitle: text(item.originalTitle),
         year: number(item.year, 9999), posterPath: text(item.posterPath, 500) || null, releaseDate: text(item.releaseDate, 20), firstAirDate: text(item.firstAirDate, 20) }));
       return { server, epoch, matcher: number(value.matcher), entries, index };
     },
@@ -74,7 +86,8 @@
       // and settings. Retain the most recently checked titles and list items.
       const entries = {};
       let remaining = 400_000;
-      for (const [key, entry] of Object.entries(value.entries).sort((a, b) => (b[1].cachedAt || 0) - (a[1].cachedAt || 0))) {
+      for (const [key, entry] of Object.entries(value.entries).sort((a, b) =>
+        (number(b[1]?.cachedAt) ?? 0) - (number(a[1]?.cachedAt) ?? 0))) {
         const size = bytes({ [key]: entry });
         if (size > remaining) continue;
         entries[key] = entry; remaining -= size;
@@ -101,7 +114,7 @@
           if (clean) caches[key] = this.boundedOverlayCache(clean);
         } catch (_) { /* Invalid generated cache records can be refetched. */ }
       }
-      return Object.fromEntries(Object.entries(caches).slice(-10));
+      return boundedSiteCaches(caches);
     },
     mergeOverlayRating(previous, incoming, expected = null) {
       if (!previous) return incoming;
@@ -284,7 +297,7 @@
         if (!local[KEY] && JSON.stringify(local[SITES_KEY]?.[key]) === JSON.stringify(bounded)) return { stored: true };
         delete caches[key];
         caches[key] = bounded;
-        await chrome.storage.local.set({ [SITES_KEY]: Object.fromEntries(Object.entries(caches).slice(-10)), [KEY]: null });
+        await chrome.storage.local.set({ [SITES_KEY]: boundedSiteCaches(caches), [KEY]: null });
         return { stored: true };
       });
     },

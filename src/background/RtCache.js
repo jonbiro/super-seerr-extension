@@ -48,10 +48,19 @@
           const local = await chrome.storage.local.get([RT_CACHE_STORAGE_KEY, 'publicRatingsV1']);
           const stored = local[RT_CACHE_STORAGE_KEY];
           if (generation !== this.rtCacheGeneration) return;
+          const now = Date.now();
+          const publicCacheTime = value => typeof value === 'number' && Number.isFinite(value) &&
+            value > 0 && value <= now + 60000 ? value : -1;
+          const storedCacheTime = entry => {
+            if (entry && Object.hasOwn(entry, 'checkedAt')) return publicCacheTime(entry.checkedAt);
+            return typeof entry?.expiresAt === 'number' && Number.isFinite(entry.expiresAt) ? entry.expiresAt : -1;
+          };
           const shared = local.publicRatingsV1;
           if (shared?.matcher === RatingsConfig.matcherVersion) {
-            for (const [key, value] of Object.entries(shared.entries || {}).slice(0, RatingsConfig.rtCacheMaxEntries)
-              .sort((a, b) => (a[1]?.checkedAt || 0) - (b[1]?.checkedAt || 0))) {
+            for (const [key, value] of Object.entries(shared.entries || {})
+              .sort((a, b) => publicCacheTime(b[1]?.checkedAt) - publicCacheTime(a[1]?.checkedAt))
+              .slice(0, RatingsConfig.rtCacheMaxEntries)
+              .sort((a, b) => publicCacheTime(a[1]?.checkedAt) - publicCacheTime(b[1]?.checkedAt))) {
               const [mediaType, tmdbId] = key.split(':');
               if (key !== this.publicRatingKey({ mediaType, tmdbId })) continue;
               const clean = this.sanitizePublicRating(value, mediaType);
@@ -69,9 +78,10 @@
             this.log('The title-matching rules have changed; discarding cached Rotten Tomatoes results');
             return;
           }
-          const now = Date.now();
-          for (const [key, entry] of Object.entries(stored.entries || {}).slice(0, RatingsConfig.rtCacheMaxEntries)
-            .sort((a, b) => (a[1]?.expiresAt || 0) - (b[1]?.expiresAt || 0))) {
+          for (const [key, entry] of Object.entries(stored.entries || {})
+            .sort((a, b) => storedCacheTime(b[1]) - storedCacheTime(a[1]))
+            .slice(0, RatingsConfig.rtCacheMaxEntries)
+            .sort((a, b) => storedCacheTime(a[1]) - storedCacheTime(b[1]))) {
             // A live in-memory entry is newer than anything on disk.
             if (this.rtCache.has(key)) continue;
             if (!entry || typeof entry !== 'object' || !Number.isFinite(entry.expiresAt)) continue;

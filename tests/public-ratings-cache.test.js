@@ -134,6 +134,28 @@ test('public storage is byte-bounded and keeps recent scores', async () => {
   assert.ok(payload.entries['movie:1']); assert.equal(payload.entries['movie:5000'], undefined);
 });
 
+test('a reordered shared public cache loads the newest entries before applying its bound', async () => {
+  const seeded = await seed();
+  const base = seeded.localStore.publicRatingsV1.entries['movie:550'];
+  const now = Date.now();
+  const record = offset => ({ ...structuredClone(base), checkedAt: now - offset, expiresAt: now - offset + Config.rtCacheTtlMs });
+  const worker = loadWorker({ local: { publicRatingsV1: { matcher: Config.matcherVersion, entries: {
+    'movie:553': { ...record(1), checkedAt: now + 120000 },
+    'movie:550': record(1), 'movie:551': record(300), 'movie:552': record(100)
+  } } } });
+  const previous = worker.context.RatingsConfig.rtCacheMaxEntries;
+  worker.context.RatingsConfig.rtCacheMaxEntries = 2;
+  try {
+    await worker.ready;
+    await worker.api.loadRtCache();
+    assert.equal(worker.api.publicRatings.has('movie:550'), true);
+    assert.equal(worker.api.publicRatings.has('movie:552'), true);
+    assert.equal(worker.api.publicRatings.has('movie:551'), false);
+  } finally {
+    worker.context.RatingsConfig.rtCacheMaxEntries = previous;
+  }
+});
+
 test('content reuses public RT while retaining its own Seerr IMDb/TMDB scores and catalogue', async () => {
   const worker = await seed();
   const overlay = loadOverlay({ pathname: '/discover', settings: { seerrUrl: 'https://seerr.example/' },

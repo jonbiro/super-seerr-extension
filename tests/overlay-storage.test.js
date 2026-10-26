@@ -166,3 +166,69 @@ test('a rejected storage access restriction does not block worker startup', asyn
   worker.context.chrome.storage.local.setAccessLevel = async () => { throw new Error('unsupported'); };
   await assert.doesNotReject(() => worker.api.restrictLocalStorage());
 });
+
+test('cache sanitization retains the newest entries when storage object order is stale', async () => {
+  const worker = await setup();
+  const previous = worker.context.RatingsConfig.overlayCacheMaxEntries;
+  worker.context.RatingsConfig.overlayCacheMaxEntries = 2;
+  try {
+    const value = blob({ entries: {
+      'movie:3': { bundle: { rtCriticsScore: 95, confidence: 1 }, cachedAt: 300 },
+      'movie:1': { bundle: { rtCriticsScore: 75, confidence: 1 }, cachedAt: 100 },
+      'movie:2': { bundle: { rtCriticsScore: 85, confidence: 1 }, cachedAt: 200 }
+    } });
+    const clean = worker.api.sanitizeOverlayCache(value, server, 0);
+    assert.deepEqual(Object.keys(clean.entries).sort(), ['movie:2', 'movie:3']);
+  } finally {
+    worker.context.RatingsConfig.overlayCacheMaxEntries = previous;
+  }
+});
+
+test('invalid cache records cannot consume the newest-entry bound', async () => {
+  const worker = await setup();
+  const previous = worker.context.RatingsConfig.overlayCacheMaxEntries;
+  worker.context.RatingsConfig.overlayCacheMaxEntries = 2;
+  try {
+    const value = blob({ entries: {
+      'not-a-media-key': { bundle: { rtCriticsScore: 99, confidence: 1 }, cachedAt: Number.MAX_SAFE_INTEGER },
+      'movie:1': { bundle: { rtCriticsScore: 75, confidence: 1 }, cachedAt: 100 },
+      'movie:2': { bundle: { rtCriticsScore: 85, confidence: 1 }, cachedAt: 200 }
+    } });
+    const clean = worker.api.sanitizeOverlayCache(value, server, 0);
+    assert.deepEqual(Object.keys(clean.entries).sort(), ['movie:1', 'movie:2']);
+  } finally {
+    worker.context.RatingsConfig.overlayCacheMaxEntries = previous;
+  }
+});
+
+test('invalid title-index records cannot consume the index bound', async () => {
+  const worker = await setup();
+  const previous = worker.context.RatingsConfig.listIndexMaxEntries;
+  worker.context.RatingsConfig.listIndexMaxEntries = 2;
+  try {
+    const value = blob({ index: [
+      { tmdbId: '1', mediaType: 'movie', title: 'First' },
+      { tmdbId: 'not-an-id', mediaType: 'movie', title: 'Invalid' },
+      { tmdbId: '2', mediaType: 'movie', title: 'Second' }
+    ] });
+    const clean = worker.api.sanitizeOverlayCache(value, server, 0);
+    assert.deepEqual(clean.index.map(item => item.tmdbId), ['1', '2']);
+  } finally {
+    worker.context.RatingsConfig.listIndexMaxEntries = previous;
+  }
+});
+
+test('site cache retention keeps the newest sites when storage object order is stale', async () => {
+  const records = {};
+  const order = [10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+  for (const i of order) {
+    const site = `https://site${i}.example/`;
+    records[site.slice(0, -1)] = blob({ server: site, entries: {
+      'movie:1': { bundle: { rtCriticsScore: i, confidence: 1 }, cachedAt: i + 1 }
+    } });
+  }
+  const worker = await setup({ overlayRatingsByServerV1: records });
+  worker.api.baseUrl = 'https://site10.example';
+  const result = await worker.api.getOverlayCache({ ...sender, url: 'https://site10.example/discover' });
+  assert.equal(result.overlayRatingsV1?.entries['movie:1']?.bundle.rtCriticsScore, 10);
+});
