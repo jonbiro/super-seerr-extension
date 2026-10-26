@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Super Seerr",
-  "version": "3.5.250",
+  "version": "3.5.251",
   "description": "Request movies and TV from nine discovery sites, with ratings, filters and optional Trakt/Simkl watchlists for Seerr.",
   "permissions": [
     "storage",

@@ -3,6 +3,12 @@
   const RatingsConfig = root.RatingsConfig;
   const RT_CACHE_STORAGE_KEY = 'rtCacheV1';
   const RT_CACHE_FLUSH_DELAY_MS = 500;
+  // A persisted title result is either an explicit negative (`null`) or an
+  // object carrying at least one of the score fields the resolver produces.
+  // Treating an arbitrary object as a hit can suppress a fresh lookup until
+  // expiry and leaves the overlay with an answer that has no score data.
+  const validCachedRtValue = value => value === null || (value && typeof value === 'object' && !Array.isArray(value) &&
+    (Object.hasOwn(value, 'rtCriticsScore') || Object.hasOwn(value, 'rtAudienceScore')));
   root.RtCache = {
     clearRatingsCache() {
       if (this.cacheClearPending) return this.cacheClearPending;
@@ -91,6 +97,7 @@
             // A live in-memory entry is newer than anything on disk.
             if (this.rtCache.has(key)) continue;
             if (!entry || typeof entry !== 'object' || !Number.isFinite(entry.expiresAt)) continue;
+            if (!validCachedRtValue(entry.value)) continue;
             const checkedAt = entry.checkedAt ?? entry.expiresAt - RatingsConfig.rtCacheTtlMs;
             if (!Number.isFinite(checkedAt) || checkedAt <= 0 || checkedAt > now + 60000) continue;
             const diagnostic = ['uncertain', 'failed', 'unrated', 'rated'].includes(entry.diagnostic) ? entry.diagnostic : null;
@@ -100,7 +107,7 @@
               : entry.value == null ? RatingsConfig.rtNegativeCacheTtlMs : RatingsConfig.rtCacheTtlMs;
             const expiresAt = Math.min(entry.expiresAt, checkedAt + ttl);
             if (now >= expiresAt) continue;
-            this.rtCache.set(key, { value: entry.value ?? null, expiresAt, checkedAt, diagnostic });
+            this.rtCache.set(key, { value: entry.value, expiresAt, checkedAt, diagnostic });
             // Title-only, negative and failed lookups also use the monotonic
             // clock. Restore their ordering before the next refresh so a
             // restart within the same clock tick cannot discard its result.

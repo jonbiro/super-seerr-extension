@@ -73,6 +73,18 @@ test('a corrupt persisted cache degrades to a cold start rather than throwing', 
   }
 });
 
+test('a structurally empty persisted RT value is ignored instead of suppressing a fresh lookup', async () => {
+  const now = Date.now();
+  const worker = loadWorker({ local: stored({ 'movie:Example:2020': {
+    value: {}, checkedAt: now - 1, expiresAt: now + 60000
+  } }) });
+  const rt = stubRt(worker.api, { critics: 80 });
+
+  const result = await worker.api.getRottenTomatoesRatings({ title: 'Example', year: 2020 });
+  assert.equal(result.rtCriticsScore, 80);
+  assert.equal(rt.fetches, 2);
+});
+
 test('a live in-memory entry wins over a stale persisted one', async () => {
   const worker = loadWorker({
     local: stored({ 'movie:Example:2020': { value: { rtCriticsScore: 11 }, expiresAt: Date.now() + 60000 } })
