@@ -1,8 +1,6 @@
 // Trakt.tv Integration for Seerr
 // Uses shared library architecture with flyout UI and Trakt's signature purple/pink theme
 
-console.log('📊 [Trakt] Integration script loaded!', window.location.href);
-
 class TraktIntegration extends BaseIntegration {
   constructor() {
     super('Trakt', {
@@ -346,10 +344,8 @@ function initializeTraktIntegration() {
       typeof MediaExtractor !== 'undefined' && 
       typeof UIComponents !== 'undefined') {
     
-    console.log('🚀 [Trakt] All shared libraries loaded, initializing integration...');
     new TraktIntegration();
   } else {
-    console.log('⏳ [Trakt] Waiting for shared libraries to load...');
     setTimeout(initializeTraktIntegration, 100);
   }
 }

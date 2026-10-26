@@ -1,8 +1,6 @@
 // Letterboxd.com Integration for Seerr
 // Uses shared library architecture - built with <100 lines thanks to BaseIntegration!
 
-console.log('🍿 [Letterboxd] Integration script loaded!', window.location.href);
-
 class LetterboxdIntegration extends BaseIntegration {
   constructor() {
     super('Letterboxd', {
@@ -249,10 +247,8 @@ function initializeLetterboxdIntegration() {
       typeof MediaExtractor !== 'undefined' && 
       typeof UIComponents !== 'undefined') {
     
-    console.log('🚀 [Letterboxd] All shared libraries loaded, initializing integration...');
     new LetterboxdIntegration();
   } else {
-    console.log('⏳ [Letterboxd] Waiting for shared libraries to load...');
     setTimeout(initializeLetterboxdIntegration, 100);
   }
 }

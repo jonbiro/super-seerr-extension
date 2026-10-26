@@ -1,8 +1,6 @@
 // Metacritic.com Integration for Seerr
 // Uses shared library architecture with flyout UI and Metacritic's signature yellow theme
 
-console.log('🟡 [Metacritic] Integration script loaded!', window.location.href);
-
 class MetacriticIntegration extends BaseIntegration {
   constructor() {
     super('Metacritic', {
@@ -257,10 +255,8 @@ function initializeMetacriticIntegration() {
       typeof MediaExtractor !== 'undefined' && 
       typeof UIComponents !== 'undefined') {
     
-    console.log('🚀 [Metacritic] All shared libraries loaded, initializing integration...');
     new MetacriticIntegration();
   } else {
-    console.log('⏳ [Metacritic] Waiting for shared libraries to load...');
     setTimeout(initializeMetacriticIntegration, 100);
   }
 }

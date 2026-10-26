@@ -1,8 +1,6 @@
 // Filmweb.pl Integration for Seerr
 // Uses shared library architecture with flyout UI and yellow/black theme
 
-console.log('🎬 [Filmweb] Integration script loaded!', window.location.href);
-
 class FilmwebIntegration extends BaseIntegration {
   constructor() {
     super('Filmweb', {
@@ -217,10 +215,8 @@ function initializeFilmwebIntegration() {
       typeof MediaExtractor !== 'undefined' && 
       typeof UIComponents !== 'undefined') {
     
-    console.log('🚀 [Filmweb] All shared libraries loaded, initializing integration...');
     new FilmwebIntegration();
   } else {
-    console.log('⏳ [Filmweb] Waiting for shared libraries to load...');
     setTimeout(initializeFilmwebIntegration, 100);
   }
 }

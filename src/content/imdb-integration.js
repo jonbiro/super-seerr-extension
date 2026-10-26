@@ -1,8 +1,6 @@
 // IMDB.com Integration for Seerr
 // Uses shared library architecture with button UI and default Seerr purple theme
 
-console.log('🎬 [IMDB] Integration script loaded!', window.location.href);
-
 class IMDBIntegration extends BaseIntegration {
   constructor() {
     super('IMDB', {
@@ -255,10 +253,8 @@ function initializeIMDBIntegration() {
       typeof MediaExtractor !== 'undefined' && 
       typeof UIComponents !== 'undefined') {
     
-    console.log('🚀 [IMDB] All shared libraries loaded, initializing integration...');
     new IMDBIntegration();
   } else {
-    console.log('⏳ [IMDB] Waiting for shared libraries to load...');
     setTimeout(initializeIMDBIntegration, 100);
   }
 }

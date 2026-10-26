@@ -1,8 +1,6 @@
 // Rotten Tomatoes Integration for Seerr
 // Uses shared library architecture with flyout UI and Rotten Tomatoes' signature red theme
 
-console.log('🍅 [Rotten Tomatoes] Integration script loaded!', window.location.href);
-
 class RottenTomatoesIntegration extends BaseIntegration {
   constructor() {
     super('Rotten Tomatoes', {
@@ -310,10 +308,8 @@ function initializeRottenTomatoesIntegration() {
       typeof MediaExtractor !== 'undefined' && 
       typeof UIComponents !== 'undefined') {
     
-    console.log('🚀 [Rotten Tomatoes] All shared libraries loaded, initializing integration...');
     new RottenTomatoesIntegration();
   } else {
-    console.log('⏳ [Rotten Tomatoes] Waiting for shared libraries to load...');
     setTimeout(initializeRottenTomatoesIntegration, 100);
   }
 }

@@ -1,8 +1,6 @@
 // TheMovieDB.org Integration for Seerr
 // Uses new shared library architecture
 
-console.log('🎬 [TMDb] Integration script loaded!', window.location.href);
-
 class TMDbIntegration extends BaseIntegration {
   constructor() {
     super('TMDb', {
@@ -222,10 +220,8 @@ function initializeTMDbIntegration() {
       typeof MediaExtractor !== 'undefined' && 
       typeof UIComponents !== 'undefined') {
     
-    console.log('🚀 [TMDb] All shared libraries loaded, initializing integration...');
     new TMDbIntegration();
   } else {
-    console.log('⏳ [TMDb] Waiting for shared libraries to load...');
     setTimeout(initializeTMDbIntegration, 100);
   }
 }

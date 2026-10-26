@@ -60,3 +60,16 @@ test('the verbose logging flag is reachable from the options page', () => {
   assert.ok(/chrome\.storage\.local\.set\([^)]*debugLogging/.test(script), 'saving should persist it');
   assert.ok(/chrome\.storage\.local\.get\(\[[^\]]*debugLogging/.test(script), 'loading should restore it');
 });
+
+test('discovery adapters do not emit unconditional startup logs', () => {
+  const adapterFiles = fs.readdirSync('src/content')
+    .filter(file => file.endsWith('-integration.js') && file !== 'seerr-integration.js');
+  for (const file of adapterFiles) {
+    const source = fs.readFileSync(`src/content/${file}`, 'utf8');
+    assert.doesNotMatch(
+      source,
+      /console\.(log|warn|info|debug)\([^)]*(?:Integration script loaded|Waiting for shared libraries|All shared libraries loaded)/,
+      `${file} should stay quiet unless an explicit debug path is enabled`
+    );
+  }
+});

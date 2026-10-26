@@ -35,6 +35,18 @@ test('different titles share request history but never their status result', asy
   assert.equal(results[0].tmdbId, 1); assert.equal(results[1].tmdbId, 2);
 });
 
+test('localized titles with the same TMDB identity share one status read', async () => {
+  const { api } = await fixture(); let calls = 0;
+  api.getMediaStatusUncached = async () => { calls++; return { status: 'available', tmdbId: 550 }; };
+  const [english, localized] = await Promise.all([
+    api.getMediaStatus({ tmdbId: 550, mediaType: 'movie', title: 'The Movie', year: 1999 }),
+    api.getMediaStatus({ tmdbId: 550, mediaType: 'movie', title: 'La película', year: 1999 })
+  ]);
+  assert.equal(calls, 1);
+  assert.equal(english.status, 'available');
+  assert.equal(localized.status, 'available');
+});
+
 test('write completion invalidates reads started before and during it, even on failure', async () => {
   const { api } = await fixture(); const writing = deferred(); let reads = 0, posts = 0;
   api.sendAPIRequest = async method => {
