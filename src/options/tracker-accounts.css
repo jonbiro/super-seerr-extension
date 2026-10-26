@@ -6,6 +6,7 @@
 #trackerAccounts label { margin: 12px 0 5px; }
 #trackerAccounts a { color: #6d28d9; overflow-wrap: anywhere; }
 #trackerAccounts textarea { box-sizing: border-box; resize: vertical; width: 100%; min-width: 0; max-width: 100%; padding: 8px; font: 12px/1.5 ui-monospace, monospace; border: 1px solid #9ca3af; border-radius: 6px; background: #f9fafb; color: #374151; overflow-wrap: anywhere; }
+#trackerAccounts .tracker-callback-actions { display: flex; justify-content: flex-end; margin-top: 8px; }
 #trackerAccounts input { min-width: 0; }
 #trackerAccounts .tracker-help, #trackerAccounts .tracker-account-summary { font-size: 13px; color: #4b5563; }
 #trackerAccounts .tracker-account-status, #trackerAccounts .tracker-section-status { overflow-wrap: anywhere; font-size: 13px; color: #4b5563; }

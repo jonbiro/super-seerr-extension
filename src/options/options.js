@@ -92,8 +92,25 @@ class OptionsManager {
     try {
       const stored = await chrome.storage.local.get([RATINGS_CACHE_KEY, SITE_RATINGS_CACHE_KEY, RT_CACHE_KEY, 'publicRatingsV1', RATINGS_UNAVAILABLE_KEY]);
       if (generation !== this.cacheCountGeneration) return;
-      held = Object.keys(stored[RATINGS_CACHE_KEY]?.entries || {}).length +
-        Object.values(stored[SITE_RATINGS_CACHE_KEY] || {}).reduce((count, cache) => count + Object.keys(cache?.entries || {}).length, 0) +
+      const siteCaches = stored[SITE_RATINGS_CACHE_KEY] && typeof stored[SITE_RATINGS_CACHE_KEY] === 'object'
+        ? stored[SITE_RATINGS_CACHE_KEY] : {};
+      const cacheServer = value => {
+        const raw = typeof value?.server === 'string' ? value.server : '';
+        if (!raw) return null;
+        try {
+          const url = new URL(raw);
+          if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password || url.search || url.hash) return null;
+          return url.href.replace(/\/+$/, '');
+        } catch (_) { return null; }
+      };
+      const siteServerKeys = new Set(Object.entries(siteCaches).map(([key, cache]) => cacheServer(cache) || cacheServer({ server: key }) || key));
+      const siteCount = Object.values(siteCaches).reduce((count, cache) => count + Object.keys(cache?.entries || {}).length, 0);
+      const legacy = stored[RATINGS_CACHE_KEY];
+      // A legacy record is retired lazily by the worker after migration. Do
+      // not show its entries twice while that retirement is pending.
+      const legacyCount = legacy && cacheServer(legacy) && siteServerKeys.has(cacheServer(legacy))
+        ? 0 : Object.keys(legacy?.entries || {}).length;
+      held = legacyCount + siteCount +
         Object.keys(stored[RT_CACHE_KEY]?.entries || {}).length + Object.keys(stored.publicRatingsV1?.entries || {}).length;
       this.hasRatingsAvailability = !!stored[RATINGS_UNAVAILABLE_KEY];
     } catch (_) {

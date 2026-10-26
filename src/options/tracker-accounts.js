@@ -49,6 +49,7 @@
       const id = `tracker-${provider.id}`;
       card.input = element('input', { id: `${id}-client`, type: 'text', autocomplete: 'off', spellcheck: 'false', maxlength: '256' });
       card.callback = element('textarea', { id: `${id}-callback`, readonly: '', rows: '3', spellcheck: 'false' });
+      card.copyCallback = element('button', { type: 'button', className: 'button secondary', textContent: 'Copy callback URL', 'aria-label': `Copy ${provider.name} callback URL` });
       card.summary = element('p', { className: 'tracker-account-summary', role: 'status' });
       card.status = element('p', { className: 'tracker-account-status', role: 'status', 'aria-live': 'polite' });
       const registration = element('a', { href: provider.register, target: '_blank', rel: 'noopener noreferrer', textContent: `Register a ${provider.name} app` });
@@ -65,10 +66,12 @@
       const controls = element('div', { className: 'tracker-account-actions' }, [card.save, card.connect, card.disconnect, card.sync]);
       fieldset.append(element('legend', { textContent: provider.name }), registration, guidance,
         element('label', { for: `${id}-client`, textContent: `${provider.name} Client ID` }), card.input,
-        callbackLabel, card.callback, card.summary, controls, card.status, card.list, card.more);
+        callbackLabel, card.callback, element('div', { className: 'tracker-callback-actions' }, [card.copyCallback]),
+        card.summary, controls, card.status, card.list, card.more);
       this.root.append(fieldset);
       card.root = fieldset;
       card.input.addEventListener('input', () => this.updateControls(card));
+      card.copyCallback.addEventListener('click', () => this.copyCallback(card));
       card.save.addEventListener('click', () => this.save(card));
       card.connect.addEventListener('click', () => this.connect(card));
       card.disconnect.addEventListener('click', () => this.disconnect(card));
@@ -145,6 +148,7 @@
       card.sync.disabled = unavailable || !card.account.connected || !!card.busy || card.loading || card.syncPermission;
       card.more.disabled = card.sync.disabled || !card.nextPage;
       card.more.hidden = !card.nextPage;
+      card.copyCallback.disabled = unavailable || !!card.busy;
       card.list.setAttribute('aria-busy', String(card.loading));
       if (!card.account) card.summary.textContent = 'Connection state unavailable.';
       else if (card.busy === 'connecting') card.summary.textContent = 'Waiting for account authorization…';
@@ -153,6 +157,24 @@
         const checked = Number.isFinite(card.account.lastSyncAt) && card.account.lastSyncAt > 0
           ? ` Last synced ${new Date(card.account.lastSyncAt).toLocaleString()}.` : '';
         card.summary.textContent = `${card.account.connected ? 'Connected.' : 'Not connected.'}${checked}${dirty ? ' Save the edited Client ID before connecting.' : ''}`;
+      }
+    }
+
+    async copyCallback(card) {
+      const value = card.callback.value.trim();
+      if (!value || card.copyCallback.disabled) return;
+      try {
+        if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+        else {
+          card.callback.focus();
+          card.callback.select();
+          const copied = document.execCommand?.('copy');
+          card.callback.setSelectionRange(0, 0);
+          if (!copied) throw new Error('Clipboard unavailable');
+        }
+        card.status.textContent = 'Callback URL copied. Paste it into the provider app settings.';
+      } catch (_) {
+        card.status.textContent = 'Could not copy the callback URL. Select it and copy it manually.';
       }
     }
 

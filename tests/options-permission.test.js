@@ -213,6 +213,15 @@ test('Settings counts and clears ratings held for multiple Seerr sites', async t
   assert.match(ctx.window.document.getElementById('ratingsCacheCount').textContent, /No ratings cached/);
 });
 
+test('Settings does not count a legacy cache twice while its site cache is being retired', async t => {
+  const ctx = openOptions({ local: {
+    overlayRatingsV1: { server: 'https://home.example/', entries: { 'movie:1': {}, 'tv:2': {} } },
+    overlayRatingsByServerV1: { 'https://home.example': { server: 'https://home.example', entries: { 'movie:1': {}, 'tv:2': {} } } }
+  } });
+  t.after(() => ctx.dom.window.close()); await flush();
+  assert.equal(ctx.window.document.getElementById('ratingsCacheCount').textContent, '2 cache entries');
+});
+
 test('an empty or missing ratings cache disables the clear button', async t => {
   for (const local of [{}, { overlayRatingsV1: { server: 'x', entries: {} } }, { overlayRatingsV1: 'corrupt' }]) {
     const ctx = openOptions({ granted: true, local });

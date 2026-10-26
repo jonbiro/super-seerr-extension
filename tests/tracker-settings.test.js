@@ -47,6 +47,23 @@ test('tracker startup exposes public app and callback state, with account reads 
   assert.doesNotMatch(f.card('trakt').root.querySelector('.tracker-help').textContent, /AUTH V2/);
 });
 
+test('callback URLs can be copied directly from the provider setup card', async t => {
+  const f = await fixture(t);
+  const copied = [];
+  Object.defineProperty(f.window.navigator, 'clipboard', { configurable: true, value: { writeText: async value => copied.push(value) } });
+  const card = f.card('simkl');
+  card.copyCallback.click(); await settle();
+  assert.deepEqual(copied, ['https://extension.chromiumapp.org/tracker/simkl']);
+  assert.match(card.status.textContent, /Callback URL copied/);
+});
+
+test('callback copy explains when clipboard access is unavailable', async t => {
+  const f = await fixture(t);
+  const card = f.card('trakt');
+  card.copyCallback.click(); await settle();
+  assert.match(card.status.textContent, /Could not copy.*manually/);
+});
+
 test('editing an app ID requires an explicit Save before account authorization', async t => {
   const f = await fixture(t);
   const card = f.card('trakt');
