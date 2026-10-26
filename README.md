@@ -2,7 +2,7 @@
 
 **Request the movies and TV shows you discover, without losing your place.** Super Seerr adds media-request controls to nine discovery sites and brings ratings, sorting, watchlists and bulk actions to your own [Seerr](https://github.com/seerr-team/seerr) server.
 
-[![Current version](https://img.shields.io/badge/version-3.5.255-blue)](CHANGELOG.md)
+[![Current version](https://img.shields.io/badge/version-3.5.256-blue)](CHANGELOG.md)
 [![CI](https://github.com/jonbiro/super-seerr-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/jonbiro/super-seerr-extension/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -84,7 +84,7 @@ For multi-site changes, Plex setup, TV-season requests, bulk review, saved prese
 Super Seerr runs in your browser and talks to the sites/services you choose; **no project telemetry service is configured**.
 
 - It does **not** request blanket access to every website. Media-site integrations are limited to the nine supported sites; your self-hosted Seerr origin is authorized separately when you save its URL.
-- **Seerr API keys, the Plex token, and connected tracker tokens are stored locally on the device**, not synced as browser preferences. Treat them like passwords. Saved site configurations also remain local when using multiple/named sites.
+- **Seerr API keys, the Plex token, and connected tracker tokens are stored locally on the device**, not synced as browser preferences. Treat them like passwords. Saving Settings keeps each server URL and its API key together locally, including a single unnamed site. Legacy single-site settings remain readable until saved again.
 - Rotten Tomatoes queries send media-title searches to Rotten Tomatoes. Requests are sent to **your chosen Seerr server**. Plex watchlist actions reach Plex only when configured.
 - Ratings, confirmed recent-action history and saved matches are stored locally with bounded caches. Debug logs can include titles or server responses; review them before sharing.
 

@@ -53,7 +53,13 @@
       const [synced, local] = await Promise.all([
         chrome.storage.sync.get('seerrUrl'), chrome.storage.local.get('seerrApiKey')
       ]);
-      const url = synced.seerrUrl ? normalize(synced.seerrUrl) : null;
+      let url = null;
+      try { url = synced.seerrUrl ? normalize(synced.seerrUrl) : null; }
+      catch (_) {
+        // An invalid legacy URL is not a saved connection. Keep its local
+        // key untouched until an explicit save commits a corrected URL/key
+        // pair; otherwise the bad sync value would also block that repair.
+      }
       return { revision: 0, activeId: url, sites: url ? [{ id: url, url, name: new URL(url).host, apiKey: local.seerrApiKey || '' }] : [] };
     },
     sanitizeSavedConnections: sanitize,

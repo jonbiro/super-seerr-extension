@@ -45,8 +45,8 @@ Other network activity naturally follows the third-party websites you visit; the
 
 | Data | Location / behavior |
 | --- | --- |
-| Seerr URL, single-site legacy configuration | Older single-site configurations can use browser sync storage until a named/multi-site setup is saved |
-| Named/multiple Seerr sites, active choice, URLs and per-site API keys | **Device-local storage** once named/multiple sites are used |
+| Seerr URL, single-site legacy configuration | Older configurations remain readable from browser sync storage until the next Settings save creates a paired local connection |
+| Saved Seerr sites, active choice, URLs and per-site API keys | **Device-local storage**, including a single unnamed site; Settings saves each URL/key pair together |
 | Seerr API key and Plex token | **Device-local storage; not synced**; older synced Seerr keys are migrated locally on upgrade |
 | Overlay preferences and filter presets | Browser **sync storage** where supported |
 | Per-server ratings, recent observed title lists | Local bounded cache scoped by URL, port and base path, retained separately per site |

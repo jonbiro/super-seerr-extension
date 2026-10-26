@@ -610,17 +610,27 @@ test('saving with a token but a declined Plex grant says so instead of success-a
   const dom = new JSDOM(html, { url: 'chrome-extension://test/options.html', runScripts: 'outside-only' });
   const { window } = dom;
   t.after(() => dom.window.close());
+  const { createStorageMock } = require('./helpers/chrome-mock');
+  const sync = createStorageMock(), local = createStorageMock();
+  const worker = loadWorker({ get: sync.get });
   window.chrome = {
     storage: {
-      sync: { get: async () => ({}), set: async () => {} },
-      local: { get: async () => ({}), set: async () => {} }
+      sync, local
     },
     // Overlay origin granted, Plex origins declined.
     permissions: {
       contains: async ({ origins }) => !origins.some(origin => origin.includes('plex')),
       request: async ({ origins }) => !origins.some(origin => origin.includes('plex'))
     },
-    runtime: { sendMessage: async () => ({ success: true }) }
+    runtime: { sendMessage: async message => {
+      if (['saveSeerrConnection', 'getSeerrConnections'].includes(message.action)) {
+        await worker.ready;
+        worker.context.chrome.storage.sync = sync;
+        worker.context.chrome.storage.local = local;
+        return new Promise(resolve => worker.listeners.message(message, { id: 'test', url: window.location.href }, resolve));
+      }
+      return { success: true };
+    } }
   };
   window.eval(fs.readFileSync('src/options/options.js', 'utf8'));
   for (let i = 0; i < 8; i++) await new Promise(resolve => setImmediate(resolve));

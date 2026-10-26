@@ -4,6 +4,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
+const { loadWorker } = require('./helpers/worker');
 
 const flush = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setImmediate(r)); };
 
@@ -17,11 +18,13 @@ function openOptions({ granted = true, synced = {}, local = {} } = {}) {
   const requested = [];
   const order = [];
   const storageListeners = [];
+  const connectionSaves = [];
 
   // Mutable stores: a read after a write must see the write, or a test can
   // pass against a page that never actually changed anything.
   const syncStore = { ...synced };
   const localStore = { ...local };
+  const worker = loadWorker({ get: async () => ({ ...syncStore }), local });
   window.chrome = {
     storage: {
       onChanged: { addListener: listener => storageListeners.push(listener) },
@@ -44,6 +47,14 @@ function openOptions({ granted = true, synced = {}, local = {} } = {}) {
       request: async ({ origins }) => { order.push('permissions.request'); requested.push(...origins); return granted; }
     },
     runtime: { sendMessage: async message => {
+      if (['saveSeerrConnection', 'getSeerrConnections'].includes(message.action)) {
+        await worker.ready;
+        worker.context.chrome.storage.sync = window.chrome.storage.sync;
+        worker.context.chrome.storage.local = window.chrome.storage.local;
+        if (message.action === 'saveSeerrConnection') connectionSaves.push(message.data);
+        return new Promise(resolve => worker.listeners.message(message,
+          { id: 'test', url: window.location.href }, resolve));
+      }
       if (message.action === 'clearRatingsCache') {
         await window.chrome.storage.local.remove(['rtCacheV1', 'seerrRatingsUnavailableV1', 'overlayRatingsV1', 'overlayRatingsByServerV1']);
       }
@@ -51,7 +62,7 @@ function openOptions({ granted = true, synced = {}, local = {} } = {}) {
     } }
   };
   window.eval(fs.readFileSync('src/options/options.js', 'utf8'));
-  return { dom, window, syncWrites, localWrites, localRemovals, requested, order, storageListeners };
+  return { dom, window, syncWrites, localWrites, localRemovals, requested, order, storageListeners, connectionSaves };
 }
 
 const warningHidden = window => window.document.getElementById('permissionWarning').classList.contains('hidden');
@@ -119,9 +130,9 @@ test('declining the permission still saves the settings', async t => {
   ctx.window.document.getElementById('settingsForm').dispatchEvent(new ctx.window.Event('submit'));
   await flush();
 
-  assert.equal(ctx.syncWrites.length, 1, 'the URL must still be saved');
-  assert.equal(ctx.syncWrites[0].seerrUrl, 'https://seerr.example:5055');
-  assert.equal(ctx.localWrites[0].seerrApiKey, 'secret-key', 'the key must still be saved');
+  assert.equal(ctx.connectionSaves.length, 1, 'the complete connection must still be saved');
+  assert.equal(ctx.connectionSaves[0].url, 'https://seerr.example:5055');
+  assert.equal(ctx.localWrites.find(write => write.seerrConnectionsV1).seerrConnectionsV1.sites[0].apiKey, 'secret-key');
   assert.equal(warningHidden(ctx.window), false, 'and the notice must appear');
 });
 
@@ -151,8 +162,8 @@ test('the API key and the verbose logging flag are written to local, never sync'
   ctx.window.document.getElementById('settingsForm').dispatchEvent(new ctx.window.Event('submit'));
   await flush();
 
-  assert.equal(ctx.localWrites[0].seerrApiKey, 'secret-key');
-  assert.equal(ctx.localWrites[0].debugLogging, true);
+  assert.equal(ctx.localWrites.find(write => write.seerrConnectionsV1).seerrConnectionsV1.sites[0].apiKey, 'secret-key');
+  assert.equal(ctx.localWrites.find(write => Object.hasOwn(write, 'debugLogging')).debugLogging, true);
   assert.ok(!('seerrApiKey' in ctx.syncWrites[0]), 'the key must never reach synced storage');
   assert.ok('overlayFeatures' in ctx.syncWrites[0], 'preferences still sync');
 });
@@ -305,6 +316,7 @@ test('double submissions save once and prompt once', async t => {
   await flush();
 
   assert.equal(ctx.syncWrites.length, 1, 'one save, not two');
+  assert.equal(ctx.connectionSaves.length, 1, 'one atomic connection save, not two');
   assert.equal(ctx.order.filter(entry => entry === 'permissions.request').length, 1, 'one prompt, not two');
 });
 
@@ -602,8 +614,7 @@ for (const mode of ['legacy', 'profile']) test(`a pending ${mode} save keeps one
   release(true); await flush();
   assert.equal(ctx.syncWrites[0].overlayFeatures[feature.dataset.overlayFeature], true);
   assert.equal(ctx.localWrites[0].debugLogging, false);
-  if (mode === 'profile') { assert.equal(saved[0].url, home.url); assert.equal(saved[0].apiKey, home.apiKey); }
-  else { assert.equal(ctx.syncWrites[0].seerrUrl, home.url); assert.equal(ctx.localWrites[0].seerrApiKey, home.apiKey); }
+  assert.equal(saved[0].url, home.url); assert.equal(saved[0].apiKey, home.apiKey);
   assert.equal(doc.getElementById('serverUrl').value, 'https://new-draft.example');
   assert.equal(doc.getElementById('apiKey').value, 'new-draft-key');
   assert.equal(feature.checked, false);

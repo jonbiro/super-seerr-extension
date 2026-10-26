@@ -50,9 +50,12 @@ test('optional host permission controls registration, real SPA navigation and re
   await manager.goto('chrome://extensions');
   await manager.evaluate(id => chrome.developerPrivate.addHostPermission(id, 'http://127.0.0.1/*'), extensionId);
   await manager.close();
+  // Load the legacy connection just seeded outside the form before editing it.
+  await options.reload();
   await options.locator('#serverUrl').fill(origin);
   await options.locator('#apiKey').fill('smoke-key');
   await options.locator('button[type="submit"]').click();
+  await expect(options.locator('#status')).toContainText('Settings saved successfully');
   await expect.poll(() => options.evaluate(() => chrome.permissions.contains({ origins: ['http://127.0.0.1/*'] }))).toBe(true);
   await expect.poll(() => options.evaluate(async () => (await chrome.scripting.getRegisteredContentScripts()).length)).toBe(2);
   const page = await context.newPage();
@@ -86,6 +89,7 @@ test('Settings tests an unsaved Seerr key without replacing saved credentials', 
   await manager.close();
   const saved = await options.evaluate(async () => ({
     url: (await chrome.storage.sync.get('seerrUrl')).seerrUrl,
+    connection: (await chrome.storage.local.get('seerrConnectionsV1')).seerrConnectionsV1,
     key: (await chrome.storage.local.get('seerrApiKey')).seerrApiKey
   }));
   try {
@@ -95,6 +99,7 @@ test('Settings tests an unsaved Seerr key without replacing saved credentials', 
     await expect(options.locator('#status')).toContainText('Connected as Smoke test');
     expect(await options.evaluate(async () => ({
       url: (await chrome.storage.sync.get('seerrUrl')).seerrUrl,
+      connection: (await chrome.storage.local.get('seerrConnectionsV1')).seerrConnectionsV1,
       key: (await chrome.storage.local.get('seerrApiKey')).seerrApiKey
     }))).toEqual(saved);
   } finally {
@@ -107,8 +112,9 @@ test('worker restart preserves configuration and cache; clear removes persisted 
   // Storage is real extension storage, and termination is through CDP rather
   // than a simulated new JS object.
   await options.evaluate(async ({ origin, matcher }) => {
-    await chrome.storage.sync.set({ seerrUrl: origin });
-    await chrome.storage.local.set({ seerrApiKey: 'smoke-key', rtCacheV1: { matcher, entries: {
+    const { seerrConnectionsV1: saved } = await chrome.storage.local.get('seerrConnectionsV1');
+    await chrome.runtime.sendMessage({ action: 'saveSeerrConnection', data: { id: saved?.activeId, url: origin, apiKey: 'smoke-key' } });
+    await chrome.storage.local.set({ rtCacheV1: { matcher, entries: {
       'movie:Example:2020': { value: { rtCriticsScore: 22 }, expiresAt: Date.now() + 60000 }
     } } });
     await chrome.runtime.sendMessage({ action: 'reloadSettings' });
@@ -369,7 +375,7 @@ test('content scripts cannot access local secrets; cache bridge and clear notifi
   const result = await options.evaluate(async tabId => {
     const [result] = await chrome.scripting.executeScript({ target: { tabId }, func: async () => {
       let denied = false;
-      try { await chrome.storage.local.get('seerrApiKey'); } catch (_) { denied = true; }
+      try { await chrome.storage.local.get(['seerrApiKey', 'seerrConnectionsV1']); } catch (_) { denied = true; }
       const response = await chrome.runtime.sendMessage({ action: 'getOverlayCache' });
       return { denied, success: response.success, keys: Object.keys(response.data || {}) };
     } }); return result.result;
@@ -389,11 +395,19 @@ test('content scripts cannot access local secrets; cache bridge and clear notifi
   await options.evaluate(() => chrome.runtime.sendMessage({ action: 'clearRatingsCache' }));
   await expect(page.locator('body')).toHaveAttribute('data-cache-cleared', 'yes');
   await expect(page.locator('.seerr-card-badge')).toHaveCount(2);
-  expect(await options.evaluate(async () => (await chrome.storage.local.get('seerrApiKey')).seerrApiKey)).toBe('smoke-key');
-  await options.evaluate(() => chrome.storage.local.set({ seerrApiKey: 'smoke-key-2' }));
+  const replaceKey = async apiKey => {
+    const { seerrConnectionsV1: saved } = await chrome.storage.local.get('seerrConnectionsV1');
+    const active = saved.sites.find(site => site.id === saved.activeId);
+    return chrome.runtime.sendMessage({ action: 'saveSeerrConnection', data: { ...active, apiKey } });
+  };
+  expect(await options.evaluate(async () => {
+    const { seerrConnectionsV1: saved } = await chrome.storage.local.get('seerrConnectionsV1');
+    return saved.sites.find(site => site.id === saved.activeId).apiKey;
+  })).toBe('smoke-key');
+  expect((await options.evaluate(replaceKey, 'smoke-key-2')).success).toBe(true);
   await expect(page.locator('body')).toHaveAttribute('data-config-changed', 'yes');
   await expect(page.locator('body')).toHaveAttribute('data-state-keys', 'action,cacheCleared');
-  await options.evaluate(() => chrome.storage.local.set({ seerrApiKey: 'smoke-key' }));
+  expect((await options.evaluate(replaceKey, 'smoke-key')).success).toBe(true);
   await page.close();
 });
 

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.256]
+
+- Save every Seerr URL/API-key pair atomically in local storage, including a single unnamed site, so slow or failed writes cannot attach one server's key to another URL. Keep legacy settings readable until explicitly saved, and distinguish a committed connection from later preference or refresh failures.
+- Allow a corrected connection to replace an invalid legacy URL instead of letting the bad sync value block the repair.
+- Preserve existing watchlist rows and keyboard focus while loading more Trakt/Simkl titles. Focus newly loaded titles after Sync or pagination, with usable fallbacks for empty lists, failed reads, and declined permissions.
+
 ## [3.5.255]
 
 - Keep popup diagnostic messages tied to the live settings snapshot, rejecting old results when the active site, API key, Plex account, or settings generation changes during a check.

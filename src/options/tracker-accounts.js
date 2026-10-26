@@ -257,6 +257,7 @@
     async syncWatchlist(card) {
       if (card.sync.disabled) return;
       const generation = card.watchGeneration;
+      const focusOwner = document.activeElement === card.sync ? card.sync : null;
       card.syncPermission = true;
       card.status.textContent = 'Checking site access…';
       this.updateControls(card);
@@ -267,20 +268,22 @@
         if (!granted) throw new Error('Site access was not granted. Choose Sync watchlist to try again.');
         card.syncPermission = false;
         this.updateControls(card);
-        await this.loadWatchlist(card, 1);
+        await this.loadWatchlist(card, 1, focusOwner);
       } catch (error) {
         if (generation === card.watchGeneration) card.status.textContent = error.message;
       } finally {
         if (generation === card.watchGeneration) {
           card.syncPermission = false;
           this.updateControls(card);
+          if (focusOwner && (document.activeElement === focusOwner || document.activeElement === document.body)) focusOwner.focus();
         }
       }
     }
 
-    async loadWatchlist(card, page) {
+    async loadWatchlist(card, page, focusOwner = document.activeElement === card.more ? card.more : null) {
       if (card.sync.disabled || !Number.isInteger(page) || page < 1 || page > 5) return;
       const generation = ++card.watchGeneration;
+      let firstNewTitle = null;
       if (page === 1) this.clearWatchlist(card);
       card.loading = true;
       card.status.textContent = 'Reading watchlist…';
@@ -290,11 +293,12 @@
         if (generation !== card.watchGeneration || !card.account.connected) return;
         if (data?.provider !== card.provider.id || data.page !== page || !Array.isArray(data.items)) throw new Error('The provider returned an unreadable watchlist. Try Sync watchlist again.');
         const items = data.items.filter(item => typeof item?.title === 'string' && item.title.trim() && ['movie', 'tv'].includes(item.mediaType));
+        const start = card.items.length;
         card.items.push(...items.slice(0, 500 - card.items.length));
         card.nextPage = Number.isInteger(data.nextPage) && data.nextPage > page && data.nextPage <= 5 && card.items.length < 500 ? data.nextPage : null;
         card.skipped += Math.max(0, Number(data.skipped) || 0) + data.items.length - items.length;
         if (Number.isFinite(data.lastSyncAt)) card.account.lastSyncAt = data.lastSyncAt;
-        this.renderWatchlist(card);
+        firstNewTitle = this.renderWatchlist(card, start);
         card.status.textContent = `${card.items.length ? `${card.items.length} ${card.items.length === 1 ? 'title' : 'titles'} loaded for review.` : 'Your watchlist has no supported movie or TV titles.'}${card.skipped ? ` ${card.skipped} unsupported ${card.skipped === 1 ? 'entry' : 'entries'} skipped.` : ''}${data.truncated || (data.hasMore && !card.nextPage) ? ' More titles may be available on the provider; this review is limited to 500 titles.' : ''}`;
       } catch (error) {
         if (generation === card.watchGeneration) card.status.textContent = error.message;
@@ -302,19 +306,27 @@
         if (generation === card.watchGeneration) {
           card.loading = false;
           this.updateControls(card);
+          if (focusOwner && (document.activeElement === focusOwner || document.activeElement === document.body)) {
+            (firstNewTitle || (!card.more.hidden && !card.more.disabled ? card.more : card.sync)).focus();
+          }
         }
       }
     }
 
-    renderWatchlist(card) {
-      card.list.replaceChildren();
-      for (const item of card.items) {
+    renderWatchlist(card, start = 0) {
+      // Pagination adds rows without replacing titles the user may be focusing
+      // or opening while the next page is in flight. A new Sync still starts over.
+      if (!start) card.list.replaceChildren();
+      let firstNewTitle = null;
+      for (const item of card.items.slice(start)) {
         const title = element('strong', { textContent: item.title });
         const details = element('span', { textContent: `${item.year || 'Year unknown'} · ${item.mediaType === 'tv' ? 'TV series' : 'Movie'}` });
         const find = element('button', { type: 'button', className: 'button secondary', textContent: 'Find in Seerr', 'aria-label': `Find ${item.title} in Seerr` });
+        firstNewTitle ??= find;
         find.addEventListener('click', () => this.findInSeerr(card, item, find));
         card.list.append(element('li', {}, [element('div', { className: 'tracker-title-info' }, [title, details]), find]));
       }
+      return firstNewTitle;
     }
 
     async findInSeerr(card, item, button) {

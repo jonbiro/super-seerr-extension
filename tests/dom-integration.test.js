@@ -165,18 +165,28 @@ test('embedded movie and TV ratings with the same ID remain separate', async t =
 });
 
 test('options edits and connection tests do not save; explicit save includes feature flags', async t => {
-  const dom = new JSDOM(source('src/options/options.html'), { url: 'https://extension.example/options', runScripts: 'outside-only' }); t.after(() => dom.window.close());
+  const dom = new JSDOM(source('src/options/options.html'), { url: 'chrome-extension://test/options.html', runScripts: 'outside-only' }); t.after(() => dom.window.close());
   const writes = [], localWrites = [], messages = [];
   const { createStorageMock } = require('./helpers/chrome-mock');
   const sync = createStorageMock({ seerrUrl: 'https://original.example' });
   const local = createStorageMock({ seerrApiKey: 'saved-key' });
+  const worker = require('./helpers/worker').loadWorker({ get: sync.get, local: local._dump() });
   dom.window.chrome = {
     storage: {
       sync: { ...sync, set: async data => { writes.push(data); await sync.set(data); } },
       local: { ...local, set: async data => { localWrites.push(data); await local.set(data); } }
     },
     permissions: { request: async () => true, contains: async () => true },
-    runtime: { sendMessage: async message => { messages.push(message); return { success: true, data: { user: 'Tester' } }; } }
+    runtime: { sendMessage: async message => {
+      messages.push(message);
+      if (['saveSeerrConnection', 'getSeerrConnections'].includes(message.action)) {
+        await worker.ready;
+        worker.context.chrome.storage.sync = dom.window.chrome.storage.sync;
+        worker.context.chrome.storage.local = dom.window.chrome.storage.local;
+        return new Promise(resolve => worker.listeners.message(message, { id: 'test', url: dom.window.location.href }, resolve));
+      }
+      return { success: true, data: { user: 'Tester' } };
+    } }
   };
   dom.window.eval(source('src/options/options.js').split('// Initialize when DOM is loaded')[0] + '\nwindow.manager = new OptionsManager();');
   await settle();
@@ -191,7 +201,7 @@ test('options edits and connection tests do not save; explicit save includes fea
   await dom.window.manager.saveSettings();
   assert.equal(writes.length, 1);
   assert.equal(writes[0].overlayFeatures.cardBadges, false);
-  assert.equal(localWrites[0].seerrApiKey, 'test-key');
+  assert.equal(localWrites.find(write => write.seerrConnectionsV1).seerrConnectionsV1.sites[0].apiKey, 'test-key');
   assert.match(doc.querySelector('#status').textContent, /Settings saved successfully/);
 });
 

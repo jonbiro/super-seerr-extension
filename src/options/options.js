@@ -366,26 +366,21 @@ class OptionsManager {
       origins: this.plexPermissionOrigins()
     }).catch(() => false);
 
+    let siteSaved = false, preferencesSaved = false;
     try {
-      // Saved profiles commit the URL and key together in the worker.
-      if (this.connectionMode || connectionName) {
-        const response = await chrome.runtime.sendMessage({ action: 'saveSeerrConnection', data: { id: connectionId, name: connectionName, url: serverUrl, apiKey } });
-        if (!response?.success) throw new Error(response?.error || 'Could not save this site');
-        this.connectionMode = true;
-        // Keep the identity confirmed by this save even if another window
-        // activates a different site before the following metadata refresh.
-        this.connectionId = response.data.activeId;
-        await chrome.storage.sync.set({ overlayFeatures });
-        await chrome.storage.local.set({ plexToken, debugLogging });
-      } else await Promise.all([
-        chrome.storage.sync.set({
-          seerrUrl: serverUrl,
-          overlayFeatures
-        }),
-        chrome.storage.local.set({ seerrApiKey: apiKey, plexToken, debugLogging })
-      ]);
-
-      if (!this.connectionMode) this.connectionId = new URL(serverUrl).href.replace(/\/+$/, '');
+      // Single-site saves need the same atomic URL/key pair as named sites.
+      // Separate sync/local writes could send the old key to the new server
+      // during a slow write or leave that mismatch behind after a failure.
+      const response = await chrome.runtime.sendMessage({ action: 'saveSeerrConnection', data: { id: connectionId, name: connectionName, url: serverUrl, apiKey } });
+      if (!response?.success) throw new Error(response?.error || 'Could not save this site');
+      this.connectionMode = true;
+      // Keep the identity confirmed by this save even if another window
+      // activates a different site before the following metadata refresh.
+      this.connectionId = response.data.activeId;
+      siteSaved = true;
+      await chrome.storage.sync.set({ overlayFeatures });
+      await chrome.storage.local.set({ plexToken, debugLogging });
+      preferencesSaved = true;
 
       await this.loadConnectionChoices();
       // The worker re-registers off this storage change, so no nudge here.
@@ -402,7 +397,9 @@ class OptionsManager {
       }
     } catch (error) {
       console.error('Error saving settings:', error);
-      this.showStatus('error', error.message || 'Failed to save settings');
+      this.showStatus('error', !siteSaved ? error.message || 'Failed to save settings'
+        : !preferencesSaved ? 'Seerr site saved, but some other settings could not be saved. Review your values and try Save Settings again.'
+        : 'Settings saved, but the saved state could not be refreshed. Reload this Settings page before making more changes.');
     }
   }
 
