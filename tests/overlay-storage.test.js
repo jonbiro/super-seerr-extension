@@ -201,6 +201,23 @@ test('invalid cache records cannot consume the newest-entry bound', async () => 
   }
 });
 
+test('scoreless cache records cannot consume the newest-entry bound', async () => {
+  const worker = await setup();
+  const previous = worker.context.RatingsConfig.overlayCacheMaxEntries;
+  worker.context.RatingsConfig.overlayCacheMaxEntries = 2;
+  try {
+    const value = blob({ entries: {
+      'movie:999': { bundle: {}, cachedAt: Date.now() + 30_000 },
+      'movie:1': { bundle: { rtCriticsScore: 75, confidence: 1 }, cachedAt: 100 },
+      'movie:2': { bundle: { rtCriticsScore: 85, confidence: 1 }, cachedAt: 200 }
+    } });
+    const clean = worker.api.sanitizeOverlayCache(value, server, 0);
+    assert.deepEqual(Object.keys(clean.entries).sort(), ['movie:1', 'movie:2']);
+  } finally {
+    worker.context.RatingsConfig.overlayCacheMaxEntries = previous;
+  }
+});
+
 test('invalid title-index records cannot consume the index bound', async () => {
   const worker = await setup();
   const previous = worker.context.RatingsConfig.listIndexMaxEntries;

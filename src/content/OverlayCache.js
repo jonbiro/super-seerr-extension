@@ -80,6 +80,11 @@
             // A live entry from this session is fresher than anything stored.
             if (!entry || typeof entry !== 'object') continue;
             const bundle = entry.bundle;
+            // A bundle object with no score is malformed persisted data, not a
+            // valid partial result. Loading it as a cache hit would suppress
+            // the provider lookup until its (possibly distant) retry time.
+            if (bundle && typeof bundle !== 'object') continue;
+            if (bundle && !Model.hasAnyScore(Model.createRatingsBundle(bundle))) continue;
             const cachedAt = typeof entry.cachedAt === 'number' ? entry.cachedAt : null;
             const loaded = { bundle: bundle ? Model.createRatingsBundle(bundle) : null, cachedAt,
               ...(typeof entry.retryAt === 'number' ? { retryAt: entry.retryAt } : {}),
@@ -96,7 +101,6 @@
               ratingsCache.set(key, loaded);
               continue;
             }
-            if (typeof bundle !== 'object') continue;
             ratingsCache.set(key, loaded);
           }
           return true;

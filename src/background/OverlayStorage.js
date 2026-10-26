@@ -10,6 +10,9 @@
   const bytes = value => new TextEncoder().encode(JSON.stringify(value)).length;
   const text = (value, max = 300) => typeof value === 'string' ? value.slice(0, max) : '';
   const number = (value, max = Infinity) => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= max ? value : null;
+  const hasScore = bundle => bundle && typeof bundle === 'object' && !Array.isArray(bundle) && [
+    ['rtCriticsScore', 100], ['rtAudienceScore', 100], ['imdbRating', 10], ['tmdbRating', 10]
+  ].some(([field, max]) => number(bundle[field], max) !== null);
   const safeTmdbId = value => {
     if (typeof value !== 'string' && typeof value !== 'number') return null;
     const textValue = String(value);
@@ -62,7 +65,8 @@
         // Reject malformed keys/records before applying the cap. Otherwise a
         // corrupt record can occupy a slot and hide a valid cached title.
         .filter(([key, entry]) => /^(movie|tv):[1-9]\d*$/.test(key) &&
-          Number.isSafeInteger(Number(key.split(':')[1])) && entry && typeof entry === 'object')
+          Number.isSafeInteger(Number(key.split(':')[1])) && entry && typeof entry === 'object' &&
+          (entry.bundle == null || hasScore(entry.bundle)))
         .sort((a, b) => cacheTime(b[1]?.cachedAt) - cacheTime(a[1]?.cachedAt))
         .slice(0, root.RatingsConfig.overlayCacheMaxEntries);
       for (const [key, entry] of storedEntries) {
@@ -73,6 +77,7 @@
           confidence: number(entry.bundle.confidence, 1) ?? 0, source: text(entry.bundle.source, 100),
           lastUpdated: typeof entry.bundle.lastUpdated === 'string' ? text(entry.bundle.lastUpdated, 50) : number(entry.bundle.lastUpdated)
         } : null;
+        if (bundle && !hasScore(bundle)) continue;
         const diagnostics = ['rated', 'partial', 'unrated', 'failed', 'uncertain'].includes(entry.diagnostics?.status) ? {
           status: entry.diagnostics.status, checkedAt: number(entry.diagnostics.checkedAt, Date.now() + 60000), source: text(entry.diagnostics.source, 100)
         } : null;

@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.253]
+
+- Ignore scoreless persisted Seerr bundles so malformed multi-site cache records cannot consume the site cap or suppress a fresh lookup.
+
 ## [3.5.252]
 
 - Apply sorting, filtering, reset, refresh coverage, and cache-age reporting to every rendered Seerr grid instead of only the first section on multi-grid pages.

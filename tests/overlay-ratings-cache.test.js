@@ -140,6 +140,22 @@ test('an absence stored without a timestamp is not trusted', async () => {
   assert.equal(resolved.timesFor(550), 1);
 });
 
+test('a scoreless persisted bundle is ignored instead of suppressing a lookup', async () => {
+  const now = Date.now();
+  const overlay = loadOverlay({
+    settings,
+    local: { overlayRatingsByServerV1: { 'https://seerr.example': {
+      server: SERVER, matcher: Config.matcherVersion, epoch: 0,
+      entries: { 'movie:550': { bundle: {}, cachedAt: now, retryAt: now + Config.ratingsFreshMs } }
+    } } }
+  });
+  const resolved = withResolver(overlay, () => ({ rtCriticsScore: 80 }));
+
+  const bundle = await overlay.getRatings(550, 'Fight Club', 1999, 'movie');
+  assert.equal(resolved.timesFor(550), 1, 'a malformed bundle must not be treated as a cache hit');
+  assert.equal(bundle.rtCriticsScore, 80);
+});
+
 test('a partial bundle is still persisted', async () => {
   const overlay = loadOverlay({ settings });
   withResolver(overlay, () => ({ rtCriticsScore: 80 }));
