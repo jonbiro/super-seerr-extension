@@ -23,6 +23,7 @@ async function fixture(t, handler) {
       if (message.action === 'connectTracker') f.accounts.find(item => item.provider === message.data.provider).connected = true;
       if (message.action === 'disconnectTracker') f.accounts.find(item => item.provider === message.data.provider).connected = false;
       if (message.action === 'getTrackerWatchlist') return f.reply({ provider: message.data.provider, page: message.data.page,
+        ...(message.data.provider === 'simkl' ? { snapshotId: 'a'.repeat(64) } : {}),
         items: [{ title: 'Film & television / 日本語', year: 1999, mediaType: 'movie' }], nextPage: null, hasMore: false, skipped: 0, lastSyncAt: 123456789 });
       return f.reply(f.accounts);
     } }
@@ -193,6 +194,7 @@ for (const server of ['javascript:alert(1)', 'https://user:secret@seerr.example/
 test('watchlist pagination is explicit and refuses pages beyond the bounded review', async t => {
   const f = await fixture(t, (message, state) => {
     if (message.action === 'getTrackerWatchlist') return state.reply({ provider: 'simkl', page: message.data.page,
+      snapshotId: 'a'.repeat(64),
       items: [{ title: '<img src=x onerror=alert(1)>', mediaType: 'movie' }, { title: 'Episode', mediaType: 'episode' }],
       nextPage: message.data.page + 1, hasMore: true, skipped: 2 });
   });
@@ -209,6 +211,25 @@ test('watchlist pagination is explicit and refuses pages beyond the bounded revi
   assert.match(card.status.textContent, /limited to 500/);
   await f.manager.loadWatchlist(card, 6);
   assert.equal(f.messages.filter(message => message.action === 'getTrackerWatchlist').length, 5);
+});
+
+for (const mismatched of [undefined, 'b'.repeat(64)]) test(`Simkl pagination rejects another review's response (missing ID: ${!mismatched})`, async t => {
+  const f = await fixture(t, (message, state) => {
+    if (message.action === 'getTrackerWatchlist') return state.reply({ provider: 'simkl', page: message.data.page,
+      snapshotId: message.data.page === 1 ? 'a'.repeat(64) : mismatched,
+      items: [{ title: message.data.page === 1 ? 'Original review title' : 'Different review title', mediaType: 'movie' }],
+      nextPage: message.data.page === 1 ? 2 : null, hasMore: message.data.page === 1 });
+  });
+  const card = f.card('simkl');
+  card.connect.click(); await settle(); card.sync.click(); await settle();
+  card.more.click(); await settle();
+  const continuation = f.messages.find(message => message.action === 'getTrackerWatchlist' && message.data.page === 2);
+  assert.equal(continuation.data.snapshotId, 'a'.repeat(64));
+  assert.equal(card.items.length, 1);
+  assert.match(card.list.textContent, /Original review title/);
+  assert.doesNotMatch(card.list.textContent, /Different review title/);
+  assert.match(card.status.textContent, /different Simkl review.*Sync watchlist/);
+  assert.equal(card.sync.disabled, false);
 });
 
 test('account reload clears private titles when another context disconnected the account', async t => {
@@ -445,6 +466,7 @@ test('a restored Settings page retires its old review until account state can be
 test('a truncated snapshot shows its review limit even when it has no next page', async t => {
   const f = await fixture(t, (message, state) => {
     if (message.action === 'getTrackerWatchlist') return state.reply({ provider: 'simkl', page: 1,
+      snapshotId: 'a'.repeat(64),
       items: [{ title: 'Example', mediaType: 'movie' }], nextPage: null, hasMore: false, truncated: true, skipped: 0 });
   });
   const card = f.card('simkl');

@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.260]
+
+- Keep each Simkl review tied to its own account-bound snapshot so a newer Sync in another Settings window cannot replace its remaining pages. Reject missing, expired, corrupt, or mismatched review continuations instead of mixing titles.
+- Retain up to ten Simkl review snapshots within a roughly 2 MB browser-session budget, surviving background-worker restarts without putting imported titles in persistent local storage. Disconnect clears retained reviews; token rotation preserves current account reviews.
+- Load cached Simkl pages offline without refreshing tokens, requesting provider access, or advancing Last synced. Preserve a newer sync timestamp when another page updates it during the cache read.
+
 ## [3.5.259]
 
 - Use Trakt's documented combined movie/show watchlist route. Correct the plural combined path introduced in 3.5.249 and verify movie/TV imports across two pages against a strict route fixture based on the provider's own contract.

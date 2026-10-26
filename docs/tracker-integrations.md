@@ -22,6 +22,8 @@ Choose **Sync watchlist** when you want to read your titles. Use **Load more tit
 
 Trakt reads the account's movie and show watchlist. Simkl reads **Plan to Watch** entries, including anime identified explicitly as a movie or TV series. Other anime formats are skipped. This view concerns planned titles, rather than importing watched history, ratings, comments or playback activity. Simkl's API returns its watchlist data as a response rather than using Trakt-style server pagination; the review limit does not guarantee that only 500 records are downloaded.
 
+Each Simkl review keeps its own remaining pages when another Settings window syncs a changed list. **Load more titles** can use that downloaded review while offline and after the background worker restarts. It does not advance **Last synced**; choose **Sync watchlist** to check the provider again. If an old review is no longer retained, the extension asks you to start a new review rather than combining different lists.
+
 **Find in Seerr** opens a title search in the **currently active Seerr site**. Review the result, availability and any requested seasons there, then submit a request separately. Syncing a tracker watchlist does not submit Seerr requests, add titles to Seerr's watchlist, or write changes back to Trakt or Simkl. This is a manual watchlist review, not automatic background or bidirectional synchronization.
 
 If a request is rate limited, wait before trying again. Provider quotas may be shared with other applications connected to the same account. See [Trakt pagination](https://developer.trakt.tv/docs/pagination), [Trakt rate limits](https://developer.trakt.tv/docs/rate-limiting), [Simkl sync rules](https://api.simkl.org/guides/sync), and [Simkl rate limits](https://api.simkl.org/resources/rate-limits).
@@ -33,6 +35,8 @@ If a request is rate limited, wait before trying again. Provider quotas may be s
 To revoke that authorization too, manage connected applications in [Trakt's account settings](https://app.trakt.tv/settings) or [Simkl Connected Apps](https://simkl.com/settings/connected-apps/).
 
 Tokens stay in local extension storage on this device and are not synchronized as browser preferences. Settings receives connection state and watchlist entries, not the tokens. Treat the browser profile as private. Account tokens and provider watchlist data are separate from public rating caches and from each Seerr site's configuration. See [Data, storage and permissions](privacy-and-permissions.md).
+
+Simkl review snapshots use browser session storage, with a maximum of ten snapshots and a roughly 2 MB total budget. They are bound to the connected account and contain no copies of access or refresh tokens. The oldest reviews are evicted as needed. Browser shutdown, extension reload/update, and disconnect clear this temporary retention; it is not synchronized or kept as persistent local history. Content scripts cannot read this session cache.
 
 ## JustWatch availability
 

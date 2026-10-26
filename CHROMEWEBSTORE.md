@@ -33,6 +33,7 @@ Source policy: [Data, storage and permissions](docs/privacy-and-permissions.md).
 - Title queries, IDs and requested seasons are sent as needed for the user's action. Optional tracker reads retrieve planned titles only when the user chooses Sync.
 - Public rating caches remain separate from private server state and tracker account data. Disconnect removes local provider tokens; provider-side authorization is managed on the provider's website.
 - Imported tracker titles are cleared from open Settings pages when an account change is observed. If the new connection state cannot be checked, affected account controls stay unavailable with a reload action.
+- Simkl review snapshots stay in private browser session storage within a roughly 2 MB budget, allowing independent reviews and offline pagination through background restarts. They contain no token copies, are unavailable to content scripts, and clear on browser shutdown, extension reload/update, or disconnect.
 - No remote executable code is loaded. Dashboard privacy declarations must reflect all handled data, including authentication information and title activity; local storage alone does not remove disclosure requirements.
 
 ## Submission checklist
@@ -46,5 +47,6 @@ Source policy: [Data, storage and permissions](docs/privacy-and-permissions.md).
 
 ## Repository version history
 
+- **3.5.260 — 2026-10-26:** keep Simkl review pages consistent across Settings windows and background restarts, support cached offline pagination, and bound private session retention.
 - **3.5.259 — 2026-10-26:** align Trakt watchlist imports with the provider's documented combined movie/TV route.
 - **3.5.258 — 2026-10-26:** clear retired tracker reviews across open Settings pages, recover failed account-state checks, and keep Trakt and Simkl connection updates independent during sign-in.

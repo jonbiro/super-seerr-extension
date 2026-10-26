@@ -1,6 +1,8 @@
 // Optional, user-initiated tracker reads. Tokens never leave the worker.
 (function (root) {
   const KEY = 'trackerAccountsV1';
+  const SNAPSHOTS_KEY = 'simklWatchlistSnapshotsV1';
+  const MAX_SNAPSHOTS = 10, MAX_SNAPSHOT_BYTES = 2 * 1024 * 1024;
   const PAGE_SIZE = 100, MAX_ITEMS = 500, MAX_BODY = 2 * 1024 * 1024;
   const PROVIDERS = {
     trakt: { name: 'Trakt', authorize: 'https://auth.trakt.tv/oauth/authorize', token: 'https://auth.trakt.tv/oauth/token', origin: 'https://api.trakt.tv' },
@@ -12,6 +14,18 @@
   }
   const random = () => [...crypto.getRandomValues(new Uint8Array(32))].map(byte => byte.toString(16).padStart(2, '0')).join('');
   const opaque = value => typeof value === 'string' && value.length > 0 && value.length <= 8192 && !/[\s\u0000-\u001f\u007f]/.test(value);
+  const snapshotIdOf = value => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+  const sameAccount = (current, account) => current && current.clientId === account.clientId &&
+    current.accessToken === account.accessToken && current.refreshToken === account.refreshToken && current.accountRevision === account.accountRevision;
+  const sameReviewAccount = (current, account) => sameAccount(current, account) ||
+    (current && opaque(account.accountRevision) && current.accountRevision === account.accountRevision &&
+      current.clientId === account.clientId && opaque(current.accessToken) && opaque(current.refreshToken));
+  const snapshotBytes = snapshots => new TextEncoder().encode(JSON.stringify({ version: 1, snapshots })).byteLength;
+  function boundSnapshots(records) {
+    const snapshots = records.filter(record => snapshotBytes([record]) <= MAX_SNAPSHOT_BYTES).slice(-MAX_SNAPSHOTS);
+    while (snapshotBytes(snapshots) > MAX_SNAPSHOT_BYTES) snapshots.shift();
+    return snapshots;
+  }
   function clientIdOf(value) {
     if (typeof value !== 'string' || !/^[\x21-\x7e]{1,256}$/.test(value.trim())) throw new Error('Enter a valid application client ID');
     return value.trim();
@@ -46,7 +60,15 @@
     invalidateTracker(provider) {
       this.trackerEpochs ??= {};
       this.trackerEpochs[provider] = this.trackerEpoch(provider) + 1;
-      this.trackerLists?.delete(provider);
+      if (provider === 'simkl') {
+        this.simklReviewState = null;
+        // Serialize removal behind any older snapshot write and ahead of the
+        // account mutation. Account binding still rejects retired data if a
+        // browser storage failure prevents best-effort cache removal.
+        this.queueTrackerStorage(async () => {
+          await chrome.storage.session?.remove(SNAPSHOTS_KEY);
+        }).catch(() => {});
+      }
       return this.trackerEpoch(provider);
     },
     async readTrackerAccounts() {
@@ -75,11 +97,66 @@
     assertTrackerEpoch(provider, epoch) {
       if (this.trackerEpoch(provider) !== epoch) throw new Error('Tracker account changed. Try again.');
     },
-    async assertTrackerSnapshot(provider, epoch, account) {
+    async assertTrackerSnapshot(provider, epoch, account, { allowTokenRotation = false } = {}) {
       this.assertTrackerEpoch(provider, epoch);
       const current = (await this.readTrackerAccounts())[provider];
       this.assertTrackerEpoch(provider, epoch);
-      if (!current || current.clientId !== account.clientId || current.accessToken !== account.accessToken || current.refreshToken !== account.refreshToken) throw new Error('Tracker account changed. Try again.');
+      if (!(allowTokenRotation ? sameReviewAccount(current, account) : sameAccount(current, account))) throw new Error('Tracker account changed. Try again.');
+      return current;
+    },
+    async withSimklSnapshots(epoch, account, operation) {
+      // Current accounts have a stable revision across rotating tokens. For
+      // legacy records, hash the token rather than copying it into this cache.
+      const identity = JSON.stringify([account.clientId, opaque(account.accountRevision) ? account.accountRevision : account.accessToken]);
+      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(identity)));
+      const accountKey = [...digest].map(byte => byte.toString(16).padStart(2, '0')).join('');
+      return this.queueTrackerStorage(async () => {
+        this.assertTrackerEpoch('simkl', epoch);
+        const current = (await chrome.storage.local.get(KEY))[KEY]?.simkl;
+        this.assertTrackerEpoch('simkl', epoch);
+        if (!sameReviewAccount(current, account)) throw new Error('Tracker account changed. Try again.');
+        const stored = chrome.storage.session?.get
+          ? (await chrome.storage.session.get(SNAPSHOTS_KEY))[SNAPSHOTS_KEY] : this.simklReviewState;
+        const records = [];
+        if (stored?.version === 1 && Array.isArray(stored.snapshots)) for (const record of stored.snapshots) {
+          if (record?.accountKey !== accountKey || !snapshotIdOf(record.id) ||
+              !(record.activity === null || typeof record.activity === 'string') ||
+              !Array.isArray(record.items) || record.items.length > MAX_ITEMS) continue;
+          const items = record.items.map(item => {
+            if (!item || !['movie', 'tv'].includes(item.mediaType)) return null;
+            return normalize({ status: 'plantowatch', [item.mediaType === 'movie' ? 'movie' : 'show']:
+              { title: item.title, year: item.year, ids: { tmdb: item.tmdbId, imdb: item.imdbId } } }, 'simkl');
+          });
+          if (items.some(item => !item)) continue;
+          records.push({ id: record.id, accountKey, activity: record.activity, items,
+            skipped: Number.isSafeInteger(record.skipped) && record.skipped >= 0 ? record.skipped : 0,
+            truncated: record.truncated === true });
+        }
+        this.assertTrackerEpoch('simkl', epoch);
+        const result = operation(boundSnapshots(records), accountKey);
+        if (result.snapshots) {
+          const snapshots = boundSnapshots(result.snapshots);
+          if (!snapshots.some(record => record.id === result.value?.id)) throw new Error('The Simkl review is too large to retain. Try a smaller watchlist.');
+          const state = { version: 1, snapshots };
+          this.assertTrackerEpoch('simkl', epoch);
+          if (chrome.storage.session?.set) await chrome.storage.session.set({ [SNAPSHOTS_KEY]: state });
+          else this.simklReviewState = state;
+        }
+        this.assertTrackerEpoch('simkl', epoch);
+        return result.value;
+      });
+    },
+    findSimklSnapshot(epoch, account, { id, activity }) {
+      return this.withSimklSnapshots(epoch, account, records => ({ value: [...records].reverse().find(record => id
+        ? record.id === id : !record.truncated && record.activity === activity) || null }));
+    },
+    saveSimklSnapshot(epoch, account, snapshot) {
+      return this.withSimklSnapshots(epoch, account, (records, accountKey) => {
+        const existing = [...records].reverse().find(record => !record.truncated && record.activity === snapshot.activity);
+        if (existing) return { value: existing };
+        const record = { ...snapshot, id: random(), accountKey };
+        return { value: record, snapshots: [...records, record] };
+      });
     },
     trackerCallback(provider) { return chrome.identity.getRedirectURL(`tracker/${provider}`); },
     async publicTrackerAccounts() {
@@ -236,12 +313,19 @@
       else url.searchParams.set('client_id', account.clientId);
       return this.trackerFetch(provider, url.href, { method: 'GET', headers });
     },
-    async readTrackerWatchlist(provider, page) {
+    async readTrackerWatchlist(provider, page, snapshotId = null) {
       const epoch = this.trackerEpoch(provider);
-      await this.trackerPermission(provider);
-      const account = await this.currentTrackerToken(provider, epoch);
-      this.trackerLists ??= new Map();
-      let rows, nextPage = null, skipped = 0, truncated = false;
+      const localPage = provider === 'simkl' && page > 1;
+      let account;
+      if (localPage) {
+        account = (await this.readTrackerAccounts())[provider];
+        this.assertTrackerEpoch(provider, epoch);
+        if (!opaque(account?.accessToken) || !opaque(account?.refreshToken)) throw new Error('Connect Simkl in Settings first.');
+      } else {
+        await this.trackerPermission(provider);
+        account = await this.currentTrackerToken(provider, epoch);
+      }
+      let rows, nextPage = null, skipped = 0, truncated = false, reviewId = null;
       if (provider === 'trakt') {
         // The combined watchlist uses singular `movie,show` in Trakt's own
         // contract; `/movies` and `/shows` are the separate list resources.
@@ -257,9 +341,10 @@
         nextPage = page < pages && page < 5 ? page + 1 : null;
         truncated = page === 5 && pages > 5;
       } else {
-        let cached = this.trackerLists.get(provider);
+        let cached;
         if (page > 1) {
-          if (!cached || cached.epoch !== epoch || cached.accessToken !== account.accessToken) throw new Error('Reload the Simkl watchlist before loading more.');
+          cached = await this.findSimklSnapshot(epoch, account, { id: snapshotId });
+          if (!cached) throw new Error('This Simkl review is no longer available. Choose Sync watchlist to start a new review.');
         } else {
           const activities = (await this.trackerApiRead(provider, '/sync/activities', account)).data;
           if (!activities || typeof activities !== 'object' || Array.isArray(activities)) throw new Error('Simkl returned invalid activity information.');
@@ -270,7 +355,8 @@
           // recorded activity. Keep it distinct from a deliberately truncated
           // local snapshot so an empty watchlist does not trigger a full pull
           // on every manual Sync.
-          if (!cached || cached.epoch !== epoch || cached.accessToken !== account.accessToken || cached.truncated || cached.activity !== activity) {
+          cached = await this.findSimklSnapshot(epoch, account, { activity });
+          if (!cached) {
             const movies = (await this.trackerApiRead(provider, '/sync/all-items/movies/plantowatch', account)).data;
             await this.assertTrackerSnapshot(provider, epoch, account);
             const shows = (await this.trackerApiRead(provider, '/sync/all-items/shows/plantowatch', account)).data;
@@ -281,24 +367,28 @@
             const normalized = [...(movies.movies || []), ...(shows.shows || [])].map(row => normalize(row, provider))
               .concat((anime.anime || []).map(row => normalize(row, provider, true)));
             const valid = [...new Map(normalized.filter(Boolean).map(item => [JSON.stringify([item.mediaType, item.tmdbId || item.imdbId || item.title.toLowerCase(), item.year]), item])).values()];
-            cached = { epoch, accessToken: account.accessToken, activity, items: valid.slice(0, MAX_ITEMS),
-              skipped: normalized.length - valid.length, truncated: valid.length > MAX_ITEMS };
             await this.assertTrackerSnapshot(provider, epoch, account);
-            this.trackerLists.set(provider, cached);
+            cached = await this.saveSimklSnapshot(epoch, account, { activity, items: valid.slice(0, MAX_ITEMS),
+              skipped: normalized.length - valid.length, truncated: valid.length > MAX_ITEMS });
           }
         }
         rows = cached.items.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
         nextPage = cached.items.length > page * PAGE_SIZE && page < 5 ? page + 1 : null;
         skipped = page === 1 ? cached.skipped : 0; truncated = cached.truncated;
+        reviewId = cached.id;
       }
-      const lastSyncAt = Date.now();
-      await this.assertTrackerSnapshot(provider, epoch, account);
-      await this.commitTracker(provider, epoch, current => {
-        if (current.accessToken !== account.accessToken || current.refreshToken !== account.refreshToken) throw new Error('Tracker account changed. Try again.');
-        return { ...current, lastSyncAt };
-      });
-      await this.assertTrackerSnapshot(provider, epoch, account);
-      return { provider, items: rows, page, nextPage, hasMore: nextPage !== null, skipped, truncated, lastSyncAt };
+      const current = await this.assertTrackerSnapshot(provider, epoch, account, { allowTokenRotation: localPage });
+      let lastSyncAt = Number.isFinite(current.lastSyncAt) ? current.lastSyncAt : null;
+      if (!localPage) {
+        lastSyncAt = Date.now();
+        await this.commitTracker(provider, epoch, current => {
+          if (current.accessToken !== account.accessToken || current.refreshToken !== account.refreshToken) throw new Error('Tracker account changed. Try again.');
+          return { ...current, lastSyncAt };
+        });
+        await this.assertTrackerSnapshot(provider, epoch, account);
+      }
+      return { provider, items: rows, page, nextPage, hasMore: nextPage !== null, skipped, truncated, lastSyncAt,
+        ...(reviewId ? { snapshotId: reviewId } : {}) };
     },
     async trackerOperation(action, data, sender) {
       this.requireExtensionPage(sender);
@@ -307,7 +397,8 @@
       if (action === 'getTrackerWatchlist') {
         const page = data?.page ?? 1;
         if (!Number.isSafeInteger(page) || page < 1 || page > 5) throw new Error('Choose a watchlist page from 1 to 5');
-        return this.readTrackerWatchlist(provider, page);
+        if (provider === 'simkl' && page > 1 && !snapshotIdOf(data?.snapshotId)) throw new Error('Choose Sync watchlist to start a new Simkl review before loading more.');
+        return this.readTrackerWatchlist(provider, page, data?.snapshotId);
       }
       if (!['saveTrackerApp', 'connectTracker', 'disconnectTracker'].includes(action)) throw new Error('Unknown tracker action');
       const clientId = action === 'saveTrackerApp' ? clientIdOf(data?.clientId) : null;

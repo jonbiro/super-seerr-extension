@@ -31,6 +31,7 @@ async function showTrackers(page, width, { failInitial = false } = {}) {
           });
         }
         if (message.action === 'getTrackerWatchlist') return { success: true, data: { provider: message.data.provider, page: 1,
+          ...(message.data.provider === 'simkl' ? { snapshotId: 'a'.repeat(64) } : {}),
           items: [{ title: 'A very long movie title with Unicode 日本語 and characters & / for narrow screen review'.repeat(2), mediaType: 'movie', year: 1999 },
             { title: 'An example series', mediaType: 'tv', year: 2020 }], nextPage: null, hasMore: false, skipped: 1, truncated: true, lastSyncAt: Date.now() } };
         if (message.action === 'getConfigState') return { success: true, data: { serverUrl: 'https://family.example/seerr/' } };
@@ -150,6 +151,7 @@ for (const provider of ['trakt', 'simkl']) for (const focus of ['load more', 'ex
       chrome.runtime.sendMessage = async message => {
         if (message.action !== 'getTrackerWatchlist') return original(message);
         const data = { provider: message.data.provider, page: message.data.page,
+          ...(message.data.provider === 'simkl' ? { snapshotId: 'a'.repeat(64) } : {}),
           items: [{ title: message.data.page === 1 ? 'First page title' : 'Second page title', mediaType: 'movie', year: 2020 }],
           nextPage: message.data.page === 1 ? 2 : null, hasMore: message.data.page === 1, skipped: 0 };
         if (message.data.page === 1) return { success: true, data };

@@ -204,6 +204,12 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
         document.body.dataset.cacheBridge = String(cache.success);
         try { await chrome.storage.local.get('seerrApiKey'); document.body.dataset.localReadBlocked = 'no'; }
         catch (_) { document.body.dataset.localReadBlocked = 'yes'; }
+        try { await chrome.storage.session.get('simklWatchlistSnapshotsV1'); document.body.dataset.sessionReadBlocked = 'no'; }
+        catch (_) { document.body.dataset.sessionReadBlocked = 'yes'; }
+        document.body.dataset.sessionEventRead = 'no';
+        chrome.storage.onChanged.addListener((changes, area) => {
+          if (area === 'session') document.body.dataset.sessionEventRead = 'yes';
+        });
         const ui = new window.UIComponents();
         ui.chooseTitle(result.data, { title: 'The Thing' }).then(async choice => {
           document.body.dataset.chosenTitle = choice ? String(choice.tmdbId) : 'cancelled';
@@ -219,6 +225,18 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     await eventually(() => script('return document.querySelectorAll(".seerr-title-choice").length;'), 2, 'Firefox renders ambiguous title candidates');
     assert.equal(await script('return document.body.dataset.cacheBridge;'), 'true');
     if (localAccessControls) assert.equal(await script('return document.body.dataset.localReadBlocked;'), 'yes');
+    assert.equal(await script('return document.body.dataset.sessionReadBlocked;'), 'yes', 'Firefox content scripts cannot read private session reviews');
+    await action('/window', { handle: optionsHandle });
+    await extensionScript(`
+      api.storage.onChanged.addListener((changes, area) => {
+        if (area === 'session' && changes.privateSessionProbeV1) document.documentElement.dataset.sessionProbeObserved = 'yes';
+      });
+      await api.storage.session.set({ privateSessionProbeV1: 'fixture-private' });
+    `);
+    await eventually(() => script('return document.documentElement.dataset.sessionProbeObserved;'), 'yes', 'Firefox trusted pages observe their session changes');
+    await action('/window', { handle: pickerHandle });
+    await asyncScript('await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))); return true;');
+    assert.equal(await script('return document.body.dataset.sessionEventRead;'), 'no', 'Firefox content scripts cannot observe private session changes');
     t.diagnostic(`Firefox local storage access controls available: ${localAccessControls}`);
     await script('document.querySelectorAll(".seerr-title-choice")[1].click();');
     await eventually(() => script('return document.body.dataset.chosenTitle;'), '911', 'Firefox picker returns the explicit choice');
@@ -292,10 +310,34 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
       assert.equal((await message({ action: 'testConnection' })).data.server, origin);
       t.diagnostic('Firefox saved and switched between two independent Seerr fixtures');
     } finally { await new Promise(resolve => secondSite.server.close(resolve)); }
+    await navigate(optionsUrl);
+    const reviewId = 'a'.repeat(64);
+    await extensionScript(`
+      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(['fixture-simkl-app', 'firefox-review']))));
+      const accountKey = [...digest].map(byte => byte.toString(16).padStart(2, '0')).join('');
+      await api.storage.local.set({ trackerAccountsV1: { simkl: {
+        clientId: 'fixture-simkl-app', accessToken: 'fixture-access', refreshToken: 'fixture-refresh',
+        expiresAt: 1, accountRevision: 'firefox-review', lastSyncAt: 123456789
+      } } });
+      await api.storage.session.set({ simklWatchlistSnapshotsV1: { version: 1, snapshots: [{
+        id: arguments[0], accountKey, activity: 'fixture', skipped: 0, truncated: false,
+        items: Array.from({ length: 150 }, (_, i) => ({ title: 'Firefox film ' + i, mediaType: 'movie', year: 2020 }))
+      }] } });
+    `, [reviewId]);
+    const review = await message({ action: 'getTrackerWatchlist', data: { provider: 'simkl', page: 2, snapshotId: reviewId } });
+    assert.equal(review.success, true);
+    assert.equal(review.data.items.length, 50);
+    assert.equal(review.data.items[0].title, 'Firefox film 100');
+    assert.equal(review.data.lastSyncAt, 123456789, 'cached pagination does not pretend to refresh the provider');
+    assert.equal((await message({ action: 'disconnectTracker', data: { provider: 'simkl' } })).success, true);
+    assert.equal(await extensionScript('return Object.hasOwn(await api.storage.session.get("simklWatchlistSnapshotsV1"), "simklWatchlistSnapshotsV1");'), false);
+    t.diagnostic('Firefox reads account-bound Simkl session pages without provider access and removes them on disconnect');
     t.diagnostic(`Validated Firefox ${started.capabilities.browserVersion}`);
   } catch (error) {
-    const artifacts = path.resolve('test-results/firefox');
-    await fs.mkdir(artifacts, { recursive: true });
+    const artifactsRoot = path.resolve('test-results');
+    await fs.mkdir(artifactsRoot, { recursive: true });
+    const artifacts = await fs.mkdtemp(path.join(artifactsRoot, `firefox-${build.manifest.version}-`));
+    t.diagnostic(`Firefox failure artifacts: ${artifacts}`);
     await fs.writeFile(path.join(artifacts, 'geckodriver.log'), driverLog);
     if (session) {
       await context('chrome').catch(() => {});

@@ -10,7 +10,7 @@ const reply = (data, headers = {}) => new Response(JSON.stringify(data), { heade
 const tokens = (suffix = '') => ({ access_token: `access-secret${suffix}`, refresh_token: `refresh-secret${suffix}`, token_type: 'Bearer', expires_in: 3600 });
 const account = extra => ({ clientId: 'app-id', accessToken: 'access-secret', refreshToken: 'refresh-secret', expiresAt: Date.now() + 3600000, ...extra });
 
-function load({ accounts = {}, fetch = async () => reply(tokens()), launch, permission = true } = {}) {
+function load({ accounts = {}, session = {}, fetch = async () => reply(tokens()), launch, permission = true } = {}) {
   const local = { trackerAccountsV1: structuredClone(accounts) }, requests = [], flows = [];
   const context = vm.createContext({
     URL, URLSearchParams, TextEncoder, TextDecoder, Uint8Array, crypto: webcrypto, btoa, AbortSignal,
@@ -31,14 +31,16 @@ function load({ accounts = {}, fetch = async () => reply(tokens()), launch, perm
         }
       },
       permissions: { contains: async () => permission },
-      storage: { local: { get: async () => structuredClone(local), set: async value => Object.assign(local, structuredClone(value)) } }
+      storage: { local: { get: async () => structuredClone(local), set: async value => Object.assign(local, structuredClone(value)) },
+        session: { get: async () => structuredClone(session), set: async value => Object.assign(session, structuredClone(value)),
+          remove: async keys => { for (const key of [].concat(keys)) delete session[key]; } } }
     }
   });
   vm.runInContext(fs.readFileSync('src/background/TrackerAccounts.js', 'utf8'), context);
   const api = Object.assign({ requireExtensionPage(value) {
     if (!value?.url?.startsWith('chrome-extension://fixture/')) throw new Error('Extension pages only');
   } }, context.TrackerAccounts);
-  return { api, context, local, requests, flows, call: (action, data) => api.trackerOperation(action, data, sender) };
+  return { api, context, local, session, requests, flows, call: (action, data) => api.trackerOperation(action, data, sender) };
 }
 
 test('all tracker actions reject content scripts and unknown providers', async () => {
@@ -220,7 +222,7 @@ test('Simkl imports only planned movies and shows, pages locally, and checks act
     : url.includes('/movies/') ? reply({ movies: rows }) : reply({ shows: [{ status: 'plantowatch', show: { title: 'Dark', year: 2017 } }] }) });
   const first = await f.call('getTrackerWatchlist', { provider: 'simkl' });
   assert.equal(first.items.length, 100); assert.equal(first.skipped, 1); assert.equal(first.nextPage, 2);
-  const second = await f.call('getTrackerWatchlist', { provider: 'simkl', page: 2 });
+  const second = await f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: first.snapshotId });
   assert.equal(second.items.length, 2); assert.equal(second.nextPage, null);
   assert.equal(f.requests.length, 4);
   assert.ok(f.requests[0].url.includes('/sync/activities?'));
@@ -248,6 +250,171 @@ test('Simkl empty objects are valid while malformed lists cannot advance last sy
   const repeat = await f.call('getTrackerWatchlist', { provider: 'simkl' });
   assert.equal(repeat.items.length, 0);
   assert.equal(fullReads(), requests, 'a valid null activity marker reuses an empty snapshot');
+});
+
+test('two open Simkl reviews keep their own pagination after one window syncs a changed list', async () => {
+  let revision = 'Earlier';
+  const f = load({ accounts: { simkl: account({ accountRevision: 'same-account' }) }, fetch: async url => url.includes('/activities') ? reply({ all: revision })
+    : url.includes('/movies/') ? reply({ movies: Array.from({ length: 150 }, (_, i) => ({ status: 'plantowatch', movie: { title: `${revision} film ${i}`, year: 2020 } })) }) : reply({}) });
+  const earlier = await f.call('getTrackerWatchlist', { provider: 'simkl' });
+  revision = 'Later';
+  const later = await f.call('getTrackerWatchlist', { provider: 'simkl' });
+  const earlierMore = await f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: earlier.snapshotId });
+  assert.equal(earlierMore.items[0].title, 'Earlier film 100');
+  const laterMore = await f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: later.snapshotId });
+  assert.equal(laterMore.items[0].title, 'Later film 100');
+  assert.notEqual(earlier.snapshotId, later.snapshotId);
+  assert.equal(f.requests.length, 8, 'pagination uses the review snapshots without another provider pull');
+});
+
+test('Simkl review pagination survives a worker restart without downloading the provider feeds again', async () => {
+  const f = load({ accounts: { simkl: account({ accountRevision: 'same-account' }) }, fetch: async url => url.includes('/activities') ? reply({ all: 'first' })
+    : url.includes('/movies/') ? reply({ movies: Array.from({ length: 150 }, (_, i) => ({ status: 'plantowatch', movie: { title: `Film ${i}` } })) }) : reply({}) });
+  const first = await f.call('getTrackerWatchlist', { provider: 'simkl' });
+  const restarted = load({ accounts: f.local.trackerAccountsV1, session: f.session, fetch: async () => { throw new Error('Pagination should use the saved session snapshot'); } });
+  const more = await restarted.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: first.snapshotId });
+  assert.equal(more.items[0].title, 'Film 100');
+  assert.equal(more.items.length, 50);
+  assert.equal(restarted.requests.length, 0);
+});
+
+test('Simkl pagination keeps the same account review through a rotating token refresh', async () => {
+  const f = load({ accounts: { simkl: account({ accountRevision: 'same-account' }) }, fetch: async (url, options) => options.method === 'POST' ? reply(tokens('-rotated'))
+    : url.includes('/activities') ? reply({ all: 'first' }) : url.includes('/movies/') ? reply({ movies: Array.from({ length: 150 }, (_, i) => ({ status: 'plantowatch', movie: { title: `Film ${i}` } })) }) : reply({}) });
+  const first = await f.call('getTrackerWatchlist', { provider: 'simkl' });
+  f.local.trackerAccountsV1.simkl.expiresAt = 1;
+  const refreshed = await f.call('getTrackerWatchlist', { provider: 'simkl' });
+  assert.equal(refreshed.snapshotId, first.snapshotId);
+  const more = await f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: first.snapshotId });
+  assert.equal(more.items[0].title, 'Film 100');
+  assert.equal(more.snapshotId, first.snapshotId);
+  assert.equal(f.requests.length, 6, 'only token refresh and an activity check are added by another Sync');
+  assert.ok(!JSON.stringify(f.session).includes('secret'), 'session snapshots do not duplicate credentials');
+});
+
+test('a new Simkl account cannot read a previous account snapshot, including after a worker restart', async () => {
+  const f = load({ accounts: { simkl: account({ accountRevision: 'previous-account' }) }, fetch: async url => url.includes('/activities') ? reply({ all: 'first' })
+    : url.includes('/movies/') ? reply({ movies: Array.from({ length: 150 }, (_, i) => ({ status: 'plantowatch', movie: { title: `Private film ${i}` } })) }) : reply({}) });
+  const first = await f.call('getTrackerWatchlist', { provider: 'simkl' });
+  const different = load({ accounts: { simkl: account({ accountRevision: 'different-account' }) }, session: f.session });
+  await assert.rejects(different.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: first.snapshotId }), /no longer available.*Sync watchlist/);
+  assert.equal(different.requests.length, 0);
+  await f.call('disconnectTracker', { provider: 'simkl' });
+  assert.deepEqual(f.session, {}, 'disconnect removes retained private reviews');
+});
+
+test('Simkl review retention is bounded and evicted reviews fail explicitly instead of mixing pages', async () => {
+  let revision = 0;
+  const f = load({ accounts: { simkl: account({ accountRevision: 'same-account' }) }, fetch: async url => url.includes('/activities') ? reply({ all: String(revision) })
+    : url.includes('/movies/') ? reply({ movies: Array.from({ length: 101 }, (_, i) => ({ status: 'plantowatch', movie: { title: `Revision ${revision} film ${i}` } })) }) : reply({}) });
+  const reviews = [];
+  for (; revision < 12; revision++) reviews.push(await f.call('getTrackerWatchlist', { provider: 'simkl' }));
+  await assert.rejects(f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: reviews[0].snapshotId }), /no longer available.*Sync watchlist/);
+  const retained = await f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: reviews[2].snapshotId });
+  assert.equal(retained.items[0].title, 'Revision 2 film 100');
+  const newest = await f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: reviews[11].snapshotId });
+  assert.equal(newest.items[0].title, 'Revision 11 film 100');
+  assert.ok(Buffer.byteLength(JSON.stringify(f.session)) <= 2 * 1024 * 1024);
+});
+
+test('Simkl review continuations require a valid snapshot before any permission or network work', async () => {
+  const f = load({ accounts: { simkl: account() } });
+  f.context.chrome.permissions.contains = async () => { throw new Error('Invalid pagination should be rejected first'); };
+  for (const snapshotId of [undefined, null, '', '__proto__', {}, 1]) {
+    await assert.rejects(f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId }), /Sync watchlist/);
+  }
+  assert.equal(f.requests.length, 0);
+});
+
+test('disconnect retires a Simkl snapshot while its session write is pending', async () => {
+  const pending = gate(); let writing = false;
+  const f = load({ accounts: { simkl: account({ accountRevision: 'same-account' }) }, fetch: async url => url.includes('/activities') ? reply({ all: 'first' })
+    : url.includes('/movies/') ? reply({ movies: [{ status: 'plantowatch', movie: { title: 'Retired private film' } }] }) : reply({}) });
+  const set = f.context.chrome.storage.session.set;
+  f.context.chrome.storage.session.set = async value => { writing = true; await pending.promise; await set(value); };
+  const reading = f.call('getTrackerWatchlist', { provider: 'simkl' }).then(() => null, error => error);
+  while (!writing) await new Promise(resolve => setImmediate(resolve));
+  const disconnecting = f.call('disconnectTracker', { provider: 'simkl' });
+  pending.resolve();
+  const error = await reading; await disconnecting;
+  assert.match(error?.message || '', /account changed/);
+  assert.equal(f.local.trackerAccountsV1.simkl.accessToken, undefined);
+  assert.deepEqual(f.session, {});
+});
+
+test('cached Simkl pages work offline without refreshing expired tokens or advancing Last synced', async () => {
+  const f = load({ accounts: { simkl: account({ accountRevision: 'same-account' }) }, fetch: async url => url.includes('/activities') ? reply({ all: 'first' })
+    : url.includes('/movies/') ? reply({ movies: Array.from({ length: 150 }, (_, i) => ({ status: 'plantowatch', movie: { title: `Film ${i}` } })) }) : reply({}) });
+  const first = await f.call('getTrackerWatchlist', { provider: 'simkl' });
+  f.local.trackerAccountsV1.simkl.expiresAt = 1;
+  f.context.chrome.permissions.contains = async () => { throw new Error('Cached pagination must not contact the provider'); };
+  const more = await f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: first.snapshotId });
+  assert.equal(more.items[0].title, 'Film 100');
+  assert.equal(more.lastSyncAt, first.lastSyncAt);
+  assert.equal(f.local.trackerAccountsV1.simkl.lastSyncAt, first.lastSyncAt);
+  assert.equal(f.requests.length, 4);
+  assert.equal(f.local.trackerAccountsV1.simkl.accessToken, 'access-secret');
+});
+
+test('multibyte Simkl snapshots respect the byte budget while keeping the newest review intact', async () => {
+  let revision = 0;
+  const f = load({ accounts: { simkl: account({ accountRevision: 'same-account' }) }, fetch: async url => url.includes('/activities') ? reply({ all: String(revision) })
+    : url.includes('/movies/') ? reply({ movies: Array.from({ length: 500 }, (_, i) => ({ status: 'plantowatch', movie: { title: `${'映'.repeat(290)} ${revision} ${i}` } })) }) : reply({}) });
+  const reviews = [];
+  for (; revision < 6; revision++) reviews.push(await f.call('getTrackerWatchlist', { provider: 'simkl' }));
+  assert.ok(Buffer.byteLength(JSON.stringify(f.session)) <= 2 * 1024 * 1024);
+  await assert.rejects(f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: reviews[0].snapshotId }), /no longer available/);
+  const newest = await f.call('getTrackerWatchlist', { provider: 'simkl', page: 5, snapshotId: reviews[5].snapshotId });
+  assert.equal(newest.items.length, 100);
+  assert.equal(newest.items[99].title, `${'映'.repeat(290)} 5 499`);
+});
+
+test('corrupt retained rows invalidate a whole Simkl review instead of shifting its page boundaries', async () => {
+  const f = load({ accounts: { simkl: account({ accountRevision: 'same-account' }) }, fetch: async url => url.includes('/activities') ? reply({ all: 'first' })
+    : url.includes('/movies/') ? reply({ movies: Array.from({ length: 150 }, (_, i) => ({ status: 'plantowatch', movie: { title: `Film ${i}` } })) }) : reply({}) });
+  const first = await f.call('getTrackerWatchlist', { provider: 'simkl' });
+  f.session.simklWatchlistSnapshotsV1.snapshots[0].items[0].title = null;
+  await assert.rejects(f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: first.snapshotId }), /no longer available.*Sync watchlist/);
+  assert.equal(f.requests.length, 4);
+});
+
+test('a cached Simkl page preserves a newer sync stamp committed while its session read is pending', async () => {
+  const f = load({ accounts: { simkl: account({ accountRevision: 'same-account' }) }, fetch: async url => url.includes('/activities') ? reply({ all: 'first' })
+    : url.includes('/movies/') ? reply({ movies: Array.from({ length: 150 }, (_, i) => ({ status: 'plantowatch', movie: { title: `Film ${i}` } })) }) : reply({}) });
+  const first = await f.call('getTrackerWatchlist', { provider: 'simkl' });
+  const get = f.context.chrome.storage.session.get;
+  let release;
+  f.context.chrome.storage.session.get = () => new Promise(resolve => { release = async () => resolve(await get()); });
+  const reading = f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: first.snapshotId });
+  while (!release) await new Promise(resolve => setImmediate(resolve));
+  f.local.trackerAccountsV1.simkl.lastSyncAt = first.lastSyncAt + 5000;
+  await release();
+  const more = await reading;
+  assert.equal(more.lastSyncAt, first.lastSyncAt + 5000);
+  assert.equal(f.local.trackerAccountsV1.simkl.lastSyncAt, more.lastSyncAt);
+});
+
+for (const replaceAccount of [false, true]) test(`a credential update queued during cached pagination respects account identity (replacement: ${replaceAccount})`, async () => {
+  const f = load({ accounts: { simkl: account({ accountRevision: 'same-account' }) }, fetch: async url => url.includes('/activities') ? reply({ all: 'first' })
+    : url.includes('/movies/') ? reply({ movies: Array.from({ length: 150 }, (_, i) => ({ status: 'plantowatch', movie: { title: `Film ${i}` } })) }) : reply({}) });
+  const first = await f.call('getTrackerWatchlist', { provider: 'simkl' });
+  const get = f.context.chrome.storage.session.get;
+  let updating;
+  f.context.chrome.storage.session.get = async () => {
+    const stored = await get();
+    updating = f.api.commitTracker('simkl', f.api.trackerEpoch('simkl'), current => ({ ...current,
+      accessToken: 'rotated-access', refreshToken: 'rotated-refresh',
+      accountRevision: replaceAccount ? 'different-account' : current.accountRevision }));
+    return stored;
+  };
+  const reading = f.call('getTrackerWatchlist', { provider: 'simkl', page: 2, snapshotId: first.snapshotId });
+  if (replaceAccount) await assert.rejects(reading, /account changed/);
+  else {
+    const more = await reading;
+    assert.equal(more.items[0].title, 'Film 100');
+    assert.equal(more.snapshotId, first.snapshotId);
+  }
+  await updating;
 });
 
 test('provider errors never echo response bodies or tokens', async () => {
@@ -373,7 +540,7 @@ test('Simkl import exposes at most 500 items in explicit pages and marks truncat
     : url.includes('/movies/') ? reply({ movies: Array.from({ length: 501 }, (_, i) => ({ status: 'plantowatch', movie: { title: `Film ${i}`, year: 2020 } })) }) : reply({}) });
   const first = await f.call('getTrackerWatchlist', { provider: 'simkl' });
   assert.equal(first.items.length, 100); assert.equal(first.truncated, true);
-  const final = await f.call('getTrackerWatchlist', { provider: 'simkl', page: 5 });
+  const final = await f.call('getTrackerWatchlist', { provider: 'simkl', page: 5, snapshotId: first.snapshotId });
   assert.equal(final.items.length, 100); assert.equal(final.nextPage, null);
   assert.equal(final.skipped, 0); assert.equal(final.truncated, true);
   assert.equal(f.requests.length, 4, 'additional pages read the same immutable snapshot');

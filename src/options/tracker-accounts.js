@@ -292,6 +292,7 @@
     clearWatchlist(card) {
       card.items = [];
       card.nextPage = null;
+      card.snapshotId = null;
       card.skipped = 0;
       card.list.replaceChildren();
     }
@@ -325,15 +326,22 @@
     async loadWatchlist(card, page, focusOwner = document.activeElement === card.more ? card.more : null) {
       if (card.sync.disabled || !Number.isInteger(page) || page < 1 || page > 5) return;
       const generation = ++card.watchGeneration;
+      const snapshotId = page > 1 ? card.snapshotId : null;
       let firstNewTitle = null;
       if (page === 1) this.clearWatchlist(card);
       card.loading = true;
       card.status.textContent = 'Reading watchlist…';
       this.updateControls(card);
       try {
-        const data = await this.message('getTrackerWatchlist', { provider: card.provider.id, page });
+        const data = await this.message('getTrackerWatchlist', { provider: card.provider.id, page, ...(snapshotId ? { snapshotId } : {}) });
         if (generation !== card.watchGeneration || !card.account.connected) return;
         if (data?.provider !== card.provider.id || data.page !== page || !Array.isArray(data.items)) throw new Error('The provider returned an unreadable watchlist. Try Sync watchlist again.');
+        if (card.provider.id === 'simkl') {
+          if (typeof data.snapshotId !== 'string' || !/^[a-f0-9]{64}$/.test(data.snapshotId) || (page > 1 && data.snapshotId !== snapshotId)) {
+            throw new Error('This page belongs to a different Simkl review. Choose Sync watchlist to start a new review.');
+          }
+          card.snapshotId = data.snapshotId;
+        }
         const items = data.items.filter(item => typeof item?.title === 'string' && item.title.trim() && ['movie', 'tv'].includes(item.mediaType));
         const start = card.items.length;
         card.items.push(...items.slice(0, 500 - card.items.length));
