@@ -1608,6 +1608,27 @@
     return cards[0] ? getCardLayoutItem(cards[0]).parentElement : null;
   }
 
+  function getCardsGrids(cards = getMediaCards()) {
+    const grids = [];
+    const seen = new Set();
+    for (const card of cards) {
+      const grid = getCardsGrid([card]);
+      if (!grid || seen.has(grid)) continue;
+      seen.add(grid);
+      grids.push(grid);
+    }
+    return grids;
+  }
+
+  function applyScoreSortToAll(order = currentSort) {
+    getCardsGrids().forEach(grid => applyScoreSort(grid, order));
+  }
+
+  function applyScoreFiltersToAll(filters = currentFilters, bar = document.getElementById('seerr-filter-bar')) {
+    getCardsGrids().forEach(grid => applyScoreFilters(grid, filters));
+    updateSortFilterCoverage(null, bar);
+  }
+
   function insertControlsBeforeGrid(bar, grid) {
     if (!grid?.parentElement) return false;
     grid.parentElement.insertBefore(bar, grid);
@@ -1710,13 +1731,13 @@
             // Only a pair needs separating, and only the upper one moves.
             if (audienceBadge && upperBadge) upperBadge.classList.add('seerr-card-badge-upper');
           }
-          applyScoreFilters(getCardsGrid());
+          applyScoreFiltersToAll();
           injectSortFilterControls();
         }).catch(err => log('Card badge ratings failed:', err))
           .finally(() => {
             if (generation !== routeGeneration || !card.isConnected || identityEpoch !== (card.__seerrIdentityEpoch || 0)) return;
             card.__seerrBadgesResolving = false;
-            applyScoreFilters(getCardsGrid());
+            applyScoreFiltersToAll();
             setTimeout(injectSortFilterControls, 100);
           });
       } else {
@@ -2093,7 +2114,7 @@
     if (!bar) return;
     const coverageEl = bar.querySelector('.seerr-score-coverage');
     if (!coverageEl) return;
-    const cards = getMediaCards(grid || bar.nextElementSibling || bar.parentElement);
+    const cards = grid ? getMediaCards(grid) : getMediaCards();
     const total = cards.length;
     const scored = cards.filter(c => getCardAnyScore(c) !== null).length;
     const visibility = new Map();
@@ -2283,7 +2304,7 @@
     if (!isListRoute(route)) return;
 
     if (document.querySelector('[data-seerr-overlay="true"][class*="sort-filter-bar"]')) {
-      applyScoreFilters(getCardsGrid());
+      applyScoreFiltersToAll();
       return;
     }
 
@@ -2356,14 +2377,14 @@
 
     function updateCoverage() {
       // A late refresh still belongs to this toolbar, even after navigation.
-      updateSortFilterCoverage(grid, bar);
+      updateSortFilterCoverage(null, bar);
       updateCacheAge();
     }
 
     function updateCacheAge() {
       const ageEl = bar.querySelector('.seerr-cache-age');
       if (!ageEl) return;
-      ageEl.textContent = describeCacheAge(ratingsCacheAge(loadedTitles(grid)));
+      ageEl.textContent = describeCacheAge(ratingsCacheAge(loadedTitles()));
     }
 
     // Wire toggle button immediately (BUG 5 fix)
@@ -2377,7 +2398,7 @@
     sortSelect.addEventListener('change', () => {
       currentSort = sortSelect.value;
       presetControls?.currentChanged();
-      applyScoreSort(grid);
+      applyScoreSortToAll();
       updateCoverage();
     });
 
@@ -2391,8 +2412,7 @@
         for (const [key, field] of Object.entries({ minCritics: 'critics', minAudience: 'audience', minTmdb: 'tmdb', minImdb: 'imdb' })) {
           bar.querySelector(`.seerr-min-${field}`).value = String(currentFilters[key]);
         }
-        applyScoreFilters(grid);
-        applyScoreSort(grid);
+        applyScoreFiltersToAll(preset.filters, bar);
         markActiveFilters(bar);
         updateCoverage();
       }
@@ -2400,18 +2420,21 @@
 
     // ── Reset ──
     bar.querySelector('.seerr-reset-sort').addEventListener('click', () => {
-      // Restore original order by re-appending in source order
-      const allCards = getMediaCards(grid);
-      ensureCardIndexes(allCards);
-      const ordered = allCards.sort((a, b) => {
-        const idxA = parseInt(a.getAttribute('data-seerr-card-index') || '0');
-        const idxB = parseInt(b.getAttribute('data-seerr-card-index') || '0');
-        return idxA - idxB;
-      });
-      ordered.forEach(c => {
-        setFilterHidden(c, false);
-        setFilterHidden(getCardLayoutItem(c), false);
-        grid.appendChild(getCardLayoutItem(c));
+      // Restore original order within each rendered grid, never moving a
+      // card between independent Seerr sections.
+      getCardsGrids().forEach(grid => {
+        const allCards = getMediaCards(grid);
+        ensureCardIndexes(allCards);
+        const ordered = allCards.sort((a, b) => {
+          const idxA = parseInt(a.getAttribute('data-seerr-card-index') || '0');
+          const idxB = parseInt(b.getAttribute('data-seerr-card-index') || '0');
+          return idxA - idxB;
+        });
+        ordered.forEach(c => {
+          setFilterHidden(c, false);
+          setFilterHidden(getCardLayoutItem(c), false);
+          grid.appendChild(getCardLayoutItem(c));
+        });
       });
       currentSort = 'default';
       sortSelect.value = 'default';
@@ -2454,7 +2477,7 @@
         if (bulkRunIsCurrent(run) && button.isConnected) {
           injectCardBadges();
           updateCoverage();
-          applyScoreFilters(grid);
+          applyScoreFiltersToAll(currentFilters, bar);
         }
       }
     });
@@ -2466,7 +2489,7 @@
       button.disabled = true;
       button.textContent = 'Refreshing...';
       try {
-        await refreshLoadedScores(grid);
+        await refreshLoadedScores();
       } finally {
         button.disabled = false;
         button.textContent = label;
@@ -2487,7 +2510,7 @@
       }
       presetControls?.currentChanged();
       markActiveFilters(bar);
-      applyScoreFilters(grid);
+      applyScoreFiltersToAll(currentFilters, bar);
       updateCoverage();
     }
 
@@ -2499,7 +2522,7 @@
     if (retryCount < 5) {
       setTimeout(() => {
         updateCoverage();
-        if (countCardsWithRatings(getMediaCards(grid)).rated === 0) {
+        if (countCardsWithRatings(getMediaCards()).rated === 0) {
           injectCardBadges();
         }
       }, 1000 + retryCount * 1000);

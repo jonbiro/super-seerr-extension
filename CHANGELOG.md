@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.252]
+
+- Apply sorting, filtering, reset, refresh coverage, and cache-age reporting to every rendered Seerr grid instead of only the first section on multi-grid pages.
+
 ## [3.5.251]
 
 - Ignore structurally empty persisted Rotten Tomatoes cache records so malformed entries cannot suppress a fresh score lookup until expiry.

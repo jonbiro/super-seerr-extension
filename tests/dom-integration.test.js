@@ -92,6 +92,24 @@ test('mixed Seerr card layouts keep link-backed cards in the overlay', async t =
   assert.ok(extra.querySelector('.seerr-select-checkbox'), 'the link-backed card should be selectable');
 });
 
+test('one filter bar covers and filters cards across multiple Seerr grids', async t => {
+  const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  const secondary = fixture.window.document.createElement('div');
+  secondary.id = 'secondary-grid';
+  secondary.innerHTML = '<article data-testid="title-card" data-id="4"><a href="/movie/4"><h2>Low</h2></a></article>';
+  fixture.window.document.querySelector('main').append(secondary);
+  fixture.window.testOverlay.injectCardBadges();
+  await settle();
+
+  const input = fixture.window.document.querySelector('.seerr-min-critics');
+  input.value = '80'; input.dispatchEvent(new fixture.window.Event('input'));
+  assert.equal(secondary.querySelector('article').style.display, 'none', 'filtering must include cards in later grids');
+  assert.equal(fixture.window.document.querySelector('.seerr-score-coverage').textContent, '3/4 scored · 1 visible', 'coverage must include every grid');
+  fixture.window.document.querySelector('.seerr-reset-sort').click();
+  assert.equal(secondary.querySelector('article').style.display, '', 'Reset must restore cards in later grids');
+});
+
 test('real DOM sorting follows ratings, stays idempotent and restores original order', async t => {
   const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
   await settle();
