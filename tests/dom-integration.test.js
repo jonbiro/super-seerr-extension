@@ -75,6 +75,23 @@ test('an empty Seerr list does not leave an orphaned filter toggle', async t => 
   assert.equal(fixture.window.document.querySelector('#seerr-filter-bar'), null);
 });
 
+test('mixed Seerr card layouts keep link-backed cards in the overlay', async t => {
+  const fixture = createOverlay();
+  t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
+  await settle();
+  const extra = fixture.window.document.createElement('article');
+  extra.innerHTML = '<a href="/movie/99"><h2>Extra title</h2></a>';
+  fixture.window.document.querySelector('#grid').append(extra);
+
+  // Seerr can briefly mix its stable title-card wrapper with a card that has
+  // only its route link while React finishes a list update. Both card shapes
+  // must stay addressable for selection, scoring, and filtering.
+  fixture.window.document.querySelector('.seerr-toggle-select').click();
+  fixture.window.testOverlay.injectCardBadges();
+  await settle();
+  assert.ok(extra.querySelector('.seerr-select-checkbox'), 'the link-backed card should be selectable');
+});
+
 test('real DOM sorting follows ratings, stays idempotent and restores original order', async t => {
   const fixture = createOverlay(); t.after(() => (fixture.window.dispatchEvent(new fixture.window.Event('pagehide')), fixture.dom.window.close()));
   await settle();

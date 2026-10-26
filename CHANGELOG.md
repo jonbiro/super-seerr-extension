@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.244]
+
+- Keep link-backed Seerr cards visible to ratings, filters, and bulk selection when a list temporarily mixes them with `data-testid="title-card"` wrappers.
+
 ## [3.5.243]
 
 - Ignore generic provider error documents on title-shaped routes so 404/5xx pages cannot become false requestable titles.

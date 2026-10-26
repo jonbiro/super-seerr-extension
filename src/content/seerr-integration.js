@@ -1562,13 +1562,21 @@
   function getMediaCards(root = document) {
     const titleCards = Array.from(root.querySelectorAll('[data-testid="title-card"]'))
       .filter(card => !card.closest('[data-seerr-overlay="true"]'));
-    if (titleCards.length > 0) return titleCards;
-
     const links = Array.from(root.querySelectorAll('a[href]'))
       .filter(link => mediaLinkTarget(link.getAttribute('href')))
       .filter(link => !link.closest('[data-seerr-overlay="true"]'));
     const cards = [];
     const seen = new Set();
+
+    // React can briefly mix its stable title-card wrapper with a link-backed
+    // card while a list update is settling. Start with the wrapper cards, but
+    // still collect any link-only cards instead of choosing one representation
+    // for the whole root.
+    titleCards.forEach(card => {
+      if (seen.has(card)) return;
+      seen.add(card);
+      cards.push(card);
+    });
 
     links.forEach(link => {
       const card = link.closest(MEDIA_CARD_CONTAINER_SELECTOR) || link;
