@@ -245,14 +245,25 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     await eventually(() => extensionScript('return (await api.scripting.getRegisteredContentScripts()).length;'), 0, 'revocation removes registered scripts');
     await navigate(`${origin}/discover`);
     assert.equal(await badges(), 0);
-    // Exercise the shipped manifest and complete bootstrap on all seven sites.
+    // Firefox preserves the old host grants on upgrade. New required discovery
+    // hosts still need the user's site-access approval; don't mistake a declared
+    // host for a granted one or bypass the browser's permission manager.
+    await navigate(optionsUrl);
+    const missingDiscoveryHosts = await extensionScript(`
+      const missing = [];
+      for (const origin of arguments[0]) if (!await api.permissions.contains({ origins: [origin] })) missing.push(origin);
+      return missing;
+    `, [build.manifest.host_permissions]);
+    t.diagnostic(`Discovery hosts awaiting approval after upgrade: ${missingDiscoveryHosts.join(', ') || 'none'}`);
+    // Exercise the shipped manifest and complete bootstrap on all nine sites.
     await context('chrome');
     await asyncScript(`
       const { ExtensionPermissions } = ChromeUtils.importESModule('resource://gre/modules/ExtensionPermissions.sys.mjs');
       const policy = WebExtensionPolicy.getByID(arguments[0]);
-      await ExtensionPermissions.add(arguments[0], { permissions: [], origins: ['http://127.0.0.1/*'] }, policy.extension);
-    `, [addonId]);
+      await ExtensionPermissions.add(arguments[0], { permissions: [], origins: arguments[1] }, policy.extension);
+    `, [addonId, ['http://127.0.0.1/*', ...missingDiscoveryHosts]]);
     await context('content');
+    assert.equal(await extensionScript('return await api.permissions.contains({ origins: arguments[0] });', [build.manifest.host_permissions]), true);
     for (const fixture of require('./site-fixtures.cjs').SITES) {
       await navigate(fixture.url);
       await eventually(() => script('return document.querySelectorAll(".seerr-flyout").length;'), 1, `${fixture.site} ${fixture.expect.mediaType}: one packaged flyout`);

@@ -151,7 +151,7 @@ test('an expanded site flyout follows SPA navigation and is removed on destroy',
   await expect.poll(() => options.evaluate(() => chrome.permissions.contains({ origins: ['http://127.0.0.1/*'] }))).toBe(true);
   const page = await context.newPage();
   await page.goto(`${origin}/title/first`);
-  await page.locator('h1').evaluate(element => { element.textContent = 'First title'; });
+  await page.locator('h1').evaluate(element => { element.textContent = 'Fight Club'; });
   await page.bringToFront();
   const tabId = await options.evaluate(async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0].id);
   await options.evaluate(async tabId => {
@@ -163,14 +163,15 @@ test('an expanded site flyout follows SPA navigation and is removed on destroy',
       class NavigationProbe extends window.BaseIntegration {
         constructor() { super('NavigationProbe', { uiTheme: 'flyout', retryDelay: 100000 }); }
         async extractMediaData() {
-          return { title: document.querySelector('h1').textContent, tmdbId: 550, mediaType: 'movie' };
+          const title = document.querySelector('h1').textContent;
+          return { title, tmdbId: title === 'Fight Club' ? 550 : 910, mediaType: 'movie' };
         }
       }
       window.navigationProbe = new NavigationProbe();
       await window.navigationProbe.init();
     } });
   }, tabId);
-  await expect(page.locator('.seerr-title')).toHaveText('First title');
+  await expect(page.locator('.seerr-title')).toHaveText('Fight Club');
   const tabButton = page.getByRole('button', { name: 'Open Super Seerr', exact: true });
   await tabButton.focus();
   await page.keyboard.press('Enter');
@@ -182,10 +183,10 @@ test('an expanded site flyout follows SPA navigation and is removed on destroy',
   await page.keyboard.press('Space');
   await expect(page.locator('.seerr-flyout')).toHaveClass(/expanded/);
   await page.evaluate(() => {
-    document.querySelector('h1').textContent = 'Second title';
+    document.querySelector('h1').textContent = 'The Thing';
     history.pushState({}, '', '/title/second');
   });
-  await expect(page.locator('.seerr-title')).toHaveText('Second title');
+  await expect(page.locator('.seerr-title')).toHaveText('The Thing');
   await expect(page.locator('.seerr-flyout')).toHaveCount(1);
   await page.locator('.seerr-tab').click();
   let watchlistPosts = 0;
@@ -398,6 +399,24 @@ test('content scripts cannot access local secrets; cache bridge and clear notifi
 
 for (const fixture of require('./site-fixtures.cjs').SITES) {
   test(`packaged ${fixture.site} integration boots on its ${fixture.expect.mediaType} fixture${fixture.label ? ` (${fixture.label})` : ''}`, async () => {
+    // Each integration can run by itself; earlier permission tests deliberately
+    // revoke this origin and must not be prerequisites for discovery coverage.
+    if (!await options.evaluate(() => chrome.permissions.contains({ origins: ['http://127.0.0.1/*'] }))) {
+      const manager = await context.newPage();
+      await manager.goto('chrome://extensions');
+      await manager.evaluate(id => chrome.developerPrivate.addHostPermission(id, 'http://127.0.0.1/*'), extensionId);
+      await manager.close();
+    }
+    // The extension manager's site-access setting alone does not request an
+    // optional runtime permission. Save through Settings so the real submit
+    // gesture grants that permission, just as it does for an installed user.
+    await options.reload();
+    await options.locator('#serverUrl').fill(origin);
+    await options.locator('#apiKey').fill('smoke-key');
+    await options.locator('button[type="submit"]').click();
+    await expect(options.locator('#status')).toContainText('Settings saved successfully');
+    const connection = await options.evaluate(() => chrome.runtime.sendMessage({ action: 'testConnection' }));
+    expect(connection.success, connection.error).toBe(true);
     const page = await context.newPage();
     // Only the webpage is a fixture. Manifest matching, script order, bootstrap,
     // DOM extraction, worker messages, and the rendered flyout are production.
@@ -420,7 +439,7 @@ for (const fixture of require('./site-fixtures.cjs').SITES) {
         await expect(page.locator('.seerr-seasons-button')).toBeHidden();
         await expect(page.locator('.seerr-seasons-button')).toBeDisabled();
       }
-    }
+    } else await expect(page.locator('.seerr-action-button')).toContainText(fixture.expect.tmdbId ? 'Request on Seerr' : 'Choose title');
     await page.keyboard.press('Escape');
     await expect(page.locator('.seerr-tab')).toHaveAttribute('aria-expanded', 'false');
     await page.close();

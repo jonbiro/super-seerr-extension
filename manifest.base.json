@@ -1,11 +1,12 @@
 {
   "manifest_version": 3,
   "name": "Super Seerr",
-  "version": "3.5.240",
-  "description": "Request movies and TV from seven discovery sites, with ratings, filters and request management for your Seerr server.",
+  "version": "3.5.241",
+  "description": "Request movies and TV from nine discovery sites, with ratings, filters and optional Trakt/Simkl watchlists for Seerr.",
   "permissions": [
     "storage",
-    "scripting"
+    "scripting",
+    "identity"
   ],
   "host_permissions": [
     "https://www.imdb.com/*",
@@ -22,7 +23,12 @@
     "https://www.trakt.tv/*",
     "https://app.trakt.tv/*",
     "https://www.filmweb.pl/*",
-    "https://filmweb.pl/*"
+    "https://filmweb.pl/*",
+    "https://simkl.com/*",
+    "https://www.simkl.com/*",
+    "https://www.justwatch.com/*",
+    "https://justwatch.com/*",
+    "https://br.justwatch.com/*"
   ],
   "optional_host_permissions": [
     "http://*/*",
@@ -150,6 +156,43 @@
         "src/shared/UIComponents.js",
         "src/shared/BaseIntegration.js",
         "src/content/filmweb-integration.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://simkl.com/movies/*",
+        "https://simkl.com/tv/*",
+        "https://simkl.com/anime/*",
+        "https://www.simkl.com/movies/*",
+        "https://www.simkl.com/tv/*",
+        "https://www.simkl.com/anime/*"
+      ],
+      "js": [
+        "src/shared/SeerrClient.js",
+        "src/shared/MediaExtractor.js",
+        "src/shared/SeasonPicker.js",
+        "src/shared/NotificationCenter.js",
+        "src/shared/UIComponents.js",
+        "src/shared/BaseIntegration.js",
+        "src/content/simkl-integration.js"
+      ],
+      "run_at": "document_end"
+    },
+    {
+      "matches": [
+        "https://www.justwatch.com/*/*/*",
+        "https://justwatch.com/*/*/*",
+        "https://br.justwatch.com/*/*/*"
+      ],
+      "js": [
+        "src/shared/SeerrClient.js",
+        "src/shared/MediaExtractor.js",
+        "src/shared/SeasonPicker.js",
+        "src/shared/NotificationCenter.js",
+        "src/shared/UIComponents.js",
+        "src/shared/BaseIntegration.js",
+        "src/content/justwatch-integration.js"
       ],
       "run_at": "document_end"
     }

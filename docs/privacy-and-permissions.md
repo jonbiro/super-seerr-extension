@@ -2,6 +2,8 @@
 
 This document describes **Super Seerr's current browser-extension behavior**. It does not replace the privacy policies of Seerr, Plex, Rotten Tomatoes, IMDb or the other websites the user visits.
 
+Firefox's installation/update disclosure declares **authentication information** and **website content** because configured service credentials and page-derived title metadata leave the browser for those services. This is distinct from developer telemetry: Super Seerr has no project analytics endpoint. The declarations follow [Mozilla's data-transmission taxonomy](https://extensionworkshop.com/documentation/develop/firefox-builtin-data-consent/); they do not enable extra requests or establish store approval.
+
 For installation and everyday use, start with the [README](../README.md) and the [user guide](user-guide.md). Source-level implementation boundaries are documented in [Development](development.md) and [Architecture](design.md).
 
 ## Summary
@@ -9,7 +11,7 @@ For installation and everyday use, start with the [README](../README.md) and the
 - Super Seerr has **no project telemetry or analytics service configured**. A bug report or diagnostic report is not automatically uploaded.
 - It connects to the **Seerr server you choose** and, if you enable the features, makes public rating/title lookups and optional **Plex Universal Watchlist** calls.
 - The Seerr API key and Plex token are **stored locally on the device**, not synchronized with browser preferences. Treat both as passwords.
-- Permissions are deliberately scoped: seven external discovery sites plus **optional access to your configured Seerr origin**, and separate Plex access if requested.
+- Permissions are deliberately scoped: nine external discovery sites plus **optional access to your configured Seerr origin**, and separate Plex access if requested.
 - Cached ratings, per-server indexes, known title corrections and recent confirmed actions are local data. Some settings may sync through your browser profile.
 
 ## Network traffic
@@ -95,4 +97,12 @@ For broader control of data held by Seerr or Plex, use those services directly.
 
 Seerr is the principal integration target. Legacy Overseerr/Jellyseerr installs share many API patterns but have not been comprehensively validated against the latest extension. Matching on live external sites can break when sites change markup or block automated clients, and not all movies have every source score.
 
-The project is **not affiliated with** Seerr, Plex, Rotten Tomatoes or the seven supported movie/TV sites. This is a source-build extension, not a certified privacy product or a publicly approved browser-store release.
+The project is **not affiliated with** Seerr, Plex, Rotten Tomatoes or the nine supported movie/TV sites. This is a source-build extension, not a certified privacy product or a publicly approved browser-store release.
+
+## Optional tracker accounts and discovery searches
+
+Settings can connect registered Trakt and Simkl public OAuth apps. The `identity` permission opens the provider sign-in window and supplies the browser callback. Provider API/auth host access is requested when connecting; discovery-page access alone does not connect an account. Access and refresh tokens plus app IDs stay in local extension storage, never browser sync or content-script messages. Disconnect removes this extension’s local tokens and imported in-memory list; revoke the app at the provider to end its grant.
+
+Manual watchlist sync reads planned movies/shows (and identifiable Simkl anime), with at most 500 normalized titles exposed for review. It performs no tracker-list changes or Seerr requests. Imported titles are sent to Seerr only when you choose Find in Seerr. Tokens, titles and imported list contents are not included in diagnostic exports.
+
+Explore-this-title links send the search title only when clicked. JustWatch country selection is a synced preference (`justWatchCountry`); no JustWatch account, private API, account cookies or subscription data are accessed. Copy title writes to the clipboard only after an explicit click. See [tracker setup](tracker-integrations.md) for provider authorization and validation limits.

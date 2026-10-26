@@ -18,7 +18,7 @@ These criteria describe the current product contract. They replace the historica
 
 ## Flyout
 
-- Supported sites: IMDb, RT, TMDB, Letterboxd, Metacritic, Trakt, Filmweb.
+- Supported sites: IMDb, RT, TMDB, Letterboxd, Metacritic, Trakt, Filmweb, Simkl, JustWatch.
 - Letterboxd handles movies; other integrations support movies and TV where the site provides sufficient metadata.
 - Extract identity through layered selectors and fallbacks; prefer explicit media IDs where available.
 - Display request status and monitoring context. Use the media-server links supplied by Seerr for available media, naming the server from its reported type and staying neutral when that is unknown.
@@ -62,12 +62,20 @@ These criteria describe the current product contract. They replace the historica
 
 ## Known limits
 
-- Firefox 157.0.1 passes the real-extension local-fixture smoke test with geckodriver 0.37.1 for permissions, overlay injection, SPA navigation, background reload, cache clearing and seven supported-site synthetic fixture integrations. Authenticated live-site coverage and physical-device/browser compatibility remain open.
+- The Firefox runtime harness covers permissions, overlay injection, SPA navigation, background reload, cache clearing and all nine supported-site synthetic fixtures. See the current handoff for its latest result. Authenticated live-site coverage and physical-device/browser compatibility remain open.
 - Ratings depend on RT markup, match heuristics, Seerr API responses, and the user’s session.
 - Cards are identified from the title lists Seerr fetches for itself, because Seerr's markup withholds a card's link and title until it is hovered. A card whose poster matches no observed item stays unresolved rather than being guessed at.
 - Cached ratings are bounded by entry count rather than age, and the two caches are capped independently. Both persist as a single rewritten blob, so a cap is also a write-size decision.
 - Cached scored bundles remain visible while aging results refresh: complete bundles after 24 hours, partial bundles after one hour. Unrated titles retry after six hours, and failed lookups after two minutes. Refresh scores and per-title retry bypass the normal freshness window.
 - Sorting covers loaded cards associated with the controls, not the complete catalogue or all carousels.
 - Cards without explicit links require a unique matching list title. Ambiguous or missing metadata is left unresolved.
-- Live validation across the seven external sites and a configured Seerr/Jellyfin instance is still needed before a store release.
+- Live validation across the nine external sites and a configured Seerr/Jellyfin instance is still needed before a store release.
 - Whether an existing Chrome install retains its host permission when that permission moves from required to optional is expected but unverified; check an actual upgrade before a store release.
+
+## Tracker accounts
+
+- Trakt and Simkl connections are optional, independent and device-local. Only trusted extension pages may configure or read account state. Never send credentials to discovery content scripts.
+- Use public-client PKCE with exact callback and state validation; honor Simkl issuer validation. No client secret or account password entry.
+- Explicit manual sync imports a bounded planned watchlist; it never writes to a tracker or automatically submits a Seerr request. Missing app registration or unavailable provider APIs must remain visible errors.
+- Reject obsolete replies after disconnect or client changes, serialize refresh-token rotation, and keep source accounts separate from the selected Seerr destination.
+- JustWatch discovery uses its public title pages and country-specific search, not its partner-only API.

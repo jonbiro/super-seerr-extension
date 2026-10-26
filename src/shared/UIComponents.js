@@ -274,8 +274,93 @@ class UIComponents {
       this.el('span', { textContent: 'Add to Plex Watchlist' })
     ]);
     panel.appendChild(plexButton);
+    const exploration = this.createTitleExploration(mediaData);
+    if (exploration) panel.appendChild(exploration);
 
     return { statusSection, button, statusIcon, statusText, watchlistButton, plexButton, seasonButton };
+  }
+
+  createTitleExploration(mediaData) {
+    const title = typeof mediaData?.title === 'string' ? mediaData.title.trim() : '';
+    if (!title) return null;
+    const year = Number.isInteger(mediaData.year) && mediaData.year >= 1870 &&
+      mediaData.year <= new Date().getFullYear() + 10 ? mediaData.year : null;
+    const query = `${title}${year ? ` ${year}` : ''}`;
+    const countries = {
+      us: 'United States', uk: 'United Kingdom', ca: 'Canada', au: 'Australia',
+      de: 'Germany', fr: 'France', it: 'Italy', es: 'Spain', br: 'Brazil', in: 'India',
+      jp: 'Japan', kr: 'South Korea', pl: 'Poland', fi: 'Finland', mx: 'Mexico',
+      at: 'Austria', ch: 'Switzerland'
+    };
+    const validCountry = value => typeof value === 'string' && Object.hasOwn(countries, value);
+    const details = this.el('details', { className: 'seerr-title-exploration' }, [
+      this.el('summary', { textContent: 'Explore this title' })
+    ]);
+    const body = this.el('div', { className: 'seerr-exploration-body' });
+    const makeLink = (name, url) => this.el('a', {
+      textContent: name, href: url.href, target: '_blank', rel: 'noopener noreferrer'
+    });
+    const traktUrl = new URL('https://app.trakt.tv/search');
+    traktUrl.searchParams.set('q', query);
+    const trakt = makeLink('Search Trakt', traktUrl);
+    const streaming = makeLink('Where to watch', new URL('https://www.justwatch.com/us/search'));
+    const simkl = makeLink('Search Simkl', new URL('https://simkl.com/search/'));
+    const country = this.el('select', { 'aria-label': 'Streaming region' });
+    for (const [value, name] of Object.entries(countries)) country.appendChild(this.el('option', { value, textContent: name }));
+    let initial = 'us';
+    try {
+      const url = new URL(window.location.href);
+      const routeCountry = url.pathname.split('/')[1]?.toLowerCase();
+      const languageCountry = new Intl.Locale(navigator.language).region?.toLowerCase();
+      if (['justwatch.com', 'www.justwatch.com', 'br.justwatch.com'].includes(url.hostname) && validCountry(routeCountry)) initial = routeCountry;
+      else if (validCountry(languageCountry === 'gb' ? 'uk' : languageCountry)) initial = languageCountry === 'gb' ? 'uk' : languageCountry;
+    } catch (_) { /* A visible default still lets the user choose a country. */ }
+    country.value = initial;
+    const updateStreaming = () => {
+      const value = validCountry(country.value) ? country.value : 'us';
+      const url = new URL(`https://www.justwatch.com/${value}/search`);
+      url.searchParams.set('q', title);
+      streaming.href = url.href;
+    };
+    updateStreaming();
+    let countryChanged = false;
+    country.addEventListener('change', async () => {
+      countryChanged = true;
+      updateStreaming();
+      try { await globalThis.chrome?.storage?.sync?.set({ justWatchCountry: country.value }); }
+      catch (_) { /* The selected link remains usable when saving is unavailable. */ }
+    });
+    // Loading preferences must not undo a selection made while storage was slow.
+    void (async () => {
+      try {
+        const saved = await globalThis.chrome?.storage?.sync?.get('justWatchCountry');
+        if (!countryChanged && validCountry(saved?.justWatchCountry)) {
+          country.value = saved.justWatchCountry;
+          updateStreaming();
+        }
+      } catch (_) { /* Country inference and manual selection remain available. */ }
+    })();
+    const label = this.el('label', { className: 'seerr-streaming-region' }, [
+      this.el('span', { textContent: 'Streaming region' }), country
+    ]);
+    const links = this.el('div', { className: 'seerr-exploration-links' }, [streaming, trakt, simkl]);
+    const copy = this.el('button', { type: 'button', textContent: 'Copy title', className: 'seerr-copy-title' });
+    const feedback = this.el('p', { role: 'status', className: 'seerr-exploration-feedback', textContent: 'Paste the copied title into Simkl search. Links open search pages in a new tab.' });
+    copy.addEventListener('click', async () => {
+      copy.disabled = true;
+      try {
+        await navigator.clipboard.writeText(query);
+        feedback.textContent = 'Title copied. Paste it into Simkl search.';
+      } catch (_) {
+        feedback.textContent = 'Could not copy. Copy the title from the heading and paste it into Simkl search.';
+      } finally { copy.disabled = false; }
+    });
+    links.appendChild(copy);
+    body.append(label, links, feedback);
+    details.appendChild(body);
+    // Native disclosure/select keyboard actions should not trigger host shortcuts.
+    details.addEventListener('keydown', event => { if (event.key !== 'Escape') event.stopPropagation(); });
+    return details;
   }
 
   updateFlyoutStatus(elements, statusData, options = {}) {
@@ -591,7 +676,7 @@ class UIComponents {
       }
 
       .seerr-tab { padding: 0; font: inherit; }
-      .seerr-flyout button:focus-visible, .seerr-panel:focus-visible {
+      .seerr-flyout :is(button, a, select, summary):focus-visible, .seerr-panel:focus-visible {
         outline: 3px solid #f59e0b;
         outline-offset: 3px;
       }
@@ -633,6 +718,31 @@ class UIComponents {
         border: 1px solid #e2e8f0;
         overflow-y: auto;
       }
+      .seerr-title-exploration {
+        margin: 12px;
+        border-top: 1px solid #94a3b866;
+        font: 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        color: inherit;
+      }
+      .seerr-title-exploration > summary { cursor: pointer; padding: 10px 2px; font-weight: 600; }
+      .seerr-exploration-body { display: grid; gap: 10px; min-width: 0; padding: 0 2px 2px; }
+      .seerr-streaming-region { display: grid; gap: 4px; font: inherit; color: inherit; }
+      .seerr-streaming-region select {
+        box-sizing: border-box; width: 100%; min-width: 0; min-height: 36px;
+        font: inherit; padding: 6px 8px; background: #fff; color: #1f2937;
+        border: 1px solid #94a3b8; border-radius: 6px;
+      }
+      .seerr-exploration-links { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .seerr-exploration-links a, .seerr-title-exploration .seerr-copy-title {
+        display: flex; align-items: center; justify-content: center; min-width: 0; min-height: 36px;
+        padding: 7px 8px; border: 1px solid #94a3b8; border-radius: 6px;
+        color: inherit; background: transparent; font: inherit; text-align: center; text-decoration: none;
+        white-space: normal; overflow-wrap: anywhere;
+      }
+      .seerr-title-exploration .seerr-copy-title { cursor: pointer; }
+      .seerr-exploration-links a:hover, .seerr-title-exploration .seerr-copy-title:hover { background: #8b5cf61a; }
+      .seerr-exploration-feedback { margin: 0; font-size: 11px; line-height: 1.5; color: inherit; }
+      .seerr-theme-dark .seerr-streaming-region select { background: #111827; color: #f9fafb; }
 
       .seerr-status-section {
         padding: 20px;

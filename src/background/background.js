@@ -16,6 +16,7 @@ import './SeasonRequests.js';
 import './OverlayStorage.js';
 import './TitleCorrections.js';
 import './FilterPresetStorage.js';
+import './TrackerAccounts.js';
 const RatingsConfig = globalThis.RatingsConfig;
 const MediaValidation = globalThis.MediaValidation;
 
@@ -257,6 +258,14 @@ class SeerrAPI {
         this.assertConnectionTarget(request, sender);
       }
       switch (request.action) {
+        case 'getTrackerAccounts':
+        case 'saveTrackerApp':
+        case 'connectTracker':
+        case 'disconnectTracker':
+        case 'getTrackerWatchlist': {
+          sendResponse({ success: true, data: await this.trackerOperation(request.action, request.data, sender) });
+          break;
+        }
         case 'getSeerrConnections':
         case 'saveSeerrConnection':
         case 'activateSeerrConnection':
@@ -867,7 +876,7 @@ class SeerrAPI {
 
 // ── Top-level setup: ensure listeners are registered before any event fires ──
 
-Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.PublicRatings, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.SeerrConnections, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests, globalThis.OverlayStorage, globalThis.TitleCorrections, globalThis.FilterPresetStorage);
+Object.assign(SeerrAPI.prototype, globalThis.SeerrMatching, globalThis.MediaStatus, globalThis.RtCache, globalThis.PublicRatings, globalThis.RottenTomatoes, globalThis.SeerrTransport, globalThis.SeerrReadCache, globalThis.SeerrConnections, globalThis.PlexWatchlist, globalThis.RecentActions, globalThis.PopupDiagnostics, globalThis.SeasonRequests, globalThis.OverlayStorage, globalThis.TitleCorrections, globalThis.FilterPresetStorage, globalThis.TrackerAccounts);
 
 const seerrAPI = new SeerrAPI();
 let initializing = true;

@@ -29,6 +29,8 @@ Load `dist/chrome` from **Chrome → Extensions → Developer mode → Load unpa
 
 After changing the source and rebuilding, **reload the extension**, then refresh any already-open Seerr and discovery pages. Some permissions or overlay registration changes require reloading the affected Seerr tab.
 
+After a Firefox upgrade, newly supported discovery sites can require a separate site-access approval. In Firefox's extension/add-on permissions controls, allow Super Seerr on Simkl or JustWatch, then reload that title page. Existing site permissions do not prove access to a newly added host.
+
 **Developer workflow note:** `make build` increments the patch version and updates the manifest, package metadata, lockfile and README badge; it is not a read-only command. A failed build can still consume a version. Avoid concurrent, separate Make invocations in the same checkout.
 
 Chrome is the primary browser CI target. Firefox's extension harness was checked with Firefox 157.0.1 and geckodriver 0.37.1 against local fixtures; complete real-world site/device verification is still outstanding. See [Firefox verification](development.md#firefox-verification-opt-in).
@@ -79,6 +81,8 @@ Named/multiple site lists, their URLs, active choice and per-site keys remain on
 | Trakt | Movies and TV |
 | Filmweb | Films and series, including Polish titles |
 | Letterboxd | **Movies only** |
+| Simkl | Movies and TV; anime only when its metadata explicitly identifies a movie or TV series |
+| JustWatch | Supported movie/TV title pages and localized routes; season/episode pages are excluded |
 
 On a supported title page, open Super Seerr's themed flyout. It shows identification details and media/request status, and may offer a playback link from Seerr when a title is already available. Super Seerr names the underlying server as Plex, Jellyfin or Emby when Seerr reports it, rather than assuming every setup uses Jellyfin.
 
@@ -182,3 +186,7 @@ For step-by-step remedies, including wrong/stale scores, browser permissions, de
 This is a personal browser extension talking to **your** Seerr server, supported public websites, and optionally Plex; no project telemetry service is configured. Keys and the Plex token stay locally stored on your device, while some harmless display preferences may sync through your browser profile. See [Privacy and permissions](privacy-and-permissions.md).
 
 Firefox currently uses a documented background-script configuration and has passed synthetic real-extension verification, but signed distribution, automatic updates, physical-device use and comprehensive live-site coverage are **not** confirmed. For current development and verification methods, see [Development](development.md).
+
+## Trakt, Simkl and JustWatch
+
+See [Tracker accounts and discovery](tracker-integrations.md) for app registration and manual watchlist sync. Simkl and JustWatch title pages now offer the same availability/request flyout as existing discovery sites. The Explore this title disclosure opens search destinations and lets you pick a JustWatch country. Season/episode pages with no clear parent identity and ambiguous anime formats are deliberately left without a request flyout.

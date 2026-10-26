@@ -8,7 +8,7 @@ const { loadIntegration } = require('./helpers/integration');
 // createMediaData stamps the site name lowercased, spaces and all.
 const SOURCE_LABELS = {
   imdb: 'imdb', tmdb: 'tmdb', letterboxd: 'letterboxd', rt: 'rotten tomatoes',
-  metacritic: 'metacritic', trakt: 'trakt', filmweb: 'filmweb'
+  metacritic: 'metacritic', trakt: 'trakt', filmweb: 'filmweb', simkl: 'simkl', justwatch: 'justwatch'
 };
 
 const { SITES } = require('./browser/site-fixtures.cjs');

@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.241]
+
+- Add request flyouts on Simkl and JustWatch title pages, including localized JustWatch routes and explicitly typed Simkl anime. Reject access-challenge pages and unrelated recommendation metadata.
+- Add Trakt and Simkl application setup, PKCE account connections, and manual read-only watchlist imports in Settings. Keep credentials device-local, bound imports, and reject stale account results.
+- Add title exploration links, a saved JustWatch streaming region, and a copy-title action for Simkl search.
+- Check localized and original titles before trusting a page-supplied TMDB ID, preventing a different title from being requested just because its release year matches.
+- Correct Firefox's data-transmission disclosure for configured service credentials and title metadata, and cover newly added site permissions during upgrades.
+
 ## [3.5.240]
 
 - Keep narrow filter action buttons aligned and equally tall when labels wrap with different system fonts, fixing the 320px Linux CI layout failures.

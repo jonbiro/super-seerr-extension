@@ -1,5 +1,34 @@
 # Super Seerr handoff to Claude
 
+## Latest continuation snapshot — 2026-10-25
+
+This snapshot supersedes the older status below. Checkout: `/Users/yoni/super-seerr-extension`, branch `master`, remote `git@github.com:jonbiro/super-seerr-extension.git`. Version **3.5.241** includes the new integrations. Use `git status` and `git log -1` for delivery state; this document records local verification before commit/CI.
+
+- Added Simkl and JustWatch discovery adapters, localized JustWatch routes, safe title exploration links, a saved streaming region, and Copy title for Simkl search.
+- Added Trakt/Simkl public-app setup and PKCE account connections in Settings. Manual Sync imports up to 500 planned titles for review; Find in Seerr opens a fresh search in the active site. It does not perform provider writes or submit Seerr requests automatically.
+- Fixed mismatched TMDB IDs being trusted when only the year matched, stale account responses, rotating token-refresh races, and challenge-page false titles.
+- Corrected Firefox's authentication/content transmission declarations. New discovery hosts need explicit approval after a Firefox upgrade; the runtime harness now verifies that grant before site injection.
+- The tracked Codex goal is **paused**, not complete, as verified with `get_goal`. This directly requested integration work did not change that goal metadata.
+
+Main new files: `src/background/TrackerAccounts.js`, `src/options/tracker-accounts.js`, `src/options/tracker-accounts.css`, `src/content/simkl-integration.js`, `src/content/justwatch-integration.js`. Shared discovery controls are in `src/shared/UIComponents.js`. Setup instructions: `docs/tracker-integrations.md`; draft store disclosure: `CHROMEWEBSTORE.md`. Source/build/test locations in the historical project map below remain useful; there are now nine discovery integrations.
+
+Verified locally on current source:
+
+- **1,676** unit/DOM/property tests passed: `/tmp/super-seerr-unit-3.5.241-final.log`.
+- **268** Chromium browser tests passed: `/tmp/super-seerr-browser-3.5.241.log`, artifacts `/tmp/super-seerr-browser-3.5.241`.
+- Firefox **157.0.1** runtime smoke passed, including 3.5.2 upgrade, twenty site fixtures, permissions, cache restart/clearing and two Seerr sites: `/tmp/super-seerr-firefox-3.5.241-final.log`.
+- Settings inspected at 320, 390 and 1440px. Review images: `/tmp/super-seerr-tracker-settings-review-final-{320,390,1440}.png`; later Simkl guidance explicitly names AUTH V2 and passed the same layout cases.
+- Both unpacked builds are at `dist/chrome` and `dist/firefox`; source parity, `npm run check` and `git diff --check` passed. Version was incremented once; the final refresh used `make -o build-version build` to retain 3.5.241.
+
+Live evidence and remaining acceptance:
+
+- JustWatch's US Fight Club page passed title/year extraction and a 390px flyout check. JustWatch TV pages and Simkl were blocked by HTTP 403. Preserve `test-results/live-sites-justwatch-simkl.json` and the separate `test-results/live-sites-simkl.json`; the latter confirms zero false flyouts on both Simkl challenge pages after the fix.
+- Real OAuth remains unverified: the user has no registered Trakt/Simkl Client IDs. Settings provides registration links, exact callback URLs and public-app instructions. Do not register accounts, share secrets, claim provider acceptance, or infer live success from fixtures.
+- Store signing/publication, authenticated live multi-server writes, and blocked public-page checks remain outside the verified results. No store release was performed.
+- Commit/push only task-owned paths after verification. Preserve the two unrelated deleted workflow files unstaged, all earlier evidence, root release artifacts, and `Puppy_Dash_Basecamp`; do not use VoiceOver or `make clean`.
+
+## Historical snapshot — 2026-10-11 (superseded)
+
 Verified locally on 2026-10-11. Start in `/Users/yoni/super-seerr-extension`.
 
 ## Current state

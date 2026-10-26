@@ -9,6 +9,7 @@ Runtime code remains plain JavaScript with no bundling step. The background entr
 | `src/background/background.js` | Browser events, settings/migration, overlay registration, message dispatch, request orchestration |
 | `src/background/SeerrTransport.js` | Authenticated HTTP transport, deadlines, response/error handling |
 | `src/background/SeerrMatching.js` | Search variants and conservative identity matching for writes |
+| `src/background/TrackerAccounts.js` | Optional PKCE connections, local tracker tokens, refresh serialization, bounded read-only imports |
 | `src/background/MediaStatus.js` | Request/media enum mapping and user-facing status |
 | `src/background/RottenTomatoes.js` | RT fetching, parsing, matching, lookup coalescing |
 | `src/background/PublicRatings.js` | Verified public RT identity, schema, freshness and byte bounds |
@@ -41,7 +42,7 @@ GECKODRIVER_PATH=/path/to/geckodriver FIREFOX_BINARY=/path/to/firefox npm run te
 
 This separate Node/WebDriver harness uses a temporary addon, profile, and the same local HTTP fixtures as Chromium. It is intended to cover optional permission grant/revocation, main- and isolated-world injection, SPA navigation, background restart via addon reload, and persisted cache clearing. Firefox permissions are granted through its own permission manager in the disposable test session, not by replacing extension API methods. Privileged WebDriver access is enabled solely for that test session.
 
-**Verified locally:** Firefox 157.0.1 and geckodriver 0.37.1 pass this test. Use a real-path temporary profile root and `--allow-system-access` as the harness does. It chooses available WebDriver and BiDi ports instead of relying on the default debugging port. The test does not modify existing browser profiles. The harness also upgrades a real 3.5.2 addon to current source, checks saved preferences and legacy secret migration, and uses native WebDriver BiDi to serve eleven synthetic movie/TV pages at all seven supported origins. Manifest matching and production bootstrap run normally. These pages are contracts, not captured live-site snapshots; live-site compatibility remains a separate check.
+The harness uses a real-path temporary profile root and `--allow-system-access`, and chooses available WebDriver and BiDi ports. It does not modify existing browser profiles. It upgrades a real 3.5.2 addon to current source, checks saved preferences and legacy secret migration, and uses native WebDriver BiDi to serve twenty synthetic movie/TV pages at all nine supported sites. Manifest matching and production bootstrap run normally. These pages are contracts, not captured live-site snapshots; live-site compatibility remains a separate check. See the current handoff for the most recent runtime result.
 
 Failures save `test-results/firefox/geckodriver.log`; failures after session creation also capture browser console messages, isolated-world helper availability, and a screenshot when possible. The harness terminates its test process group and removes its temporary extension/profile on exit. No additional automation-library dependency is required.
 
@@ -61,7 +62,8 @@ Browser tests create a temporary unpacked extension and an isolated browser prof
 
 Coverage includes:
 
-- All seven site integrations, including TV variants and Polish Unicode titles, through real manifest injection on synthetic pages.
+- All nine site integrations, including TV variants and Polish Unicode titles, through real manifest injection on synthetic pages.
+- Tracker setup and watchlist review layouts at narrow and desktop widths. Unit/worker fixtures cover PKCE callbacks, cancellation, refresh-token races, permission restoration and bounded read-only imports; real provider authorization still requires registered app IDs.
 - Upgrading actual 3.5.2 source (`4864269`) in the same profile, preserving settings and optional permissions, migrating legacy keys, and replacing dynamic script registrations. A full Git history is needed to archive this baseline; CI checks out that history. Chromium enables Developer mode only in its disposable profile to permit unpacked-addon reload.
 - Saving configuration without permission, granting optional host access, registering both isolated- and main-world scripts, and revocation.
 - Real isolated-world injection, SPA navigation to an unsupported route and back, and no duplicate badges.

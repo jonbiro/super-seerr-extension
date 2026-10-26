@@ -1,0 +1,26 @@
+#trackerAccounts { margin: 28px 0; min-width: 0; }
+#trackerAccounts h2 { font-size: 20px; margin-bottom: 8px; }
+#trackerAccounts p { margin: 8px 0; }
+#trackerAccounts .tracker-account { margin-top: 20px; padding: 16px; border: 1px solid #d1d5db; border-radius: 10px; min-width: 0; }
+#trackerAccounts legend { padding: 0 6px; font-size: 17px; font-weight: 650; }
+#trackerAccounts label { margin: 12px 0 5px; }
+#trackerAccounts a { color: #6d28d9; overflow-wrap: anywhere; }
+#trackerAccounts textarea { box-sizing: border-box; resize: vertical; width: 100%; min-width: 0; max-width: 100%; padding: 8px; font: 12px/1.5 ui-monospace, monospace; border: 1px solid #9ca3af; border-radius: 6px; background: #f9fafb; color: #374151; overflow-wrap: anywhere; }
+#trackerAccounts input { min-width: 0; }
+#trackerAccounts .tracker-help, #trackerAccounts .tracker-account-summary { font-size: 13px; color: #4b5563; }
+#trackerAccounts .tracker-account-status, #trackerAccounts .tracker-section-status { overflow-wrap: anywhere; font-size: 13px; color: #4b5563; }
+#trackerAccounts .tracker-account-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+#trackerAccounts .button { min-height: 40px; white-space: normal; overflow-wrap: anywhere; padding: 8px 12px; font-size: 13px; }
+#trackerAccounts :is(a, button, input, textarea):focus-visible { outline: 3px solid #7c3aed; outline-offset: 3px; }
+#trackerAccounts .tracker-watchlist { list-style: none; padding: 0; margin: 12px 0; max-height: 420px; overflow: auto; }
+#trackerAccounts .tracker-watchlist li { display: flex; align-items: center; gap: 10px; justify-content: space-between; padding: 10px 0; border-top: 1px solid #e5e7eb; }
+#trackerAccounts .tracker-title-info { display: grid; min-width: 0; overflow-wrap: anywhere; }
+#trackerAccounts .tracker-title-info span { font-size: 12px; color: #6b7280; }
+#trackerAccounts .tracker-watchlist .button { flex: 0 0 auto; max-width: 45%; }
+@media (max-width: 400px) {
+  #trackerAccounts .tracker-account { padding: 12px; }
+  #trackerAccounts .tracker-account-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: stretch; }
+  #trackerAccounts .tracker-account-actions .button { min-width: 0; width: 100%; }
+  #trackerAccounts .tracker-watchlist li { display: grid; }
+  #trackerAccounts .tracker-watchlist .button { justify-self: start; max-width: 100%; }
+}

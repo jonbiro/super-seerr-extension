@@ -1,8 +1,8 @@
 # Super Seerr 🍿
 
-**Request the movies and TV shows you discover, without losing your place.** Super Seerr adds media-request controls to seven discovery sites and brings ratings, sorting, watchlists and bulk actions to your own [Seerr](https://github.com/seerr-team/seerr) server.
+**Request the movies and TV shows you discover, without losing your place.** Super Seerr adds media-request controls to nine discovery sites and brings ratings, sorting, watchlists and bulk actions to your own [Seerr](https://github.com/seerr-team/seerr) server.
 
-[![Current version](https://img.shields.io/badge/version-3.5.240-blue)](CHANGELOG.md)
+[![Current version](https://img.shields.io/badge/version-3.5.241-blue)](CHANGELOG.md)
 [![CI](https://github.com/jonbiro/super-seerr-extension/actions/workflows/ci.yml/badge.svg)](https://github.com/jonbiro/super-seerr-extension/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
@@ -22,7 +22,7 @@
 
 | Where | What Super Seerr adds |
 | --- | --- |
-| **IMDb, Rotten Tomatoes, TMDB, Metacritic, Trakt, Filmweb** | Find a movie or TV title and open a request flyout, where the page provides enough identifying information. |
+| **IMDb, Rotten Tomatoes, TMDB, Metacritic, Trakt, Filmweb, Simkl, JustWatch** | Find a movie or TV title and open a request flyout, where the page provides enough identifying information. |
 | **Letterboxd** | Request matching **movies** from their Letterboxd pages. |
 | **Your configured Seerr server** | Rotten Tomatoes/IMDb/TMDB ratings on cards and detail pages; sorting, filters and reusable presets; bulk request review; quality summaries; and optional Plex Universal Watchlist buttons. |
 
@@ -33,6 +33,12 @@
 - **Separate approval from selection.** Choosing a match or a TV season does **not** automatically submit it. You confirm the request.
 - **Batch carefully.** Select titles in Seerr, review the proposed requests, and stop remaining submissions with Cancel or Escape.
 - **Watchlist choices stay distinct.** Seerr's watchlist and Plex's Universal Watchlist are separate systems. Plex integration is optional.
+
+### Trakt, Simkl and streaming discovery
+
+Connect your own registered Trakt or Simkl public app in **Settings → Trakt & Simkl watchlists**. Manually sync planned movies and shows into a local review list, then use **Find in Seerr** to choose what to request. Syncing does not change your tracker lists or automatically request media. Setup needs a public client ID and the exact callback shown in Settings; no client secret is stored. See [account setup and limits](docs/tracker-integrations.md).
+
+The flyout’s **Explore this title** section opens Trakt search, JustWatch streaming search with an explicit country, and Simkl search with a copy-title action. These are search links, not guaranteed matches. Simkl anime pages require metadata that distinguishes a movie from a TV series; JustWatch supports localized title routes.
 
 ### Ratings that explain themselves
 
@@ -77,8 +83,8 @@ For multi-site changes, Plex setup, TV-season requests, bulk review, saved prese
 
 Super Seerr runs in your browser and talks to the sites/services you choose; **no project telemetry service is configured**.
 
-- It does **not** request blanket access to every website. Media-site integrations are limited to the seven supported sites; your self-hosted Seerr origin is authorized separately when you save its URL.
-- **Seerr API keys and the Plex token are stored locally on the device**, not synced as browser preferences. Treat them like passwords. Saved site configurations also remain local when using multiple/named sites.
+- It does **not** request blanket access to every website. Media-site integrations are limited to the nine supported sites; your self-hosted Seerr origin is authorized separately when you save its URL.
+- **Seerr API keys, the Plex token, and connected tracker tokens are stored locally on the device**, not synced as browser preferences. Treat them like passwords. Saved site configurations also remain local when using multiple/named sites.
 - Rotten Tomatoes queries send media-title searches to Rotten Tomatoes. Requests are sent to **your chosen Seerr server**. Plex watchlist actions reach Plex only when configured.
 - Ratings, confirmed recent-action history and saved matches are stored locally with bounded caches. Debug logs can include titles or server responses; review them before sharing.
 
@@ -103,6 +109,7 @@ Automated tests use local fixtures and temporary extension profiles—**passing 
 
 | Documentation | What it covers |
 | --- | --- |
+| [Tracker accounts](docs/tracker-integrations.md) | Trakt/Simkl app setup, manual watchlist sync and streaming discovery |
 | [User guide](docs/user-guide.md) | Setup, multiple sites, requests, ratings, presets, seasons, history |
 | [Troubleshooting](docs/troubleshooting.md) | Missing overlays/scores, permissions, connection failures, diagnostics |
 | [Privacy & permissions](docs/privacy-and-permissions.md) | Data flows, browser permissions, keys, local/sync storage and caches |

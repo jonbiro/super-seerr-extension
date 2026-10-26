@@ -1,6 +1,36 @@
 // Synthetic contract fixtures, not snapshots or evidence of live-site compatibility.
 const SITES = [
   {
+    site: 'simkl', url: 'https://simkl.com/movies/53894/fight-club/',
+    html: '<h1>Fight Club</h1><script type="application/ld+json">{"@type":"Movie","name":"Fight Club","datePublished":"1999-10-15","url":"https://simkl.com/movies/53894/fight-club/"}</script>',
+    expect: { title: 'Fight Club', year: 1999, mediaType: 'movie' }
+  },
+  {
+    site: 'simkl', url: 'https://simkl.com/tv/11121/breaking-bad/',
+    html: '<h1>Breaking Bad</h1><script type="application/ld+json">{"@type":"TVSeries","name":"Breaking Bad","startDate":"2008-01-20","url":"https://simkl.com/tv/11121/breaking-bad/"}</script>',
+    expect: { title: 'Breaking Bad', year: 2008, mediaType: 'tv' }
+  },
+  {
+    site: 'simkl', label: 'anime film', live: false, url: 'https://simkl.com/anime/999999/fixture-film/',
+    html: '<h1>Fixture Film</h1><script type="application/ld+json">{"@type":"Movie","name":"Fixture Film","datePublished":"2020-01-01","url":"https://simkl.com/anime/999999/fixture-film/"}</script>',
+    expect: { title: 'Fixture Film', year: 2020, mediaType: 'movie' }
+  },
+  {
+    site: 'justwatch', url: 'https://www.justwatch.com/us/movie/fight-club',
+    html: '<link rel="canonical" href="https://www.justwatch.com/us/movie/fight-club"><h1 class="title-detail-hero__details__title">Fight Club<span class="release-year"> (1999)</span></h1>',
+    expect: { title: 'Fight Club', year: 1999, mediaType: 'movie' }
+  },
+  {
+    site: 'justwatch', url: 'https://www.justwatch.com/us/tv-show/breaking-bad',
+    html: '<h1 class="title-detail-hero__details__title">Breaking Bad<span class="release-year"> (2008)</span></h1>',
+    expect: { title: 'Breaking Bad', year: 2008, mediaType: 'tv' }
+  },
+  {
+    site: 'justwatch', label: 'localized route', url: 'https://www.justwatch.com/de/Serie/Breaking-Bad',
+    html: '<h1 class="title-detail-hero__details__title">Breaking Bad<span class="release-year"> (2008)</span></h1>',
+    expect: { title: 'Breaking Bad', year: 2008, mediaType: 'tv' }
+  },
+  {
     site: 'imdb',
     url: 'https://www.imdb.com/title/tt0111161/',
     html: `<h1 data-testid="hero__pageTitle"><span>The Shawshank Redemption</span></h1>

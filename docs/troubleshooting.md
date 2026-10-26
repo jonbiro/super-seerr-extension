@@ -18,6 +18,14 @@ Rebuild once, then reload the extension in `chrome://extensions`. Refresh Seerr 
 - Try a discover/search grid or a movie/TV detail route. Unsupported routes and layouts may have no overlay.
 - Some titles have no supported ratings or no sufficiently confident RT match; no badge can be correct behavior.
 
+For a newly supported discovery site, check that site's access in the browser's extension permissions. Firefox upgrades can preserve existing grants without granting newly added Simkl/JustWatch hosts. Approve the specific site and reload its title page. An HTTP 403 challenge is a separate website access block, not a missing Seerr key.
+
+## Trakt or Simkl will not connect
+
+Use **Settings → Trakt & Simkl watchlists** and follow [tracker setup](tracker-integrations.md). Register your own public app, use the exact displayed callback, and save its Client ID. Simkl requires **Mobile, desktop & browser apps → AUTH V2**. The Client ID field is not a password or client-secret field.
+
+If browser access was revoked after connection, click **Sync watchlist** to request it again. A provider denial, expired authorization or rate limit is shown as an error; reconnect when instructed and wait before retrying a rate limit. Sync imports titles for review only and never submits requests. Disconnect removes local tokens; revoke provider-side authorization in that provider's account settings.
+
 ## Scores look wrong or uncertain
 
 A tilde means an approximate RT match. Remakes and titles without a year are especially ambiguous. Check the underlying title and media type. Scores from different sources may update at different times. Verified public Rotten Tomatoes scores persist across worker restarts and are shared across your saved sites; Seerr-specific scores remain separate.
