@@ -2576,8 +2576,9 @@
   }
 
   function isRequestableTitle(title) {
-    return /^\d+$/.test(String(title.tmdbId || '')) && Number(title.tmdbId) > 0 &&
-      (title.mediaType === 'movie' || title.mediaType === 'tv');
+    const id = String(title?.tmdbId ?? '');
+    return /^[1-9]\d*$/.test(id) && Number.isSafeInteger(Number(id)) &&
+      (title?.mediaType === 'movie' || title?.mediaType === 'tv');
   }
 
   function openBulkConfirmation() {
@@ -2704,8 +2705,8 @@
         if (!modal.isConnected || generation !== routeGeneration) return;
         const t = requestTitles[i];
         btn.textContent = `Requesting ${i + 1}/${readyTitles.length}...`;
-        const tmdbIdNum = parseInt(t.tmdbId, 10);
-        if (!t.tmdbId || Number.isNaN(tmdbIdNum)) {
+        const tmdbIdNum = Number(t.tmdbId);
+        if (!Number.isSafeInteger(tmdbIdNum) || tmdbIdNum <= 0) {
           recordFailure(t, 'Missing or invalid media identity.');
           continue;
         }

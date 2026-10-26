@@ -147,6 +147,15 @@ test('site edits, removals, and queued concurrent additions preserve other crede
   assert.doesNotMatch(JSON.stringify(w.localStore), /home-secret/);
 });
 
+test('removing a site that disappeared concurrently does not create a fake successful revision', async () => {
+  const w = await setup(); await addSecond(w);
+  const before = w.localStore.seerrConnectionsV1.revision;
+  const reply = await message(w, 'removeSeerrConnection', { id: 'https://missing.example' });
+  assert.equal(reply.success, false);
+  assert.match(reply.error, /removed/i);
+  assert.equal(w.localStore.seerrConnectionsV1.revision, before);
+});
+
 test('failed profile storage leaves the selected server and saved credentials unchanged', async () => {
   const w = await setup(); await addSecond(w);
   w.context.chrome.storage.local.set = async () => { throw new Error('Quota exceeded'); };
@@ -215,6 +224,48 @@ test('SPA messages use the current tab URL instead of the original parent docume
   w.context.chrome.tabs.get = async () => { throw new Error('Tab closed'); };
   assert.equal((await message(w, 'requestMedia', {}, originalSender)).success, false);
   assert.equal(writes, 0);
+});
+
+test('same-origin pages outside a saved nested site cannot use its active configuration', async () => {
+  const w = await setup();
+  let writes = 0;
+  w.api.requestMedia = async () => { writes++; return { tmdbId: 1 }; };
+  w.context.chrome.tabs = { get: async () => ({ id: 1, url: 'https://home.example/other-page' }) };
+  const sender = { id: 'test', tab: { id: 1 }, frameId: 0, url: `${first}/discover` };
+
+  const config = await message(w, 'getConfigState', undefined, sender);
+  assert.equal(config.success, false);
+  assert.match(config.error, /page changed/i);
+  const request = await message(w, 'requestMedia', { tmdbId: 1, mediaType: 'movie', title: 'Example' }, sender);
+  assert.equal(request.success, false);
+  assert.match(request.error, /page changed/i);
+  assert.equal(writes, 0);
+});
+
+test('inactive nested pages cannot invoke Plex watchlist actions', async () => {
+  const w = await setup();
+  await addSecond(w);
+  await message(w, 'activateSeerrConnection', { id: first });
+  let adds = 0;
+  w.api.plexAddToWatchlist = async () => { adds++; return { already: false }; };
+  const inactive = { id: 'test', tab: { id: 1 }, frameId: 0, url: `${second}/discover` };
+  const reply = await message(w, 'plexAddToWatchlist', { tmdbId: 1, mediaType: 'movie', title: 'Example' }, inactive);
+  assert.equal(reply.success, false);
+  assert.match(reply.error, /not the active/i);
+  assert.equal(adds, 0);
+});
+
+test('a stale Plex action cannot write after switching back to the original site', async () => {
+  const w = await setup();
+  await addSecond(w);
+  const oldToken = w.api.connectionToken();
+  await message(w, 'activateSeerrConnection', { id: first });
+  let adds = 0;
+  w.api.plexAddToWatchlist = async () => { adds++; return { already: false }; };
+  const reply = await message(w, 'plexAddToWatchlist', { tmdbId: 1, mediaType: 'movie', title: 'Example' }, sender, { connectionToken: oldToken });
+  assert.equal(reply.success, false);
+  assert.match(reply.error, /site changed/i);
+  assert.equal(adds, 0);
 });
 
 test('popup uses the confirmed switch result even if subsequent history reads fail', async t => {

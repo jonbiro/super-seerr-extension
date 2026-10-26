@@ -254,7 +254,7 @@ class SeerrAPI {
   async handleMessage(request, sender, sendResponse) {
     try {
       sender = await this.currentSeerrSender(sender);
-      if (['requestMedia', 'addToWatchlist', 'getMediaStatus', 'getSeasonOptions', 'getMediaCandidates', 'saveTitleCorrection', 'getSavedTitleCorrection', 'searchMedia', 'debugSearch', 'debugAPI'].includes(request.action)) {
+      if (['requestMedia', 'addToWatchlist', 'getMediaStatus', 'getSeasonOptions', 'getMediaCandidates', 'saveTitleCorrection', 'getSavedTitleCorrection', 'searchMedia', 'debugSearch', 'debugAPI', 'plexWatchlistState', 'plexAddToWatchlist'].includes(request.action)) {
         this.assertConnectionTarget(request, sender);
       }
       switch (request.action) {

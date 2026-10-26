@@ -43,15 +43,19 @@
       if (!Number.isInteger(sender?.tab?.id) || (sender.frameId ?? 0) !== 0 || !chrome.tabs?.get) return sender;
       let original;
       try { original = new URL(sender.url); } catch (_) { return sender; }
-      const sites = this.connections?.sites || (this.baseUrl ? [{ url: this.baseUrl }] : []);
-      if (!sites.some(site => new URL(site.url).origin === original.origin)) return sender;
+      const sites = this.savedSites();
+      if (!sites.some(site => {
+        try { return new URL(site.url).origin === original.origin; } catch (_) { return false; }
+      })) return sender;
       // MessageSender.url can remain the original document URL after pushState.
       // The browser's tab URL determines which installation owns this message.
       const tab = await chrome.tabs.get(sender.tab.id);
-      if (!tab.url || new URL(tab.url).origin !== original.origin) {
+      let current;
+      try { current = new URL(tab.url); } catch (_) { current = null; }
+      if (!current || current.origin !== original.origin || !this.savedSiteForPage({ ...sender, url: current.href })) {
         throw new Error('The Seerr page changed. Reload it before trying again.');
       }
-      return { ...sender, url: tab.url };
+      return { ...sender, url: current.href };
     },
     async connectionOperation(action, data, sender) {
       this.requireExtensionPage(sender);
@@ -75,6 +79,7 @@
           if (!value.sites.some(site => site.id === data?.id)) throw new Error('This site was removed. Reload Settings.');
           value.activeId = data.id;
         } else if (action === 'removeSeerrConnection') {
+          if (!value.sites.some(site => site.id === data?.id)) throw new Error('This site was removed. Reload Settings.');
           if (value.activeId === data?.id) throw new Error('Switch to another site before removing this one.');
           value.sites = value.sites.filter(site => site.id !== data?.id);
         } else throw new Error('Unknown site operation');
@@ -96,19 +101,29 @@
       this.connectionChangePending = operation.catch(() => {});
       return operation;
     },
+    savedSites() {
+      const sites = Array.isArray(this.connections?.sites)
+        ? this.connections.sites
+        : this.baseUrl ? [{ id: this.baseUrl, url: this.baseUrl }] : [];
+      return sites.filter(site => site && typeof site.url === 'string');
+    },
     savedSiteForPage(sender) {
-      if (!this.connections || !sender?.url) return null;
+      if (!sender?.url) return null;
       let page;
       try { page = new URL(sender.url); } catch (_) { return null; }
-      const matches = this.connections.sites.filter(site => {
-        const url = new URL(site.url), base = url.pathname.replace(/\/+$/, '');
+      const matches = this.savedSites().filter(site => {
+        let url;
+        try { url = new URL(site.url); } catch (_) { return false; }
+        const base = url.pathname.replace(/\/+$/, '');
         return page.origin === url.origin && (page.pathname === base || page.pathname.startsWith(`${base}/`));
       }).sort((a, b) => b.url.length - a.url.length);
       return matches[0] || null;
     },
     isInactiveSeerrPage(sender) {
       const site = this.savedSiteForPage(sender);
-      return !!site && site.id !== this.connections.activeId;
+      // A legacy single-site install has no profile container; its virtual
+      // site is the active site by definition.
+      return !!site && !!this.connections && site.id !== this.connections.activeId;
     },
     assertConnectionTarget(request, sender) {
       if (request.connectionToken !== undefined && request.connectionToken !== this.connectionToken()) {

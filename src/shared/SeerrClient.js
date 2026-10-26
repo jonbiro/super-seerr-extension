@@ -35,7 +35,7 @@ class SeerrClient {
   }
 
   async sendMessage(message) {
-    const scoped = ['getMediaStatus', 'requestMedia', 'addToWatchlist', 'getSeasonOptions', 'getMediaCandidates', 'saveTitleCorrection', 'getSavedTitleCorrection', 'searchMedia', 'debugSearch', 'debugAPI'].includes(message.action);
+    const scoped = ['getMediaStatus', 'requestMedia', 'addToWatchlist', 'plexWatchlistState', 'plexAddToWatchlist', 'getSeasonOptions', 'getMediaCandidates', 'saveTitleCorrection', 'getSavedTitleCorrection', 'searchMedia', 'debugSearch', 'debugAPI'].includes(message.action);
     return await chrome.runtime.sendMessage(scoped && this.connectionToken !== undefined
       ? { connectionToken: this.connectionToken, ...message } : message);
   }
@@ -194,8 +194,10 @@ class SeerrClient {
   }
 
   async plexAddToWatchlist(mediaData) {
+    const connectionToken = this.connectionToken;
     const response = await this.sendMessage({
       action: 'plexAddToWatchlist',
+      ...(connectionToken !== undefined ? { connectionToken } : {}),
       data: {
         mediaType: mediaData.mediaType,
         tmdbId: mediaData.tmdbId,
@@ -210,9 +212,11 @@ class SeerrClient {
   // Read-only state for button labels. Never throws: unknown keeps the Add
   // button, which reports already-on-watchlist if it turns out to be there.
   async plexWatchlistState(mediaData) {
+    const connectionToken = this.connectionToken;
     try {
       const response = await this.sendMessage({
         action: 'plexWatchlistState',
+        ...(connectionToken !== undefined ? { connectionToken } : {}),
         data: {
           mediaType: mediaData.mediaType,
           tmdbId: mediaData.tmdbId,

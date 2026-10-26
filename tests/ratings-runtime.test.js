@@ -128,7 +128,7 @@ test('production bulk eligibility allows unrated titles and rejects invalid medi
   const { isRequestableTitle } = loadOverlay();
   assert.equal(isRequestableTitle({ tmdbId: '123', mediaType: 'movie', score: null }), true);
   assert.equal(isRequestableTitle({ tmdbId: '123', mediaType: 'tv', score: 0 }), true);
-  for (const tmdbId of [null, undefined, '', 'unknown', '-1', '0']) {
+  for (const tmdbId of [null, undefined, '', 'unknown', '-1', '0', '999999999999999999']) {
     assert.equal(isRequestableTitle({ tmdbId, mediaType: 'movie', score: 100 }), false);
   }
   assert.equal(isRequestableTitle({ tmdbId: '123', mediaType: 'person' }), false);

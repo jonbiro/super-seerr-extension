@@ -56,6 +56,18 @@ test('a request retains the reviewed connection token while its preflight is pen
   assert.equal(sent.connectionToken, '1:home');
 });
 
+for (const action of ['plexAddToWatchlist', 'plexWatchlistState']) {
+  test(`${action} carries the reviewed connection token`, async () => {
+    const client = new SeerrClient();
+    client.connectionToken = '1:home';
+    let sent;
+    client.sendMessage = async message => { sent = message; return { success: true, data: {} }; };
+    if (action === 'plexAddToWatchlist') await client.plexAddToWatchlist({ tmdbId: 550, mediaType: 'movie', title: 'Fight Club' });
+    else await client.plexWatchlistState({ tmdbId: 550, mediaType: 'movie', title: 'Fight Club' });
+    assert.equal(sent.connectionToken, '1:home');
+  });
+}
+
 for (const token of ['1:home', null]) {
   test(`a status read retains its initial connection token (${token}) while preflight is pending`, async () => {
     const client = new SeerrClient();
