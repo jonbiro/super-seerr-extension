@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.247]
+
+- Use the newest standard Seerr request when embedded request relations arrive in an unspecified order, preventing stale declined or failed requests from masking a newer request state.
+
 ## [3.5.246]
 
 - Merge duplicate normalized Seerr cache records per title during migration, preserving unique ratings and list entries while enforcing cache bounds.

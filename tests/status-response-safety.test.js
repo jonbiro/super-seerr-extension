@@ -24,6 +24,16 @@ test('a 4K-only embedded request leaves standard media availability intact', () 
   assert.equal(result.watchUrl, 'https://media.example/watch/550');
 });
 
+test('embedded standard requests use the most recently updated request, not relation order', () => {
+  const { api } = loadWorker();
+  const result = api.formatMediaStatus({ id: 550, requests: [
+    { id: 20, type: 'movie', status: 3, is4k: false, updatedAt: '2026-10-01T00:00:00.000Z' },
+    { id: 21, type: 'movie', status: 1, is4k: false, updatedAt: '2026-10-02T00:00:00.000Z' }
+  ], mediaInfo: { status: 5 } }, 'movie');
+  assert.equal(result.status, 'pending');
+  assert.equal(result.buttonText, 'Request Pending');
+});
+
 for (const status of [null, '5junk', '3.8', 3.8, [], [5], true, '', ' ', 0, -1, 8]) {
   test(`malformed media status ${JSON.stringify(status)} offers a status retry`, () => {
     const { api } = loadWorker();

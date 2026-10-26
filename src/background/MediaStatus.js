@@ -1,5 +1,59 @@
 // Focused worker methods; composed onto SeerrAPI by background.js.
 (function (root) {
+  function parseRequestTimestamp(value) {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    if (value instanceof Date) {
+      const timestamp = value.getTime();
+      return Number.isFinite(timestamp) ? timestamp : null;
+    }
+    if (typeof value !== 'string' || !value.trim()) return null;
+    const timestamp = Date.parse(value);
+    return Number.isFinite(timestamp) ? timestamp : null;
+  }
+
+  function requestId(request) {
+    const value = request && request.id;
+    if (typeof value === 'number') return Number.isSafeInteger(value) && value > 0 ? value : null;
+    if (typeof value === 'string' && /^\d+$/.test(value)) {
+      const parsed = Number(value);
+      return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
+    }
+    return null;
+  }
+
+  function requestRecency(request) {
+    const updatedAt = parseRequestTimestamp(request.updatedAt);
+    if (updatedAt !== null) return updatedAt;
+    return parseRequestTimestamp(request.createdAt);
+  }
+
+  function isNewerRequest(candidate, current) {
+    const candidateTime = requestRecency(candidate);
+    const currentTime = requestRecency(current);
+    if (candidateTime !== null || currentTime !== null) {
+      if (candidateTime === null) return false;
+      if (currentTime === null || candidateTime > currentTime) return true;
+      if (candidateTime < currentTime) return false;
+    }
+
+    const candidateId = requestId(candidate);
+    const currentId = requestId(current);
+    return candidateId !== null && (currentId === null || candidateId > currentId);
+  }
+
+  function findLatestStandardRequest(requests, mediaType) {
+    if (!Array.isArray(requests)) return null;
+    let latest = null;
+    for (const request of requests) {
+      if (!request || typeof request !== 'object' || Array.isArray(request) || request.is4k ||
+        request.status === undefined || (request.type !== undefined && request.type !== mediaType)) {
+        continue;
+      }
+      if (!latest || isNewerRequest(request, latest)) latest = request;
+    }
+    return latest;
+  }
+
   root.MediaStatus = {
     formatMediaStatus(mediaDetails, mediaType) {
       if (!mediaDetails) {
@@ -55,11 +109,7 @@
 
       // Embedded requests are separate quality/type records, just like the
       // paged history. A 4K request must not block the standard-quality action.
-      const latestRequest = Array.isArray(mediaDetails.requests)
-        ? mediaDetails.requests.find(request => request && typeof request === 'object' &&
-          !Array.isArray(request) && !request.is4k && request.status !== undefined &&
-          (request.type === undefined || request.type === mediaType))
-        : null;
+      const latestRequest = findLatestStandardRequest(mediaDetails.requests, mediaType);
 
       if (mediaDetails.status !== undefined && mediaDetails.media) {
         status = mediaDetails.status;
