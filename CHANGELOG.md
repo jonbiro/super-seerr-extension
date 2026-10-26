@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.259]
+
+- Use Trakt's documented combined movie/show watchlist route. Correct the plural combined path introduced in 3.5.249 and verify movie/TV imports across two pages against a strict route fixture based on the provider's own contract.
+
 ## [3.5.258]
 
 - Retire Trakt/Simkl imported titles and pending title actions immediately when the account identity changes or stored accounts are removed, even if reading the replacement connection state fails. Preserve unsaved Client ID edits and show a usable recovery action.
@@ -55,7 +59,7 @@ heading per change.
 
 ## [3.5.249]
 
-- Use Trakt's plural `movies,shows` watchlist resource so authenticated watchlist syncs reach the current user API.
+- Changed Trakt's combined watchlist path to `movies,shows`; corrected in 3.5.259 after checking the provider's own route contract.
 
 ## [3.5.248]
 

@@ -243,10 +243,9 @@
       this.trackerLists ??= new Map();
       let rows, nextPage = null, skipped = 0, truncated = false;
       if (provider === 'trakt') {
-        // Trakt's user watchlist route uses the plural resource names. The
-        // singular `movie,show` form is accepted by neither the current API
-        // nor some compatible proxies, which turns every sync into a 404/400.
-        const response = await this.trackerApiRead(provider, `/users/me/watchlist/movies,shows/added?page=${page}&limit=${PAGE_SIZE}`, account);
+        // The combined watchlist uses singular `movie,show` in Trakt's own
+        // contract; `/movies` and `/shows` are the separate list resources.
+        const response = await this.trackerApiRead(provider, `/users/me/watchlist/movie,show/added?page=${page}&limit=${PAGE_SIZE}`, account);
         if (!Array.isArray(response.data)) throw new Error('Trakt returned an invalid watchlist.');
         if (response.data.length > PAGE_SIZE) throw new Error('Trakt returned too many items for one page.');
         rows = response.data.map(row => normalize(row, provider));

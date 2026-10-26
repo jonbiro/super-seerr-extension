@@ -46,4 +46,5 @@ Source policy: [Data, storage and permissions](docs/privacy-and-permissions.md).
 
 ## Repository version history
 
+- **3.5.259 — 2026-10-26:** align Trakt watchlist imports with the provider's documented combined movie/TV route.
 - **3.5.258 — 2026-10-26:** clear retired tracker reviews across open Settings pages, recover failed account-state checks, and keep Trakt and Simkl connection updates independent during sign-in.

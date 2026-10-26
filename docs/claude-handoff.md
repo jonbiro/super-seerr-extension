@@ -2,10 +2,10 @@
 
 ## Latest review checkpoint — 2026-10-26
 
-This checkpoint supersedes the delivery, test, and goal status in the older snapshots below. Checkout: `/Users/yoni/super-seerr-extension`, branch `master`, remote `git@github.com:jonbiro/super-seerr-extension.git`. Current source and unpacked builds are **3.5.258**. Check `git status`, `git log -1`, and the matching GitHub Actions run for publishing state.
+This checkpoint supersedes the delivery, test, and goal status in the older snapshots below. Checkout: `/Users/yoni/super-seerr-extension`, branch `master`, remote `git@github.com:jonbiro/super-seerr-extension.git`. Current source and unpacked builds are **3.5.259**. Check `git status`, `git log -1`, and the matching GitHub Actions run for publishing state.
 
 - The ongoing review goal is **active**, not complete, at this checkpoint. It covers single-site behavior, multiple Seerr sites, shared ratings, and every extension feature. Recheck Codex goal metadata when resuming.
-- Latest fixes retire changed tracker account reviews immediately, let Trakt/Simkl metadata refresh independently during authorization, and recover failed or restored-page account checks without losing Client ID drafts. See [the current findings and evidence](reviews/2026-10-26-tracker-account-state.md).
+- Latest fixes retire changed tracker account reviews immediately, let Trakt/Simkl metadata refresh independently during authorization, and recover failed or restored-page account checks without losing Client ID drafts. The combined Trakt import route now matches the provider's own contract. See [the current findings and evidence](reviews/2026-10-26-tracker-account-state.md).
 - Local verification: **1,820 unit tests**, **329 Chromium tests**, Firefox **157.0.1** runtime harness, source checks, both builds, and generated-file parity passed.
 - Previous review checkpoints: [broad feature review](reviews/2026-10-26.md), [settings/preset races](reviews/2026-10-26-state-races.md), [atomic connection saves/tracker focus](reviews/2026-10-26-connection-saves.md), and [Settings focus/permission recovery](reviews/2026-10-26-settings-focus.md).
 - Pending acceptance: authenticated live Seerr/Plex actions, provider OAuth consent with registered app IDs, and live sites blocked by access challenges or consent. Continue bounded bug review without claiming these have passed.

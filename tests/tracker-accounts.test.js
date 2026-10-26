@@ -163,15 +163,29 @@ test('Trakt watchlist reads normalize movie/show identity, honor server paginati
   assert.ok(!JSON.stringify(result).includes('secret'));
 });
 
-test('Trakt watchlist uses the plural movies/shows API resource', async () => {
-  const f = load({ accounts: { trakt: account() }, fetch: async () => reply([], {
-    'X-Pagination-Page': '1', 'X-Pagination-Page-Count': '0'
-  }) });
-  await f.call('getTrackerWatchlist', { provider: 'trakt' });
-  const url = new URL(f.requests[0].url);
-  assert.equal(url.pathname, '/users/me/watchlist/movies,shows/added');
-  assert.equal(url.searchParams.get('page'), '1');
-  assert.equal(url.searchParams.get('limit'), '100');
+test('Trakt combined watchlist reads movies and shows through its documented paginated route', async () => {
+  // Contract: trakt/trakt-api, projects/api/src/contracts/users/subroutes/watchlist.ts,
+  // `all.path` is `/movie,show/:sort`; individual resources are `/movies` and `/shows`.
+  const f = load({ accounts: { trakt: account() }, fetch: async value => {
+    const url = new URL(value), page = Number(url.searchParams.get('page'));
+    if (url.pathname !== '/users/me/watchlist/movie,show/added') return new Response('Unknown watchlist route', { status: 404 });
+    if (url.searchParams.get('limit') !== '100' || ![1, 2].includes(page)) return new Response('Invalid pagination', { status: 400 });
+    return reply(page === 1
+      ? [{ type: 'movie', movie: { title: 'Dune', year: 2021, ids: { tmdb: 438631 } } }]
+      : [{ type: 'show', show: { title: 'Dark', year: 2017, ids: { tmdb: 70523 } } }], {
+      'X-Pagination-Page': String(page), 'X-Pagination-Page-Count': '2'
+    });
+  } });
+  const first = await f.call('getTrackerWatchlist', { provider: 'trakt' });
+  assert.equal(first.items[0].mediaType, 'movie');
+  assert.equal(first.items[0].title, 'Dune');
+  assert.equal(first.nextPage, 2);
+  const second = await f.call('getTrackerWatchlist', { provider: 'trakt', page: first.nextPage });
+  assert.equal(second.items[0].mediaType, 'tv');
+  assert.equal(second.items[0].title, 'Dark');
+  assert.equal(second.hasMore, false);
+  assert.equal(f.requests.length, 2);
+  assert.ok(f.requests.every(request => request.options.method === 'GET'));
 });
 
 test('disconnect during watchlist fetch rejects the stale list and its sync stamp', async () => {
