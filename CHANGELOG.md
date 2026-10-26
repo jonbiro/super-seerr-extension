@@ -19,6 +19,7 @@ heading per change.
 - Add an explicit `noopener noreferrer` relationship to the Settings issue-report link.
 - Capture the reviewed Seerr site token explicitly for watchlist writes, matching request and Plex actions during multi-site switches.
 - Canonicalize numeric-string TMDB IDs across shared public ratings, server-scoped ratings, and the persisted title index so equivalent IDs cannot split caches.
+- Bound and cancel oversized Seerr error responses before parsing them in the background worker, preventing a proxy error page from consuming unbounded memory.
 
 ## [3.5.240]
 

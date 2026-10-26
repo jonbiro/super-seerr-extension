@@ -1,6 +1,67 @@
 // Focused worker methods; composed onto SeerrAPI by background.js.
 (function (root) {
   const RatingsConfig = root.RatingsConfig;
+  // Provider/proxy error pages are not part of the API contract. Keep a
+  // bounded copy for the useful JSON message, and cancel an oversized stream
+  // before it can consume an unbounded amount of worker memory.
+  const MAX_ERROR_BODY_BYTES = 64 * 1024;
+  const MAX_ERROR_MESSAGE_CHARS = 500;
+  const cancelResponseBody = async response => {
+    try { await response.body?.cancel(); } catch (_) { /* Preserve the HTTP error. */ }
+  };
+  const readBoundedErrorText = async response => {
+    const announced = Number(response.headers?.get?.('Content-Length'));
+    if (Number.isFinite(announced) && announced > MAX_ERROR_BODY_BYTES) {
+      await cancelResponseBody(response);
+      return null;
+    }
+    if (response.body?.getReader) {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let size = 0;
+      try {
+        while (true) {
+          const part = await reader.read();
+          if (part.done) break;
+          const length = part.value?.byteLength || 0;
+          size += length;
+          if (size > MAX_ERROR_BODY_BYTES) {
+            await reader.cancel().catch(() => {});
+            return null;
+          }
+          if (length) chunks.push(part.value);
+        }
+      } catch (_) {
+        await reader.cancel().catch(() => {});
+        return null;
+      } finally { reader.releaseLock(); }
+      if (typeof TextDecoder !== 'function') return null;
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      return new TextDecoder().decode(bytes);
+    }
+    // Lightweight test doubles and older response shims may not expose a
+    // stream. Their text() result is still bounded before parsing.
+    if (typeof response.text === 'function') {
+      try {
+        const text = await response.text();
+        return typeof text === 'string' && text.length <= MAX_ERROR_BODY_BYTES ? text : null;
+      } catch (_) { return null; }
+    }
+    return null;
+  };
+  const readErrorPayload = async response => {
+    if (response.body?.getReader || typeof response.text === 'function') {
+      const text = await readBoundedErrorText(response);
+      if (typeof text !== 'string') return null;
+      try { return JSON.parse(text); } catch (_) { return null; }
+    }
+    // Minimal mocks can expose only json(); real browser Responses take the
+    // streaming path above, so this fallback does not bypass the byte limit.
+    try { return typeof response.json === 'function' ? await response.json() : null; }
+    catch (_) { return null; }
+  };
   const isNetworkFailure = error => {
     const name = String(error?.name || '').toLowerCase();
     const message = String(error?.message || '').toLowerCase();
@@ -66,10 +127,10 @@
 
         if (!response.ok) {
           let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
-          try {
-            const errorData = await response.json();
-            if (errorData.message) errorMessage = errorData.message;
-          } catch (_) {}
+          const errorData = await readErrorPayload(response);
+          if (typeof errorData?.message === 'string' && errorData.message.trim()) {
+            errorMessage = errorData.message.trim().slice(0, MAX_ERROR_MESSAGE_CHARS);
+          }
           const error = new Error(errorMessage);
           error.status = response.status;
           throw error;

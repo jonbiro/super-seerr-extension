@@ -42,3 +42,19 @@ test('collapses legacy trailing slashes before appending an API route', async ()
   await worker.api.sendAPIRequest('GET', '/api/v1/auth/me');
   assert.equal(requested, 'https://seerr.example/base/api/v1/auth/me');
 });
+
+test('cancels an oversized streaming HTTP error before reading it into the worker', async () => {
+  const worker = loadWorker();
+  await worker.ready;
+  worker.api.baseUrl = 'https://seerr.example';
+  worker.api.apiKey = 'key';
+  let cancelled = 0;
+  worker.context.fetch = async () => new Response(new ReadableStream({
+    pull(controller) {
+      controller.enqueue(new TextEncoder().encode('x'.repeat(70 * 1024)));
+    },
+    cancel() { cancelled++; }
+  }), { status: 503 });
+  await assert.rejects(worker.api.sendAPIRequest('GET', '/api/v1/auth/me'), /HTTP 503/);
+  assert.equal(cancelled, 1, 'an oversized provider error must release its unread body');
+});
