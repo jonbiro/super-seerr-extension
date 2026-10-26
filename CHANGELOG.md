@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.245]
+
+- Keep the freshest normalized server cache when legacy and per-server records use different trailing-slash keys.
+- Sanitize shared public ratings before applying the bounded cache cap so malformed records cannot hide valid scores.
+
 ## [3.5.244]
 
 - Keep link-backed Seerr cards visible to ratings, filters, and bulk selection when a list temporarily mixes them with `data-testid="title-card"` wrappers.

@@ -250,3 +250,18 @@ test('site cache retention keeps the newest sites when storage object order is s
   const result = await worker.api.getOverlayCache({ ...sender, url: 'https://site10.example/discover' });
   assert.equal(result.overlayRatingsV1?.entries['movie:1']?.bundle.rtCriticsScore, 10);
 });
+
+test('duplicate normalized server records keep the freshest cache regardless of object order', async () => {
+  const older = blob({ server: 'https://seerr.example/base/', entries: {
+    'movie:1': { bundle: { rtCriticsScore: 10, confidence: 1 }, cachedAt: 100 }
+  } });
+  const newer = blob({ server: 'https://seerr.example/base', entries: {
+    'movie:1': { bundle: { rtCriticsScore: 90, confidence: 1 }, cachedAt: 200 }
+  } });
+  const worker = await setup({ overlayRatingsByServerV1: {
+    'https://seerr.example/base': newer,
+    'https://seerr.example/base/': older
+  } });
+  const caches = worker.api.overlayCachesFromStorage(worker.localStore, 0);
+  assert.equal(caches['https://seerr.example/base'].entries['movie:1'].bundle.rtCriticsScore, 90);
+});

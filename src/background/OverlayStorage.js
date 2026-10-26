@@ -120,7 +120,16 @@
         try {
           const key = serverKey(value.server);
           const clean = this.sanitizeOverlayCache(value, value.server, epoch);
-          if (clean) caches[key] = this.boundedOverlayCache(clean);
+          if (clean) {
+            const bounded = this.boundedOverlayCache(clean);
+            const previous = caches[key];
+            // Older storage versions could serialize the same server under
+            // both trailing-slash forms. Keep the freshest duplicate instead
+            // of letting object iteration order discard newer ratings. A
+            // tie deliberately favors the later record so a migrated,
+            // per-server entry can supersede an equivalent legacy payload.
+            if (!previous || cacheFreshness(bounded) >= cacheFreshness(previous)) caches[key] = bounded;
+          }
         } catch (_) { /* Invalid generated cache records can be refetched. */ }
       }
       return boundedSiteCaches(caches);

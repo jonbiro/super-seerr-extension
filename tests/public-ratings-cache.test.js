@@ -175,6 +175,33 @@ test('a reordered shared public cache loads the newest entries before applying i
   }
 });
 
+test('malformed shared records cannot consume the newest-entry bound', async () => {
+  const seeded = await seed();
+  const base = seeded.localStore.publicRatingsV1.entries['movie:550'];
+  const now = Date.now();
+  const record = (offset, source = base.source) => {
+    const value = structuredClone(base);
+    value.checkedAt = now - offset;
+    value.expiresAt = value.checkedAt + Config.rtCacheTtlMs;
+    value.source = source;
+    return value;
+  };
+  const worker = loadWorker({ local: { publicRatingsV1: { matcher: Config.matcherVersion, entries: {
+    'movie:551': record(1, 'untrusted'),
+    'movie:552': record(2, 'untrusted'),
+    'movie:550': record(300)
+  } } } });
+  const previous = worker.context.RatingsConfig.rtCacheMaxEntries;
+  worker.context.RatingsConfig.rtCacheMaxEntries = 2;
+  try {
+    await worker.ready;
+    await worker.api.loadRtCache();
+    assert.equal(worker.api.publicRatings.has('movie:550'), true);
+  } finally {
+    worker.context.RatingsConfig.rtCacheMaxEntries = previous;
+  }
+});
+
 test('content reuses public RT while retaining its own Seerr IMDb/TMDB scores and catalogue', async () => {
   const worker = await seed();
   const overlay = loadOverlay({ pathname: '/discover', settings: { seerrUrl: 'https://seerr.example/' },

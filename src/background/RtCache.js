@@ -57,17 +57,23 @@
           };
           const shared = local.publicRatingsV1;
           if (shared?.matcher === RatingsConfig.matcherVersion) {
-            for (const [key, value] of Object.entries(shared.entries || {})
-              .sort((a, b) => publicCacheTime(b[1]?.checkedAt) - publicCacheTime(a[1]?.checkedAt))
-              .slice(0, RatingsConfig.rtCacheMaxEntries)
-              .sort((a, b) => publicCacheTime(a[1]?.checkedAt) - publicCacheTime(b[1]?.checkedAt))) {
+            // Validate before applying the entry cap. A corrupt record with a
+            // newer timestamp must not hide usable shared ratings merely by
+            // occupying one of the bounded slots.
+            const validShared = [];
+            for (const [key, value] of Object.entries(shared.entries || {})) {
               const [mediaType, tmdbId] = key.split(':');
               if (key !== this.publicRatingKey({ mediaType, tmdbId })) continue;
               const clean = this.sanitizePublicRating(value, mediaType);
-              if (clean && !this.publicRatings.has(key)) {
-                this.publicRatings.set(key, clean);
-                this.rtLookupClock = Math.max(this.rtLookupClock, clean.checkedAt);
-              }
+              if (clean) validShared.push([key, clean]);
+            }
+            for (const [key, clean] of validShared
+              .sort((a, b) => publicCacheTime(b[1]?.checkedAt) - publicCacheTime(a[1]?.checkedAt))
+              .slice(0, RatingsConfig.rtCacheMaxEntries)
+              .sort((a, b) => publicCacheTime(a[1]?.checkedAt) - publicCacheTime(b[1]?.checkedAt))) {
+              if (this.publicRatings.has(key)) continue;
+              this.publicRatings.set(key, clean);
+              this.rtLookupClock = Math.max(this.rtLookupClock, clean.checkedAt);
             }
           }
           if (generation !== this.rtCacheGeneration || !stored || typeof stored !== 'object') return;
