@@ -61,6 +61,28 @@ test('Plex proxy success pages cannot verify the account in popup diagnostics', 
 });
 
 for (const field of ['baseUrl', 'apiKey', 'plexToken', 'settingsLoadGeneration']) {
+  test(`popup diagnostic messages reject obsolete ${field} results`, async () => {
+    const w = await worker();
+    let release, started;
+    const gate = new Promise(resolve => { release = resolve; });
+    const began = new Promise(resolve => { started = resolve; });
+    const requests = [];
+    w.context.fetch = async url => {
+      requests.push(url);
+      if (url.endsWith('/settings/public')) { started(); await gate; }
+      return { ok: true, json: async () => url.endsWith('/auth/me') ? { id: 1 } : { initialized: true } };
+    };
+    const response = new Promise(resolve => w.listeners.message({ action: 'getPopupDiagnostics' },
+      { id: 'test', url: 'chrome-extension://test/src/popup/popup.html' }, resolve));
+    await began;
+    w.api[field] = field === 'settingsLoadGeneration' ? w.api[field] + 1 : 'changed';
+    release();
+    const reply = await response;
+    assert.equal(reply.success, false, 'the public message path must retain the live worker settings guard');
+    assert.match(reply.error, /Settings changed during diagnostics/);
+    assert.deepEqual(requests, [`${origin}/api/v1/settings/public`], 'obsolete checks cannot proceed to authentication');
+  });
+
   test(`diagnostics discard a report when ${field} changes during a check`, async () => {
     const w = await worker();
     let release;

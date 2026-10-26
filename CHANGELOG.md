@@ -6,6 +6,11 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.255]
+
+- Keep popup diagnostic messages tied to the live settings snapshot, rejecting old results when the active site, API key, Plex account, or settings generation changes during a check.
+- Keep filter preset controls and keyboard focus owned by the newest operation, so delayed Save/Delete replies cannot unlock an unfinished refresh or another save.
+
 ## [3.5.254]
 
 - Keep title and release-year evidence in Seerr status-cache keys so a reused or incorrect page-supplied ID cannot mix results between titles or remakes. Continue sharing underlying detail and request-history reads.

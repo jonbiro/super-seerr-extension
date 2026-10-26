@@ -26,14 +26,49 @@ async function installPresets(page) {
   await page.setContent('<button id="outside">Other action</button><div class="seerr-sort-filter-bar"><select class="seerr-sort-select"><option value="default">Default</option></select></div>');
   await page.addScriptTag({ path: path.resolve('src/content/FilterPresets.js') });
   await page.evaluate(() => {
-    window.chrome = { storage: {}, runtime: { sendMessage: async ({ action }) => {
-      if (action === 'getFilterPresets') return { success: true, data: [{ name: 'Night', sort: 'default', filters: {} }] };
+    let reads = 0;
+    window.chrome = { storage: { onChanged: { addListener: listener => { window.notifyPresetChange = listener; } } }, runtime: { sendMessage: async ({ action }) => {
+      if (action === 'getFilterPresets') {
+        if (++reads === 1) return { success: true, data: [{ name: 'Night', sort: 'default', filters: {} }] };
+        return new Promise(resolve => { window.finishPresetReload = resolve; });
+      }
       return new Promise(resolve => { window.finishPreset = resolve; });
     } } };
     window.installFilterPresets({ bar: document.querySelector('.seerr-sort-filter-bar'), readCurrent: () => ({ sort: 'default', filters: {} }), apply: () => {} });
   });
   await expect(page.getByLabel('Saved filter presets')).toBeEnabled();
   await page.getByLabel('Saved filter presets').selectOption('Night');
+}
+
+for (const action of ['Save', 'Delete']) for (const newestFirst of [false, true]) for (const moved of [false, true]) {
+  test(`${action} preset keeps controls and focus with the newest refresh (newest first: ${newestFirst}, moved: ${moved})`, async ({ page }) => {
+    await installPresets(page);
+    const button = page.getByRole('button', { name: `${action} preset`, exact: true });
+    const select = page.getByLabel('Saved filter presets');
+    const save = page.getByRole('button', { name: 'Save preset', exact: true });
+    const wrapper = page.locator('.seerr-filter-presets');
+    await button.focus(); await page.keyboard.press('Enter');
+    await page.evaluate(() => notifyPresetChange({ seerrFilterPresetsV1: {} }, 'sync'));
+    if (moved) await page.locator('#outside').focus();
+    const finishOld = () => page.evaluate(() => finishPreset({ success: true, data: [] }));
+    const finishNewest = () => page.evaluate(() => finishPresetReload({ success: true, data: [{ name: 'Latest', sort: 'default', filters: {} }] }));
+    const target = moved ? page.locator('#outside') : action === 'Delete' ? select : button;
+    if (newestFirst) {
+      await finishNewest();
+      await expect(target).toBeFocused();
+      await finishOld();
+    } else {
+      await finishOld();
+      await expect(save).toBeDisabled();
+      await expect(select).toBeDisabled();
+      await expect(wrapper).toHaveAttribute('aria-busy', 'true');
+      await finishNewest();
+    }
+    await expect(save).toBeEnabled();
+    await expect(wrapper).toHaveAttribute('aria-busy', 'false');
+    await expect(select.locator('option')).toHaveText(['Saved presets', 'Latest']);
+    await expect(target).toBeFocused();
+  });
 }
 
 for (const action of ['Save', 'Delete']) for (const outcome of ['success', 'failure']) for (const moved of [false, true]) {

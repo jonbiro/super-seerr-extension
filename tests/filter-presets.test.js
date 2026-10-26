@@ -123,3 +123,48 @@ for (const action of ['save', 'delete']) for (const writeSuccess of [true, false
     assert.equal(f.bar.querySelector('.seerr-filter-presets').getAttribute('aria-busy'), 'false');
   });
 }
+
+for (const action of ['save', 'delete']) for (const writeSuccess of [true, false]) for (const readSuccess of [true, false]) {
+  test(`a superseding preset read retains controls after ${action} finishes first (write: ${writeSuccess}, read: ${readSuccess})`, async t => {
+    const f = delayedFixture(); t.after(() => f.dom.window.close());
+    f.finish(0, 'Night'); await tick();
+    const select = f.bar.querySelector('.seerr-filter-presets select');
+    const name = f.bar.querySelector('input');
+    select.value = 'Night'; select.dispatchEvent(new f.dom.window.Event('change'));
+    if (action === 'save') name.value = 'Draft';
+    f.bar.querySelectorAll('button')[action === 'save' ? 0 : 1].click();
+    f.change();
+    if (writeSuccess) f.pending[1].resolve({ success: true, data: [] });
+    else f.pending[1].reject(new Error('Obsolete write failed'));
+    await tick();
+    const wrapper = f.bar.querySelector('.seerr-filter-presets');
+    assert.equal(wrapper.getAttribute('aria-busy'), 'true', 'the newest read still owns the pending controls');
+    for (const node of [select, name, ...wrapper.querySelectorAll('button')]) assert.equal(node.disabled, true);
+    if (readSuccess) f.finish(2, 'Latest');
+    else f.pending[2].reject(new Error('Newer read failed'));
+    await tick();
+    assert.equal(wrapper.getAttribute('aria-busy'), 'false');
+    assert.equal(select.disabled, false);
+    assert.equal(name.disabled, false);
+    assert.deepEqual([...select.options].map(option => option.value), ['', readSuccess ? 'Latest' : 'Night']);
+    assert.equal(wrapper.querySelectorAll('button')[2].hidden, readSuccess);
+  });
+}
+
+for (const success of [true, false]) test(`an older preset write cannot unlock a newer write (old success: ${success})`, async t => {
+  const f = delayedFixture(); t.after(() => f.dom.window.close());
+  f.finish(0, 'Night'); await tick();
+  const wrapper = f.bar.querySelector('.seerr-filter-presets');
+  const name = wrapper.querySelector('input'), save = wrapper.querySelector('button');
+  name.value = 'First'; save.click(); f.change();
+  f.finish(2, 'Latest'); await tick();
+  name.value = 'Second'; save.click();
+  if (success) f.finish(1, 'First'); else f.pending[1].reject(new Error('Obsolete write failed'));
+  await tick();
+  assert.equal(save.disabled, true, 'the second write still owns the disabled state');
+  assert.equal(wrapper.getAttribute('aria-busy'), 'true');
+  f.pending[3].resolve({ success: true, data: [{ name: 'Second', sort: 'default', filters: {} }] }); await tick();
+  assert.equal(save.disabled, false);
+  assert.equal(wrapper.querySelector('select').value, 'Second');
+  assert.equal(wrapper.querySelector('[role="status"]').textContent, 'Saved Second');
+});

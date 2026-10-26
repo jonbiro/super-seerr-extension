@@ -441,11 +441,10 @@ class SeerrAPI {
 
         case 'getPopupDiagnostics': {
           this.requireExtensionPage(sender);
-          const diagnosticClient = new SeerrAPI();
-          diagnosticClient.baseUrl = this.baseUrl;
-          diagnosticClient.apiKey = this.apiKey;
-          diagnosticClient.plexToken = this.plexToken;
-          sendResponse({ success: true, data: await diagnosticClient.getPopupDiagnostics() });
+          // The diagnostic method snapshots its network client and checks the
+          // live worker before returning. A detached instance here would hide
+          // site/account changes from that guard.
+          sendResponse({ success: true, data: await this.getPopupDiagnostics() });
           break;
         }
 

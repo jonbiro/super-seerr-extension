@@ -22,7 +22,7 @@
     const limits = { minCritics: 100, minAudience: 100, minTmdb: 10, minImdb: 10 };
     let presets = [];
     let busy = false;
-    let pendingReadOwner = null;
+    let pendingActionOwner = null;
     let revision = 0, disposed = false, selection = '';
     function setBusy(value) {
       busy = value;
@@ -40,12 +40,12 @@
         (control.disabled || control.hidden ? select : control).focus({ preventScroll: true });
       }
     }
-    function finishRead(current) {
-      if (disposed || current !== revision || !pendingReadOwner) return;
-      // A cross-tab refresh supersedes an initial load or retry, including
-      // ownership of disabled controls and the initiating keyboard focus.
-      const owner = pendingReadOwner;
-      pendingReadOwner = null;
+    function finishCurrentAction(current) {
+      if (disposed || current !== revision || !pendingActionOwner) return;
+      // A cross-tab refresh takes over any pending action, retaining its
+      // control and focus ownership. Only the latest reply may release them.
+      const owner = pendingActionOwner;
+      pendingActionOwner = null;
       finishAction(owner.control, owner.restoreFocus);
     }
     function validate(value) {
@@ -112,6 +112,7 @@
       const initiatingControl = document.activeElement === name ? name : save;
       const restoreFocus = document.activeElement === initiatingControl;
       const current = revision + 1;
+      pendingActionOwner = { control: initiatingControl, restoreFocus };
       setBusy(true);
       try {
         const next = await request('saveFilterPreset', preset);
@@ -119,25 +120,26 @@
         selection = preset.name; adopt(next); render();
         status.textContent = `Saved ${preset.name}`;
       } catch (error) { if (!disposed && current === revision) status.textContent = error.message || 'Could not save preset.'; }
-      finally { finishAction(initiatingControl, restoreFocus); }
+      finally { finishCurrentAction(current); }
     });
     remove.addEventListener('click', async () => {
       const selected = select.value; if (busy || !selected) return;
       const restoreFocus = document.activeElement === remove;
       const current = revision + 1;
+      pendingActionOwner = { control: remove, restoreFocus };
       setBusy(true);
       try {
         const next = await request('deleteFilterPreset', { name: selected });
         if (disposed || next.revision !== revision) return;
         selection = ''; adopt(next); render(); name.value = ''; status.textContent = `Deleted ${selected}`;
       } catch (_) { if (!disposed && current === revision) status.textContent = 'Could not delete preset.'; }
-      finally { finishAction(remove, restoreFocus); }
+      finally { finishCurrentAction(current); }
     });
     retry.addEventListener('click', async () => {
       if (busy) return;
       const restoreFocus = document.activeElement === retry;
       const current = revision + 1;
-      pendingReadOwner = { control: retry, restoreFocus };
+      pendingActionOwner = { control: retry, restoreFocus };
       setBusy(true); status.textContent = 'Loading presets…';
       try {
         const next = await load();
@@ -149,7 +151,7 @@
           retry.hidden = false;
           status.textContent = 'Could not load presets. Try again.';
         }
-      } finally { finishRead(current); }
+      } finally { finishCurrentAction(current); }
     });
     function changed(changes, area) {
       if (area !== 'sync' || !changes[KEY]) return;
@@ -159,7 +161,7 @@
           retry.hidden = false;
           status.textContent = 'Could not refresh presets. Try again.';
         }
-      }).finally(() => finishRead(current));
+      }).finally(() => finishCurrentAction(current));
     }
     chrome.storage.onChanged?.addListener(changed);
     const cleanup = () => {
@@ -170,14 +172,14 @@
     bar.__seerrPresetCleanup = cleanup;
     root.addEventListener('pagehide', cleanup, { once: true });
     render(); setBusy(true);
-    pendingReadOwner = { control: null, restoreFocus: false };
+    pendingActionOwner = { control: null, restoreFocus: false };
     const initialRevision = revision + 1;
     void load().then(adopt)
       .catch(() => { if (!disposed && initialRevision === revision) {
         retry.hidden = false;
         status.textContent = 'Could not load presets. Try again.';
       } })
-      .finally(() => finishRead(initialRevision));
+      .finally(() => finishCurrentAction(initialRevision));
     return { currentChanged };
   };
 })(typeof window !== 'undefined' ? window : globalThis);
