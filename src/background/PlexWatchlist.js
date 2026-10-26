@@ -15,6 +15,7 @@
   const PLEX_VERSION = '1.0';
   const PLEX_CLIENT_ID = 'super-seerr-extension';
   const MAX_ERROR_BODY_BYTES = 64 * 1024;
+  const MAX_RESPONSE_BODY_BYTES = RatingsConfig.plexMaxResponseBytes;
 
   async function readBoundedErrorText(response) {
     const announced = Number(response.headers?.get?.('Content-Length'));
@@ -53,6 +54,41 @@
       const text = await response.text();
       return typeof text === 'string' && text.length <= MAX_ERROR_BODY_BYTES ? text : null;
     } catch (_) { return null; }
+  }
+
+  async function readBoundedResponseText(response) {
+    const announced = Number(response.headers?.get?.('Content-Length'));
+    if (Number.isFinite(announced) && announced > MAX_RESPONSE_BODY_BYTES) {
+      try { await response.body?.cancel(); } catch (_) { /* Preserve the size error. */ }
+      throw new Error('Plex returned a response that is too large.');
+    }
+    if (response.body?.getReader) {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let size = 0;
+      try {
+        while (true) {
+          const part = await reader.read();
+          if (part.done) break;
+          const length = part.value?.byteLength || 0;
+          size += length;
+          if (size > MAX_RESPONSE_BODY_BYTES) {
+            await reader.cancel().catch(() => {});
+            throw new Error('Plex returned a response that is too large.');
+          }
+          if (length) chunks.push(part.value);
+        }
+      } finally { reader.releaseLock(); }
+      if (typeof TextDecoder !== 'function') throw new Error('Plex response could not be decoded.');
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      return new TextDecoder().decode(bytes);
+    }
+    if (typeof response.text !== 'function') throw new Error('Plex response body is unreadable.');
+    const text = await response.text();
+    if (typeof text !== 'string' || text.length > MAX_RESPONSE_BODY_BYTES) throw new Error('Plex returned a response that is too large.');
+    return text;
   }
 
   function releaseYear(metadata) {
@@ -122,9 +158,12 @@
       }
       const contentType = response.headers.get('Content-Type') || '';
       if (response.status === 204) return null;
-      if (contentType.includes('application/json')) return response.json();
+      if (contentType.includes('application/json')) {
+        if (!response.body?.getReader) return response.json();
+        return JSON.parse(await readBoundedResponseText(response));
+      }
       // Discover answers JSON when asked; fall back to text so callers can decide.
-      try { return JSON.parse(await response.text()); }
+      try { return JSON.parse(await readBoundedResponseText(response)); }
       catch (_) { return null; }
     },
 

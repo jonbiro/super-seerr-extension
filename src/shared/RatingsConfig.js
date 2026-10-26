@@ -115,6 +115,9 @@ const RatingsConfig = {
   // 200 KB), but a proxy or bot challenge must not let one worker retain an
   // unbounded HTML response while parsing a scorecard.
   rtMaxHtmlBytes: 2 * 1024 * 1024,
+  // Plex metadata and watchlist responses are JSON documents. Keep the same
+  // memory ceiling for provider reads even when a proxy omits Content-Length.
+  plexMaxResponseBytes: 2 * 1024 * 1024,
   rtFailureLimit: 5,
   rtBackoffMs: 5 * 60 * 1000,
 

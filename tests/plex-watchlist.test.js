@@ -3,6 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const Config = require('../src/shared/RatingsConfig');
 const { loadWorker } = require('./helpers/worker');
 
 function jsonResponse(data, { status = 200 } = {}) {
@@ -288,6 +289,32 @@ test('plex cancels oversized HTTP error bodies before retaining them', async () 
   });
   await worker.ready;
   await assert.rejects(() => worker.api.plexFetch('https://plex.tv/api/v2/user', { token: 't' }), /Plex returned HTTP 502/);
+  assert.equal(reads, 1);
+  assert.equal(cancelled, true);
+});
+
+test('plex cancels oversized successful JSON bodies before parsing them', async () => {
+  let reads = 0;
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() {
+          reads++;
+          return { done: false, value: new Uint8Array(Config.plexMaxResponseBytes + 1) };
+        },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  const worker = loadWorker({
+    get: async () => ({}),
+    local: { plexToken: 't' },
+    fetch: async () => ({ ok: true, status: 200, headers: { get: name => name === 'Content-Type' ? 'application/json' : null }, body })
+  });
+  await worker.ready;
+  await assert.rejects(() => worker.api.plexFetch('https://plex.tv/api/v2/user', { token: 't' }), /too large/);
   assert.equal(reads, 1);
   assert.equal(cancelled, true);
 });
