@@ -31,6 +31,11 @@ async function fixture(t, handler) {
   await settle();
   f.manager = f.window.trackerAccounts;
   f.card = provider => f.manager.cards.get(provider);
+  f.notifyAccounts = () => {
+    const newValue = Object.fromEntries(f.accounts.map(account => [account.provider,
+      { clientId: account.clientId, accountRevision: account.accountRevision }]));
+    for (const listener of f.storageListeners) listener({ trackerAccountsV1: { newValue } }, 'local');
+  };
   return f;
 }
 
@@ -245,6 +250,196 @@ test('last-sync or token-refresh storage notifications preserve a pending watchl
   finishRead(); await settle();
   assert.equal(card.items.length, 1);
   assert.match(card.list.textContent, /Current private title/);
+});
+
+test('a pending connection does not delay another provider disconnecting in a different window', async t => {
+  let finishConnect;
+  const f = await fixture(t, (message, state) => {
+    if (message.action === 'connectTracker' && message.data.provider === 'trakt') {
+      return new Promise(resolve => { finishConnect = () => resolve(state.reply(state.accounts)); });
+    }
+  });
+  const card = f.card('simkl');
+  card.connect.click(); await settle();
+  card.sync.click(); await settle();
+  assert.equal(card.items.length, 1);
+  f.card('trakt').connect.click(); await settle();
+  const before = f.messages.filter(message => message.action === 'getTrackerAccounts').length;
+  Object.assign(f.accounts.find(account => account.provider === 'simkl'), { connected: false, accountRevision: 'disconnected' });
+  f.notifyAccounts();
+  await settle();
+  try {
+    assert.ok(f.messages.filter(message => message.action === 'getTrackerAccounts').length > before,
+      'public account reads must not wait for an unrelated OAuth window');
+    assert.equal(card.items.length, 0);
+    assert.equal(card.sync.disabled, true);
+    assert.equal(card.account.connected, false);
+    assert.equal(f.card('trakt').disconnect.disabled, false, 'the pending authorization can still be cancelled');
+  } finally { finishConnect(); await settle(); }
+});
+
+test('an account change retires private titles and pending actions before a failed public refresh', async t => {
+  let failRefresh, finishConfig, configReads = 0;
+  const f = await fixture(t, (message, state) => {
+    if (message.action === 'getTrackerAccounts' && failRefresh === true) {
+      return new Promise(resolve => { failRefresh = () => resolve({ success: false, error: 'Account state temporarily unavailable' }); });
+    }
+    if (message.action === 'getConfigState') {
+      configReads++;
+      return new Promise(resolve => { finishConfig = () => resolve(state.reply({ serverUrl: state.server })); });
+    }
+  });
+  const card = f.card('trakt');
+  card.connect.click(); await settle();
+  card.sync.click(); await settle();
+  card.input.value = 'unsaved-app'; card.input.dispatchEvent(new f.window.Event('input'));
+  card.list.querySelector('button').click(); await settle();
+  Object.assign(f.accounts.find(account => account.provider === 'trakt'), { connected: false, accountRevision: 'disconnected' });
+  failRefresh = true;
+  f.notifyAccounts();
+  await settle();
+  const stale = { titles: card.list.textContent, syncDisabled: card.sync.disabled };
+  finishConfig(); failRefresh(); await settle();
+  assert.equal(stale.titles, '', 'private titles retire while the new public metadata is pending');
+  assert.equal(stale.syncDisabled, true);
+  assert.equal(f.opened.length, 0);
+  assert.equal(configReads, 1, 'retired title actions stop before further config reads');
+  assert.equal(card.input.value, 'unsaved-app', 'unsaved Client ID edits survive refresh failures');
+  assert.equal(card.sync.disabled, true);
+  assert.match(f.manager.status.textContent, /temporarily unavailable/);
+  assert.match(card.status.textContent, /Could not check.*Reload account connections/);
+  assert.equal(f.manager.retry.disabled, false);
+  f.manager.retry.click(); await settle();
+  assert.equal(card.account.connected, false);
+  assert.equal(card.input.value, 'unsaved-app');
+  assert.equal(card.input.disabled, false);
+});
+
+for (const provider of ['trakt', 'simkl']) test(`${provider} account changes reject delayed watchlist rows while public state is still pending`, async t => {
+  let finishRead, finishAccounts, delayAccounts = false;
+  const f = await fixture(t, (message, state) => {
+    if (message.action === 'getTrackerWatchlist') return new Promise(resolve => { finishRead = () => resolve(state.reply({ provider, page: 1,
+      items: [{ title: 'Previous account private title', mediaType: 'movie' }], nextPage: null })); });
+    if (message.action === 'getTrackerAccounts' && delayAccounts) return new Promise(resolve => {
+      finishAccounts = () => resolve(state.reply(state.accounts));
+    });
+  });
+  const card = f.card(provider);
+  card.connect.click(); await settle();
+  card.sync.click(); await settle();
+  Object.assign(f.accounts.find(account => account.provider === provider), { accountRevision: 'new-account' });
+  delayAccounts = true; f.notifyAccounts(); await settle();
+  finishRead(); await settle();
+  assert.equal(card.list.textContent, '');
+  assert.equal(card.sync.disabled, true);
+  finishAccounts(); await settle();
+  assert.equal(card.sync.disabled, false);
+  assert.equal(card.account.accountRevision, 'new-account');
+  assert.equal(card.items.length, 0);
+});
+
+test('unchanged public identity preserves watchlist reads during token rotation and another provider connection', async t => {
+  let finishRead, finishConnect;
+  const f = await fixture(t, (message, state) => {
+    if (message.action === 'connectTracker' && message.data.provider === 'simkl') return new Promise(resolve => {
+      finishConnect = () => resolve(state.reply(state.accounts));
+    });
+    if (message.action === 'getTrackerWatchlist') return new Promise(resolve => { finishRead = () => resolve(state.reply({ provider: 'trakt', page: 1,
+      items: [{ title: 'Current account private title', mediaType: 'movie' }], nextPage: null })); });
+  });
+  const card = f.card('trakt');
+  card.connect.click(); await settle();
+  card.sync.click(); await settle();
+  f.card('simkl').connect.click(); await settle();
+  const newValue = Object.fromEntries(f.accounts.map(account => [account.provider, { clientId: account.clientId,
+    accountRevision: account.accountRevision, accessToken: 'rotated-fixture', refreshToken: 'rotated-fixture', lastSyncAt: Date.now() }]));
+  f.storageListeners[0]({ trackerAccountsV1: { newValue } }, 'local'); await settle();
+  finishRead(); await settle();
+  assert.match(card.list.textContent, /Current account private title/);
+  assert.equal(card.sync.disabled, false);
+  assert.doesNotMatch(f.doc.body.textContent, /rotated-fixture/);
+  finishConnect(); await settle();
+});
+
+test('an older account read cannot overwrite an app save that finishes first', async t => {
+  let finishAccounts, delayAccounts = false;
+  const f = await fixture(t, (message, state) => {
+    if (message.action === 'getTrackerAccounts' && delayAccounts) {
+      delayAccounts = false;
+      const before = state.reply(state.accounts);
+      return new Promise(resolve => { finishAccounts = () => resolve(before); });
+    }
+  });
+  const card = f.card('trakt');
+  delayAccounts = true;
+  const reading = f.manager.loadAccounts({ invalidateLists: false }); await settle();
+  card.input.value = 'new-app'; card.input.dispatchEvent(new f.window.Event('input'));
+  card.save.click(); await settle();
+  assert.equal(card.account.clientId, 'new-app');
+  finishAccounts(); await reading; await settle();
+  assert.equal(card.account.clientId, 'new-app');
+  assert.equal(card.input.value, 'new-app');
+  assert.equal(f.manager.status.textContent, '');
+  assert.equal(f.manager.retry.disabled, false);
+});
+
+test('deleting stored accounts retires existing titles before the replacement metadata reply', async t => {
+  let finishAccounts, delayAccounts = false;
+  const f = await fixture(t, (message, state) => {
+    if (message.action === 'getTrackerAccounts' && delayAccounts) return new Promise(resolve => {
+      finishAccounts = () => resolve(state.reply(state.accounts));
+    });
+  });
+  const card = f.card('simkl');
+  card.connect.click(); await settle(); card.sync.click(); await settle();
+  const oldValue = Object.fromEntries(f.accounts.map(account => [account.provider, { clientId: account.clientId, accountRevision: account.accountRevision }]));
+  Object.assign(f.accounts.find(account => account.provider === 'simkl'), { connected: false, clientId: '', accountRevision: '' });
+  delayAccounts = true;
+  f.storageListeners[0]({ trackerAccountsV1: { oldValue } }, 'local');
+  assert.equal(card.list.textContent, '');
+  assert.equal(card.sync.disabled, true);
+  await settle(); finishAccounts(); await settle();
+  assert.equal(card.account.connected, false);
+  assert.equal(card.input.disabled, false);
+});
+
+test('deferred metadata refreshes resume for the first finished account while the other is still connecting', async t => {
+  const finish = {};
+  const f = await fixture(t, (message, state) => {
+    if (message.action === 'connectTracker') return new Promise(resolve => {
+      finish[message.data.provider] = success => resolve(success ? state.reply(state.accounts)
+        : { success: false, error: 'Tracker account changed. Try again.' });
+    });
+  });
+  for (const provider of ['trakt', 'simkl']) { f.card(provider).connect.click(); await settle(); }
+  Object.assign(f.accounts.find(account => account.provider === 'simkl'), { clientId: 'another-app', accountRevision: 'changed-app' });
+  f.notifyAccounts(); await settle();
+  assert.equal(f.card('simkl').disconnect.disabled, false, 'a superseded authorization remains cancellable');
+  finish.simkl(false); await settle();
+  try {
+    assert.equal(f.card('simkl').account.clientId, 'another-app');
+    assert.equal(f.card('simkl').input.disabled, false);
+    assert.equal(f.card('trakt').disconnect.disabled, false);
+    assert.equal(f.manager.retry.disabled, false);
+  } finally { finish.trakt(true); await settle(); }
+});
+
+test('a restored Settings page retires its old review until account state can be checked', async t => {
+  let failAccounts = false;
+  const f = await fixture(t, message => {
+    if (message.action === 'getTrackerAccounts' && failAccounts) return { success: false, error: 'Account state temporarily unavailable' };
+  });
+  const card = f.card('trakt');
+  card.connect.click(); await settle(); card.sync.click(); await settle();
+  failAccounts = true;
+  f.window.dispatchEvent(new f.window.PageTransitionEvent('pageshow', { persisted: true }));
+  assert.equal(card.list.textContent, '');
+  assert.equal(card.sync.disabled, true);
+  await settle();
+  assert.equal(f.manager.retry.disabled, false);
+  assert.match(f.manager.status.textContent, /temporarily unavailable/);
+  failAccounts = false; f.manager.retry.click(); await settle();
+  assert.equal(card.sync.disabled, false);
 });
 
 test('a truncated snapshot shows its review limit even when it has no next page', async t => {

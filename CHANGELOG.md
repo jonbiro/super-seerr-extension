@@ -6,6 +6,12 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.258]
+
+- Retire Trakt/Simkl imported titles and pending title actions immediately when the account identity changes or stored accounts are removed, even if reading the replacement connection state fails. Preserve unsaved Client ID edits and show a usable recovery action.
+- Refresh tracker connections independently while another provider is authorizing. Keep cancellation available, resume each deferred account refresh when it can proceed, and reject metadata captured before a newer account action.
+- Recheck account state when Settings returns from the browser's page cache, keeping old account controls unavailable until that check succeeds. Ordinary token rotations and sync timestamps continue to preserve current watchlist reads.
+
 ## [3.5.257]
 
 - Restore keyboard focus after Settings saves, connection tests, cache clearing, reloads, and saved-site actions. Keep fallback controls visible when an action disappears or becomes unavailable, and respect focus moved elsewhere while work is pending.

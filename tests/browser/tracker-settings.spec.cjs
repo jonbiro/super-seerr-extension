@@ -11,11 +11,12 @@ async function showTrackers(page, width, { failInitial = false } = {}) {
   await page.addStyleTag({ path: path.resolve('src/options/tracker-accounts.css') });
   await page.evaluate(fail => {
     window.accountEntries = ['trakt', 'simkl'].map(provider => ({ provider, name: provider, clientId: `${provider}-app`, connected: true,
-      callbackUrl: `https://${'extension'.repeat(5)}.chromiumapp.org/tracker/${provider}`, lastSyncAt: null }));
+      callbackUrl: `https://${'extension'.repeat(5)}.chromiumapp.org/tracker/${provider}`, lastSyncAt: null, accountRevision: 'initial-account' }));
     window.trackerMessages = [];
     window.trackerTabs = [];
     window.failTrackerInitial = fail;
     window.chrome = {
+      storage: { onChanged: { addListener(listener) { window.trackerAccountChanged = listener; } } },
       permissions: { request: async () => true },
       tabs: { create: async options => trackerTabs.push(options) },
       runtime: { sendMessage: async message => {
@@ -24,7 +25,11 @@ async function showTrackers(page, width, { failInitial = false } = {}) {
           failTrackerInitial = false;
           return { success: false, error: 'Connection state could not be read. Try again.' };
         }
-        if (message.action === 'disconnectTracker') accountEntries.find(account => account.provider === message.data.provider).connected = false;
+        if (message.action === 'disconnectTracker' || message.action === 'connectTracker') {
+          Object.assign(accountEntries.find(account => account.provider === message.data.provider), {
+            connected: message.action === 'connectTracker', accountRevision: `${message.action}-account`
+          });
+        }
         if (message.action === 'getTrackerWatchlist') return { success: true, data: { provider: message.data.provider, page: 1,
           items: [{ title: 'A very long movie title with Unicode 日本語 and characters & / for narrow screen review'.repeat(2), mediaType: 'movie', year: 1999 },
             { title: 'An example series', mediaType: 'tv', year: 2020 }], nextPage: null, hasMore: false, skipped: 1, truncated: true, lastSyncAt: Date.now() } };
@@ -78,6 +83,64 @@ test('tracker account startup failure stays recoverable and keyboard accessible'
   await expect(card.getByRole('button', { name: 'Sync watchlist', exact: true })).toBeEnabled();
   await expect(page.locator('.tracker-section-status')).toHaveText('');
 });
+
+for (const provider of ['trakt', 'simkl']) for (const success of [true, false]) {
+  test(`${provider} account change retires private rows during another authorization (refresh succeeds: ${success})`, async ({ page }, testInfo) => {
+    await showTrackers(page, 320);
+    const card = page.locator(`[data-tracker="${provider}"]`);
+    const other = page.locator(`[data-tracker="${provider === 'trakt' ? 'simkl' : 'trakt'}"]`);
+    await card.getByRole('button', { name: 'Sync watchlist', exact: true }).click();
+    await expect(card.locator('.tracker-watchlist li')).toHaveCount(2);
+    await card.getByLabel(`${provider === 'trakt' ? 'Trakt' : 'Simkl'} Client ID`, { exact: true }).fill('unsaved-app');
+    await other.getByRole('button', { name: 'Disconnect', exact: true }).click();
+    await page.evaluate(() => {
+      const original = chrome.runtime.sendMessage;
+      chrome.runtime.sendMessage = async message => {
+        if (message.action === 'connectTracker') return new Promise(resolve => {
+          window.finishOtherAuthorization = () => original(message).then(resolve);
+        });
+        if (message.action === 'getTrackerAccounts' && window.holdAccountRefresh) {
+          const snapshot = structuredClone(accountEntries);
+          return new Promise(resolve => { window.finishAccountRefresh = success => resolve(success
+            ? { success: true, data: snapshot } : { success: false, error: 'Account state temporarily unavailable. Reload account connections.' }); });
+        }
+        return original(message);
+      };
+    });
+    await other.getByRole('button', { name: /^Connect (Trakt|Simkl)$/ }).click();
+    await expect(other.getByRole('button', { name: 'Cancel connection', exact: true })).toBeEnabled();
+    await page.evaluate(provider => {
+      Object.assign(accountEntries.find(account => account.provider === provider), { connected: false, accountRevision: 'remote-disconnect' });
+      window.holdAccountRefresh = true;
+      const newValue = Object.fromEntries(accountEntries.map(account => [account.provider,
+        { clientId: account.clientId, accountRevision: account.accountRevision }]));
+      trackerAccountChanged({ trackerAccountsV1: { newValue } }, 'local');
+    }, provider);
+    await expect(card.locator('.tracker-watchlist li')).toHaveCount(0);
+    await expect(card.getByRole('button', { name: 'Sync watchlist', exact: true })).toBeDisabled();
+    await expect(card.locator('.tracker-account-summary')).toHaveText('Connection state unavailable.');
+    await page.evaluate(success => finishAccountRefresh(success), success);
+    const retry = page.getByRole('button', { name: 'Reload account connections', exact: true });
+    await expect(retry).toBeEnabled();
+    if (!success) {
+      await expect(page.locator('.tracker-section-status')).toContainText('temporarily unavailable');
+      await expect(card.locator('.tracker-account-status')).toContainText('Could not check this connection.');
+    }
+    else await expect(card.locator('.tracker-account-summary')).toContainText('Not connected.');
+    await expect(page).toHaveTitle('Super Seerr - Settings');
+    await page.locator('#trackerAccounts').screenshot({ path: testInfo.outputPath('account-change-recovery.png') });
+    if (!success) {
+      await page.evaluate(() => { window.holdAccountRefresh = false; });
+      await retry.click();
+    }
+    await expect(card.locator('input')).toHaveValue('unsaved-app');
+    await expect(card.locator('input')).toBeEnabled();
+    await expect(other.getByRole('button', { name: 'Cancel connection', exact: true })).toBeEnabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.evaluate(() => { window.holdAccountRefresh = false; finishOtherAuthorization(); });
+    await expect(other.getByRole('button', { name: 'Sync watchlist', exact: true })).toBeEnabled();
+  });
+}
 
 for (const provider of ['trakt', 'simkl']) for (const focus of ['load more', 'existing title', 'outside']) {
   test(`${provider} pagination preserves keyboard focus (${focus})`, async ({ page }) => {

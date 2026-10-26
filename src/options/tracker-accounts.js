@@ -20,7 +20,7 @@
       this.cards = new Map();
       this.readGeneration = 0;
       this.seerrConnectionGeneration = 0;
-      this.accountsRefreshPending = false;
+      this.pendingAccountRefreshes = new Set();
       root.append(element('h2', { id: 'trackerAccountsHeading', textContent: 'Trakt & Simkl watchlists' }),
         element('p', { textContent: 'Connect your own app to read its watchlist when you choose Sync. Sync imports titles into this review only; it does not change your provider watchlist or send Seerr requests. Find a title in Seerr to review availability and request it separately. Account tokens stay on this device.' }));
       this.status = element('p', { className: 'tracker-section-status', role: 'status' });
@@ -33,12 +33,24 @@
           this.seerrConnectionGeneration++;
         }
         if (area !== 'local' || !Object.prototype.hasOwnProperty.call(changes, 'trackerAccountsV1')) return;
-        // Inspect public state only. Token rotations and last-sync stamps do
-        // not replace an account or invalidate the list currently being read.
+        const change = changes.trackerAccountsV1;
+        // Public identity fields retire private rows immediately, even when
+        // the subsequent metadata read fails or another OAuth window is open.
+        // Token rotations and last-sync stamps leave that identity unchanged.
+        if (Object.prototype.hasOwnProperty.call(change, 'newValue') || Object.prototype.hasOwnProperty.call(change, 'oldValue')) {
+          for (const card of this.cards.values()) {
+            const account = change.newValue?.[card.provider.id];
+            const clientId = typeof account?.clientId === 'string' ? account.clientId : '';
+            const revision = typeof account?.accountRevision === 'string' ? account.accountRevision : '';
+            if (card.account && (clientId !== card.account.clientId || revision !== (card.account.accountRevision || ''))) {
+              this.retireAccountReview(card);
+            }
+          }
+        }
         this.loadAccounts({ invalidateLists: false });
       });
       window.addEventListener('pageshow', event => {
-        if (event.persisted) this.loadAccounts({ invalidateLists: false });
+        if (event.persisted) this.loadAccounts();
       });
       this.loadAccounts();
     }
@@ -101,56 +113,91 @@
         this.clearWatchlist(card);
       }
       card.account = account;
+      if (card.accountStale) card.status.textContent = '';
+      card.accountStale = false;
       if (resetDraft) card.input.value = account.clientId;
       card.callback.value = account.callbackUrl;
       this.updateControls(card);
     }
 
     async loadAccounts({ invalidateLists = true } = {}) {
-      if ([...this.cards.values()].some(card => card.busy)) {
-        this.accountsRefreshPending = true;
-        return;
+      const available = [...this.cards.values()].filter(card => !card.busy);
+      for (const card of this.cards.values()) {
+        if (card.busy) this.pendingAccountRefreshes.add(card);
+        else this.pendingAccountRefreshes.delete(card);
       }
+      if (!available.length) return;
+      const cardGenerations = new Map(available.map(card => [card, card.generation]));
       if (invalidateLists) for (const card of this.cards.values()) {
-        card.watchGeneration++;
-        card.loading = false;
-        card.syncPermission = false;
-        this.clearWatchlist(card);
-        card.status.textContent = '';
-        this.updateControls(card);
+        if (!card.busy) this.retireAccountReview(card);
       }
       const generation = ++this.readGeneration;
+      this.accountsLoading = true;
       this.retry.disabled = true;
       this.status.textContent = 'Loading account connections…';
       try {
         const accounts = await this.message('getTrackerAccounts');
         if (generation !== this.readGeneration) return;
-        for (const card of this.cards.values()) this.applyAccount(card, accounts, !card.account);
+        for (const card of this.cards.values()) {
+          // A read started before this card's mutation cannot overwrite its
+          // committed reply, but unrelated providers can still refresh now.
+          if (card.busy || cardGenerations.get(card) !== card.generation) {
+            this.pendingAccountRefreshes.add(card);
+            continue;
+          }
+          this.applyAccount(card, accounts, !card.account);
+        }
         this.status.textContent = '';
       } catch (error) {
         if (generation !== this.readGeneration) return;
         this.status.textContent = error.message;
+        for (const card of available) {
+          if (card.accountStale && !card.busy && cardGenerations.get(card) === card.generation) {
+            card.status.textContent = 'Could not check this connection. Choose Reload account connections to try again.';
+          }
+        }
       } finally {
-        if (generation === this.readGeneration) this.retry.disabled = false;
+        if (generation === this.readGeneration) {
+          this.accountsLoading = false;
+          this.updateAccountReload();
+        }
+      }
+    }
+
+    retireAccountReview(card) {
+      card.watchGeneration++;
+      card.loading = false;
+      card.syncPermission = false;
+      card.accountStale = true;
+      this.clearWatchlist(card);
+      card.status.textContent = 'Checking this account connection…';
+      this.updateControls(card);
+    }
+
+    updateAccountReload() {
+      const busy = [...this.cards.values()].filter(card => card.busy).length;
+      this.retry.disabled = !!this.accountsLoading || busy === this.cards.size;
+      if (!this.accountsLoading && [...this.pendingAccountRefreshes].some(card => !card.busy)) {
+        this.loadAccounts({ invalidateLists: false });
       }
     }
 
     updateControls(card) {
-      const unavailable = !card.account;
+      const unavailable = !card.account || card.accountStale;
       const dirty = card.input.value.trim() !== card.account?.clientId;
       card.input.disabled = unavailable || !!card.busy || card.syncPermission;
       card.save.disabled = unavailable || !!card.busy || card.syncPermission || !card.input.value.trim() || !dirty;
       card.connect.disabled = unavailable || !!card.busy || card.syncPermission || dirty || !card.account.clientId || card.account.connected;
       card.connect.textContent = card.busy === 'connecting' ? `Connecting ${card.provider.name}…`
-        : card.account?.connected ? `Connected to ${card.provider.name}` : `Connect ${card.provider.name}`;
-      card.disconnect.disabled = unavailable || card.busy === 'saving' || card.busy === 'disconnecting' || (!card.account.connected && card.busy !== 'connecting');
+        : !unavailable && card.account.connected ? `Connected to ${card.provider.name}` : `Connect ${card.provider.name}`;
+      card.disconnect.disabled = card.busy !== 'connecting' && (unavailable || card.busy === 'saving' || card.busy === 'disconnecting' || !card.account.connected);
       card.disconnect.textContent = card.busy === 'connecting' ? 'Cancel connection' : 'Disconnect';
       card.sync.disabled = unavailable || !card.account.connected || !!card.busy || card.loading || card.syncPermission;
       card.more.disabled = card.sync.disabled || !card.nextPage;
       card.more.hidden = !card.nextPage;
       card.copyCallback.disabled = unavailable || !!card.busy;
       card.list.setAttribute('aria-busy', String(card.loading));
-      if (!card.account) card.summary.textContent = 'Connection state unavailable.';
+      if (unavailable && !card.busy) card.summary.textContent = 'Connection state unavailable.';
       else if (card.busy === 'connecting') card.summary.textContent = 'Waiting for account authorization…';
       else if (card.busy === 'disconnecting') card.summary.textContent = 'Disconnecting…';
       else {
@@ -179,8 +226,6 @@
     }
 
     begin(card, busy) {
-      this.readGeneration++;
-      this.retry.disabled = true;
       card.generation++;
       card.watchGeneration++;
       card.loading = false;
@@ -189,18 +234,15 @@
       card.status.textContent = '';
       this.clearWatchlist(card);
       this.updateControls(card);
+      this.updateAccountReload();
       return card.generation;
     }
 
     finish(card, generation) {
       if (card.generation !== generation) return;
       card.busy = null;
-      this.retry.disabled = [...this.cards.values()].some(item => item.busy);
       this.updateControls(card);
-      if (this.accountsRefreshPending && !this.retry.disabled) {
-        this.accountsRefreshPending = false;
-        this.loadAccounts({ invalidateLists: false });
-      }
+      this.updateAccountReload();
     }
 
     async save(card) {
