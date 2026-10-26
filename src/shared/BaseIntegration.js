@@ -557,6 +557,8 @@ class BaseIntegration {
         await this.updateStatus();
       } else if (this.currentStatusData?.action === 'choose') {
         await this.handleTitleChoice();
+      } else if (this.currentStatusData?.action === 'manageRequest' && !seasonsOnly) {
+        this.handleManageRequest();
       } else if (isWatchButton && !seasonsOnly) {
         await this.handleWatchButtonClick();
       } else {
@@ -570,6 +572,27 @@ class BaseIntegration {
         this._requestInFlight = false;
         this._requestAttempt = null;
       }
+    }
+  }
+
+  handleManageRequest() {
+    const view = this.captureActionView();
+    let opened;
+    try {
+      const destination = new URL(this.currentStatusData?.manageUrl);
+      if (!['http:', 'https:'].includes(destination.protocol) || destination.username || destination.password || destination.search || destination.hash) {
+        throw new Error('Invalid Seerr title URL');
+      }
+      if (!view.isCurrent()) return;
+      opened = window.open(destination.href, '_blank');
+      if (opened) opened.opener = null;
+      else this.ui.createNotification('Popup Blocked', 'Allow popups to review this request in Seerr.', 'warning', 4000);
+    } catch (_) {
+      try { opened?.close(); } catch (_) {}
+      if (!view.isCurrent()) return;
+      this.currentStatusData = this.getErrorStatus(new Error('Could not open the Seerr title. Retry the status lookup.'));
+      this.updateUIFromStatus(this.currentStatusData);
+      this.ui.createNotification('Could Not Open Seerr', this.currentStatusData.message, 'warning', 4000);
     }
   }
 
@@ -739,15 +762,17 @@ class BaseIntegration {
       if (!view.isCurrent()) return;
       this.log('Request successful:', result);
 
-      // Show success notification
+      // A receipt may confirm fewer seasons or a request that already failed.
+      // Keep that distinction visible instead of claiming an ordinary success.
       this.ui.createNotification(
-          'Request Sent!',
-          `${this.mediaData.title} has been added to your Seerr requests`,
-          'success'
+          result?.notice ? 'Request Needs Review' : 'Request Sent!',
+          result?.notice || `${this.mediaData.title} has been added to your Seerr requests`,
+          result?.notice ? 'warning' : 'success',
+          result?.notice ? 0 : undefined
       );
 
       // Auto-close flyout after success
-      if (this.uiTheme === 'flyout' && this.isFlyoutExpanded()) {
+      if (!result?.notice && this.uiTheme === 'flyout' && this.isFlyoutExpanded()) {
         this.deferViewAction(view, () => {
           view.elements.flyout.setExpanded(false, view.elements.flyout.contains(document.activeElement));
           this.log('Auto-closing flyout after successful request');

@@ -162,7 +162,7 @@ test('an expanded site flyout follows SPA navigation and is removed on destroy',
   const tabId = await options.evaluate(async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0].id);
   await options.evaluate(async tabId => {
     await chrome.scripting.executeScript({ target: { tabId }, files: [
-      'src/shared/SeerrClient.js', 'src/shared/MediaExtractor.js',
+      'src/shared/MediaValidation.js', 'src/shared/SeerrClient.js', 'src/shared/MediaExtractor.js',
       'src/shared/NotificationCenter.js', 'src/shared/UIComponents.js', 'src/shared/BaseIntegration.js'
     ] });
     await chrome.scripting.executeScript({ target: { tabId }, func: async () => {
@@ -284,7 +284,7 @@ for (const remember of [false, true]) test(`ambiguous title picker preserves the
   await page.goto(`${origin}/title/ambiguous`); await page.bringToFront();
   const tabId = await options.evaluate(async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0].id);
   await options.evaluate(async tabId => {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['src/shared/SeerrClient.js', 'src/shared/MediaExtractor.js', 'src/shared/NotificationCenter.js', 'src/shared/UIComponents.js', 'src/shared/BaseIntegration.js'] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['src/shared/MediaValidation.js', 'src/shared/SeerrClient.js', 'src/shared/MediaExtractor.js', 'src/shared/NotificationCenter.js', 'src/shared/UIComponents.js', 'src/shared/BaseIntegration.js'] });
     await chrome.scripting.executeScript({ target: { tabId }, func: async () => {
       class PickerProbe extends window.BaseIntegration {
         constructor() { super('PickerProbe', { uiTheme: 'flyout', retryDelay: 100000 }); }
@@ -337,7 +337,7 @@ test('TV request review shows availability and posts only explicitly selected se
   await page.goto(`${origin}/title/seasons`); await page.bringToFront();
   const tabId = await options.evaluate(async () => (await chrome.tabs.query({ active: true, currentWindow: true }))[0].id);
   await options.evaluate(async tabId => {
-    await chrome.scripting.executeScript({ target: { tabId }, files: ['src/shared/SeerrClient.js', 'src/shared/MediaExtractor.js', 'src/shared/SeasonPicker.js', 'src/shared/NotificationCenter.js', 'src/shared/UIComponents.js', 'src/shared/BaseIntegration.js'] });
+    await chrome.scripting.executeScript({ target: { tabId }, files: ['src/shared/MediaValidation.js', 'src/shared/SeerrClient.js', 'src/shared/MediaExtractor.js', 'src/shared/SeasonPicker.js', 'src/shared/NotificationCenter.js', 'src/shared/UIComponents.js', 'src/shared/BaseIntegration.js'] });
     await chrome.scripting.executeScript({ target: { tabId }, func: async () => {
       class SeasonProbe extends window.BaseIntegration {
         constructor() { super('SeasonProbe', { uiTheme: 'flyout', retryDelay: 100000 }); }

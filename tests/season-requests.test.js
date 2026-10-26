@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadWorker } = require('./helpers/worker');
 const { loadIntegration } = require('./helpers/integration');
+const { receipt } = require('./helpers/request-receipt');
 const media = { title: 'Example', mediaType: 'tv', tmdbId: 42 };
 function details() {
   return { id: 42, name: 'Example', seasons: [0,1,2,3,4,5,6].map(seasonNumber => ({ seasonNumber, name: seasonNumber ? `Season ${seasonNumber}` : 'Specials', episodeCount: 8 })),
@@ -10,10 +11,13 @@ function details() {
 }
 async function setup() {
   const worker = loadWorker({ get: async () => ({ seerrUrl: 'https://seerr.example' }), local: { seerrApiKey: 'key' } }); await worker.ready;
-  const state = { details: details(), posts: [], reads: 0 };
-  worker.api.sendAPIRequest = async () => { state.reads++; return state.details; };
+  const state = { details: details(), settings: { enableSpecialEpisodes: true }, posts: [], reads: 0, settingsReads: 0 };
+  worker.api.sendAPIRequest = async (_, endpoint) => {
+    if (endpoint === '/api/v1/settings/public') { state.settingsReads++; return state.settings; }
+    state.reads++; return state.details;
+  };
   worker.api.makeAPIRequest = async (method, endpoint, body) => {
-    if (method === 'POST') { state.posts.push(body); return { id: 1 }; }
+    if (method === 'POST') { state.posts.push(body); return receipt(body, { id: 1 }); }
     return state.details;
   };
   return { ...worker, state };
@@ -24,6 +28,77 @@ test('season review distinguishes availability and existing requests without blo
   const result = await api.getSeasonOptions(media);
   assert.deepEqual(Array.from(result.seasons, s => s.availability), ['Not available', 'Available', 'Partially available', 'Processing', 'Already requested', 'Not available', 'Not available']);
   assert.deepEqual(Array.from(result.seasons.filter(s => s.requestable), s => s.number), [0,5,6]);
+});
+
+test('failed requests reserve their seasons for the existing Seerr retry workflow', async () => {
+  const { api, state } = await setup();
+  state.details.mediaInfo = { requests: [{ id: 8, is4k: false, status: 4, seasons: [{ seasonNumber: 6 }] }] };
+  const review = await api.getSeasonOptions(media);
+  const season = review.seasons.find(season => season.number === 6);
+  assert.equal(season.requestable, false);
+  assert.match(season.availability, /failed.*Seerr/i);
+  await assert.rejects(api.requestMedia({ ...media, seasons: [6] }), /cannot be requested/);
+  assert.equal(state.posts.length, 0);
+});
+
+test('server-disabled specials cannot be selected or silently dropped from a confirmed request', async () => {
+  const { api, state } = await setup();
+  const detailsRead = api.sendAPIRequest;
+  api.sendAPIRequest = (method, endpoint) => endpoint === '/api/v1/settings/public'
+    ? Promise.resolve({ enableSpecialEpisodes: false }) : detailsRead(method, endpoint);
+  const review = await api.getSeasonOptions(media);
+  const specials = review.seasons.find(season => season.number === 0);
+  assert.equal(specials.requestable, false);
+  assert.match(specials.availability, /disabled.*Seerr/i);
+  await assert.rejects(api.requestMedia({ ...media, seasons: [0, 6] }), /cannot be requested/);
+  assert.equal(state.posts.length, 0);
+});
+
+test('specials are rechecked before writing when the server disables them after review', async () => {
+  const { api, state } = await setup();
+  assert.equal((await api.getSeasonOptions(media)).seasons.find(season => season.number === 0).requestable, true);
+  state.settings.enableSpecialEpisodes = false;
+  await assert.rejects(api.requestMedia({ ...media, seasons: [0, 6] }), /cannot be requested/);
+  assert.equal(state.posts.length, 0);
+  assert.equal(state.settingsReads, 2);
+});
+
+test('disabled specials preserve known availability rather than replacing it with the request setting', async () => {
+  const { api, state } = await setup();
+  state.settings.enableSpecialEpisodes = false;
+  state.details.mediaInfo.seasons.push({ seasonNumber: 0, status: 5 });
+  const specials = (await api.getSeasonOptions(media)).seasons.find(season => season.number === 0);
+  assert.equal(specials.availability, 'Available');
+  assert.equal(specials.requestable, false);
+});
+
+for (const unavailable of ['missing', 'offline']) test(`unavailable specials settings leave ordinary seasons usable (${unavailable})`, async () => {
+  const { api, state } = await setup();
+  const read = api.sendAPIRequest;
+  api.sendAPIRequest = async (method, endpoint) => {
+    if (endpoint !== '/api/v1/settings/public') return read(method, endpoint);
+    if (unavailable === 'offline') throw new Error('Offline');
+    return {};
+  };
+  const review = await api.getSeasonOptions(media);
+  assert.equal(review.seasons.find(season => season.number === 0).requestable, false);
+  assert.match(review.seasons.find(season => season.number === 0).availability, /setting unavailable/);
+  await assert.rejects(api.requestMedia({ ...media, seasons: [0] }), /cannot be requested/);
+  await api.requestMedia({ ...media, seasons: [6] });
+  assert.equal(state.posts.length, 1);
+  assert.deepEqual(Array.from(state.posts[0].seasons), [6]);
+});
+
+test('a site switch during the specials settings read cannot authorize a request', async () => {
+  const { api, state } = await setup();
+  const read = api.sendAPIRequest;
+  api.sendAPIRequest = async (method, endpoint) => {
+    const response = await read(method, endpoint);
+    if (endpoint === '/api/v1/settings/public') api.baseUrl = 'https://other.example';
+    return response;
+  };
+  await assert.rejects(api.requestMedia({ ...media, seasons: [0, 6] }), /Settings changed/);
+  assert.equal(state.posts.length, 0);
 });
 
 test('TV requests post only selected seasons once and never default to all', async () => {
@@ -59,16 +134,16 @@ test('changed availability, configuration, and missing season data refuse the wr
   assert.equal(state.posts.length, 0);
 });
 
-test('failed season requests can be retried while pending and approved requests remain blocked', async () => {
+test('declined and completed season requests can be requested anew while pending, approved, and failed records remain reserved', async () => {
   const { api, state } = await setup();
   state.details.mediaInfo = { requests: [1, 2, 3, 4, 5].map(status => ({
     is4k: false, status, seasons: [{ seasonNumber: status }]
   })) };
   const review = await api.getSeasonOptions(media);
-  assert.deepEqual(Array.from(review.seasons.filter(s => s.requestable), s => s.number), [0, 3, 4, 5, 6]);
-  await api.requestMedia({ ...media, seasons: [4] });
+  assert.deepEqual(Array.from(review.seasons.filter(s => s.requestable), s => s.number), [0, 3, 5, 6]);
+  await api.requestMedia({ ...media, seasons: [3] });
   assert.equal(state.posts.length, 1);
-  assert.deepEqual(Array.from(state.posts[0].seasons), [4]);
+  assert.deepEqual(Array.from(state.posts[0].seasons), [3]);
 });
 
 test('invalid episode counts and unknown availability cannot enable season requests', async () => {

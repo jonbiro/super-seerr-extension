@@ -12,7 +12,8 @@ for (const requests of [
     const { api } = loadWorker();
     const result = api.formatMediaStatus({ id: 550, requests, mediaInfo: { status: 1 } }, 'movie');
     assert.equal(result.status, 'failed');
-    assert.equal(result.buttonText, 'Try Again');
+    assert.equal(result.buttonText, 'Review in Seerr');
+    assert.equal(result.action, 'manageRequest');
   });
 }
 

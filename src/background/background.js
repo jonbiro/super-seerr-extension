@@ -25,7 +25,7 @@ const MediaValidation = globalThis.MediaValidation;
 // the saved origin instead, once the user grants that optional host permission.
 const OVERLAY_SCRIPT_ID = 'seerr-overlay';
 const OVERLAY_SCRIPT_FILES = {
-  js: ['src/shared/NotificationCenter.js', 'src/shared/SeasonPicker.js', 'src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/OverlayCache.js', 'src/content/RatingsPresentation.js', 'src/content/SeerrSession.js', 'src/content/FilterPresets.js', 'src/content/RatingQueue.js', 'src/content/seerr-integration.js'],
+  js: ['src/shared/MediaValidation.js', 'src/shared/NotificationCenter.js', 'src/shared/SeasonPicker.js', 'src/shared/RatingsModel.js', 'src/shared/RatingsConfig.js', 'src/content/OverlayCache.js', 'src/content/RatingsPresentation.js', 'src/content/SeerrSession.js', 'src/content/FilterPresets.js', 'src/content/RatingQueue.js', 'src/content/seerr-integration.js'],
   css: ['src/content/seerr-overlay.css']
 };
 
@@ -551,13 +551,11 @@ class SeerrAPI {
     this.log('📡 [Background] Sending request to Seerr:', requestData);
     const historyServer = this.baseUrl;
     const response = await this.makeAPIRequest('POST', '/api/v1/request', requestData);
+    const confirmed = MediaValidation.requestReceipt(response, requestData);
     this.log('✅ [Background] Request successful:', response);
 
     return {
-      id: response.id,
-      tmdbId, historyServer,
-      mediaType: response.type,
-      status: response.status,
+      ...confirmed, historyServer,
       title: mediaData.title
     };
   }

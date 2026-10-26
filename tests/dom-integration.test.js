@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
 const Config = require('../src/shared/RatingsConfig');
+const { result: requestResult } = require('./helpers/request-receipt');
 
 const source = file => fs.readFileSync(file, 'utf8');
 const flush = () => new Promise(resolve => setImmediate(resolve));
@@ -226,7 +227,7 @@ test('bulk dialog supports keyboard selection and cancellation stops subsequent 
   doc.querySelector('.confirm-btn').click();
   assert.equal(requests, 1);
   doc.querySelector('[role="dialog"]').dispatchEvent(new fixture.window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  release({ success: true });
+  release({ success: true, data: requestResult({ mediaType: 'movie', tmdbId: 1 }) });
   await new Promise(resolve => setTimeout(resolve, 550));
   assert.equal(requests, 1);
   assert.equal(doc.querySelector('[role="dialog"]'), null);
@@ -820,7 +821,7 @@ test('bulk TV review requires season selection and sends only the reviewed seaso
   assert.equal(writes[0].mediaType, 'tv');
   assert.deepEqual(Array.from(writes[0].seasons), [2]);
   assert.equal(bulk.querySelector('[data-season-index]').disabled, true);
-  finishRequest({ success: true }); await settle();
+  finishRequest({ success: true, data: requestResult(writes[0]) }); await settle();
 });
 
 test('manual refresh keeps known scores visible and retains them when sources fail', async t => {
@@ -909,7 +910,7 @@ for (const [outcomes, kind, heading] of [
     doc.querySelector('.seerr-bulk-review').click();
     let sent = 0;
     const original = f.window.chrome.runtime.sendMessage;
-    f.window.chrome.runtime.sendMessage = async message => message.action === 'requestMedia' ? { success: outcomes[sent++] } : original(message);
+    f.window.chrome.runtime.sendMessage = async message => message.action === 'requestMedia' ? { success: outcomes[sent++], data: requestResult(message.data) } : original(message);
     doc.querySelector('.confirm-btn').click();
     await new Promise(resolve => setTimeout(resolve, outcomes.length > 1 ? 550 : 0)); await settle();
     await new Promise(resolve => setTimeout(resolve, 10));
@@ -945,7 +946,7 @@ test('duplicate cards produce one request and completion restores selection cont
   doc.querySelector('.seerr-bulk-review').click();
   assert.equal(doc.querySelector('.confirm-btn').textContent, 'Request 1 title');
   const original = f.window.chrome.runtime.sendMessage; let writes = 0;
-  f.window.chrome.runtime.sendMessage = async message => { if (message.action === 'requestMedia') { writes++; return { success: true }; } return original(message); };
+  f.window.chrome.runtime.sendMessage = async message => { if (message.action === 'requestMedia') { writes++; return { success: true, data: requestResult(message.data) }; } return original(message); };
   doc.querySelector('.confirm-btn').click(); await settle();
   assert.equal(writes, 1); assert.equal(doc.querySelectorAll('.seerr-select-checkbox').length, 0);
   assert.equal(doc.querySelector('.seerr-toggle-select').textContent, 'Select titles');
@@ -1356,7 +1357,7 @@ for (const mediaType of ['movie', 'tv']) test(`bulk ${mediaType} retains the cat
         { number: 1, name: 'Season 1', episodeCount: 8, availability: 'Not available', requestable: true }
       ] } };
     }
-    if (message.action === 'requestMedia') { writes.push(message.data); return { success: true }; }
+    if (message.action === 'requestMedia') { writes.push(message.data); return { success: true, data: requestResult(message.data) }; }
     return original(message);
   };
   const doc = f.window.document;
@@ -1397,7 +1398,7 @@ for (const [label, metadata, expected] of [
   await settle();
   const original = f.window.chrome.runtime.sendMessage, writes = [];
   f.window.chrome.runtime.sendMessage = async message => {
-    if (message.action === 'requestMedia') { writes.push(message.data); return { success: true }; }
+    if (message.action === 'requestMedia') { writes.push(message.data); return { success: true, data: requestResult(message.data) }; }
     return original(message);
   };
   const doc = f.window.document;

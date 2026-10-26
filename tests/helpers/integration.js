@@ -4,7 +4,7 @@
 const fs = require('node:fs');
 const { JSDOM } = require('jsdom');
 
-const SHARED = ['SeerrClient', 'MediaExtractor', 'SeasonPicker', 'NotificationCenter', 'UIComponents', 'BaseIntegration'];
+const SHARED = ['MediaValidation', 'SeerrClient', 'MediaExtractor', 'SeasonPicker', 'NotificationCenter', 'UIComponents', 'BaseIntegration'];
 
 function loadIntegration({
   url = 'https://www.imdb.com/title/tt0111161/',

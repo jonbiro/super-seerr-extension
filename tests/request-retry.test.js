@@ -3,6 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const SeerrClient = require('../src/shared/SeerrClient');
+const { result: requestResult } = require('./helpers/request-receipt');
 
 function client(replies, { retryDelay = 0 } = {}) {
   const sent = [];
@@ -54,8 +55,26 @@ test('write safety is independent of the configured read retry count', async () 
 });
 
 test('a successful request is sent exactly once', async () => {
-  const { instance, sent } = client([{ success: true, data: { id: 7 } }]);
+  const { instance, sent } = client([{ success: true, data: requestResult({ tmdbId: 550 }) }]);
   assert.equal((await instance.requestMedia({ tmdbId: 550 })).id, 7);
+  assert.equal(requests(sent), 1);
+});
+
+for (const data of [undefined, {}, { id: 7 }, requestResult({ mediaType: 'tv', tmdbId: 550, seasons: [3] }),
+  requestResult({ mediaType: 'tv', tmdbId: 550, seasons: [1] }, { confirmedSeasons: [] })]) {
+  test(`an unconfirmed worker reply is surfaced once (${JSON.stringify(data)})`, async () => {
+    const { instance, sent } = client([{ success: true, data }]);
+    await assert.rejects(instance.requestMedia({ tmdbId: 550, mediaType: 'tv', seasons: [1, 2] }), /confirmation unavailable.*Check Seerr/);
+    assert.equal(requests(sent), 1);
+  });
+}
+
+test('a partial or failed worker receipt retains its warning through the client', async () => {
+  const media = { tmdbId: 550, mediaType: 'tv', seasons: [1, 2] };
+  const { instance, sent } = client([{ success: true, data: requestResult({ ...media, seasons: [2] }, { status: 4 }) }]);
+  const result = await instance.requestMedia(media);
+  assert.match(result.notice, /only these seasons: 2.*not included.*failed in Seerr/);
+  assert.deepEqual(result.confirmedSeasons, [2]);
   assert.equal(requests(sent), 1);
 });
 

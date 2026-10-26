@@ -31,3 +31,42 @@ for (const count of [2, 40]) for (const requestable of [true, false]) {
     expect(await page.evaluate(() => window.reviewResult)).toBe(null);
   });
 }
+
+for (const width of [320, 768]) test(`season review identifies Seerr and keeps its title link in the focus loop (${width}px)`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 400 });
+  await page.setContent('<button id="opener">Choose seasons</button>');
+  for (const file of ['MediaValidation', 'SeasonPicker']) await page.addScriptTag({ path: path.resolve(`src/shared/${file}.js`) });
+  await page.locator('#opener').focus();
+  await page.evaluate(() => { chooseSeerrSeasons({ title: 'Example series', server: 'https://seerr.example/family///', tmdbId: 42,
+    seasons: [{ number: 0, name: 'Specials', episodeCount: 8, requestable: false, availability: 'Specials disabled in Seerr' },
+      { number: 1, name: 'Season 1', episodeCount: 8, requestable: false, availability: 'Request failed — review in Seerr' }] }); });
+  const dialog = page.getByRole('dialog', { name: 'Choose TV seasons' });
+  await expect(dialog).toContainText('Seerr: seerr.example/family');
+  await expect(dialog.getByRole('heading')).toBeFocused();
+  expect(await dialog.evaluate(node => node.scrollTop)).toBe(0);
+  await page.screenshot({ path: `/tmp/super-seerr-request-review-${width}.png` });
+  const link = dialog.getByRole('link', { name: 'Open this title in Seerr' });
+  await expect(link).toHaveAttribute('href', 'https://seerr.example/family/tv/42');
+  await expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  await page.keyboard.press('Tab');
+  await expect(link).toBeFocused();
+  await page.keyboard.press('Shift+Tab');
+  await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeFocused();
+  await page.keyboard.press('Tab');
+  await expect(link).toBeFocused();
+  const box = await dialog.boundingBox();
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(width);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#opener')).toBeFocused();
+});
+
+test('season review does not link to malformed Seerr URLs', async ({ page }) => {
+  await page.setContent('<main>Fixture</main>');
+  for (const file of ['MediaValidation', 'SeasonPicker']) await page.addScriptTag({ path: path.resolve(`src/shared/${file}.js`) });
+  for (const server of ['javascript:alert(1)', 'https://user:password@seerr.example', 'https://seerr.example?key=secret']) {
+    await page.evaluate(server => { chooseSeerrSeasons({ title: 'Example series', server, tmdbId: 42, seasons: [] }); }, server);
+    await expect(page.getByRole('dialog').getByRole('link')).toHaveCount(0);
+    await page.keyboard.press('Escape');
+  }
+});

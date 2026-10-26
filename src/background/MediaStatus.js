@@ -184,6 +184,10 @@
 
       if (statusKind === 'request') this.applyRequestStatus(result, numericStatus, mediaUrl);
       else this.applyMediaStatus(result, numericStatus, mediaUrl, mediaDetails);
+      if (result.action === 'manageRequest' && tmdbId && this.baseUrl) {
+        try { result.manageUrl = root.MediaValidation.seerrTitleUrl(this.baseUrl, mediaType, tmdbId); }
+        catch (_) { /* An unusable destination must never become a new write. */ }
+      }
 
       const monitoringInfo = this.detectMonitoringStatus(mediaDetails, mediaType);
       if (monitoringInfo) {
@@ -221,12 +225,13 @@
           break;
 
         case 4:
-          // Offer a retry: a failed request is the one case where requesting
-          // again is the useful action.
+          // Seerr reserves failed requests. Its retry action operates on the
+          // existing request and requires Seerr's request-management permission.
           result.status = 'failed';
-          result.message = 'Request failed';
-          result.buttonText = 'Try Again';
-          result.buttonClass = 'request';
+          result.message = 'Request failed. Review it in Seerr to retry.';
+          result.buttonText = 'Review in Seerr';
+          result.buttonClass = 'error';
+          result.action = 'manageRequest';
           break;
 
         case 5:

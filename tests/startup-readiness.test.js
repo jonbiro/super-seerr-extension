@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadWorker } = require('./helpers/worker');
+const { receipt } = require('./helpers/request-receipt');
 
 const deferred = () => { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; };
 
@@ -10,10 +11,10 @@ test('slow cosmetic metadata does not block ping or configured requests', async 
   const worker = loadWorker({
     get: async () => ({ seerrUrl: 'https://seerr.example' }),
     local: { seerrApiKey: 'key' },
-    fetch: async url => {
+    fetch: async (url, options) => {
       calls.push(url);
       if (url.endsWith('/settings/public')) return metadata.promise;
-      return { ok: true, json: async () => ({ id: 1 }) };
+      return { ok: true, json: async () => receipt(JSON.parse(options.body), { id: 1 }) };
     }
   });
   const ready = await Promise.race([worker.ready.then(() => true), new Promise(r => setTimeout(() => r(false), 100))]);

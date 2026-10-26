@@ -47,6 +47,7 @@ Source policy: [Data, storage and permissions](docs/privacy-and-permissions.md).
 
 ## Repository version history
 
+- **3.5.261 — 2026-10-26:** verify Seerr request confirmations, retain partial/failed outcome warnings, direct failed requests to Seerr, and respect each server's specials setting during season review and submission.
 - **3.5.260 — 2026-10-26:** keep Simkl review pages consistent across Settings windows and background restarts, support cached offline pagination, and bound private session retention.
 - **3.5.259 — 2026-10-26:** align Trakt watchlist imports with the provider's documented combined movie/TV route.
 - **3.5.258 — 2026-10-26:** clear retired tracker reviews across open Settings pages, recover failed account-state checks, and keep Trakt and Simkl connection updates independent during sign-in.

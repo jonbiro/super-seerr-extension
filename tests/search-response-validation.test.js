@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadWorker } = require('./helpers/worker');
+const { receipt } = require('./helpers/request-receipt');
 const configured = { get: async () => ({ seerrUrl: 'https://seerr.example' }), local: { seerrApiKey: 'key' } };
 const media = { title: 'Fight Club', year: 1999, mediaType: 'movie' };
 const result = { id: 550, title: media.title, releaseDate: '1999-10-15', mediaType: 'movie' };
@@ -35,7 +36,7 @@ test('stray invalid search rows do not hide a valid candidate or break a verifie
   const { api, ready } = loadWorker(configured); await ready;
   const posts = [];
   api.makeAPIRequest = async (method, endpoint, body) => {
-    if (method === 'POST') { posts.push(body); return { id: 42, type: 'movie', status: 1 }; }
+    if (method === 'POST') { posts.push(body); return receipt(body, { id: 42 }); }
     assert.match(endpoint, /\/api\/v1\/search\?/);
     return { results: [null, false, 'bad row', 7, [], result, { ...result, id: 1, mediaType: 'tv' }] };
   };
@@ -66,7 +67,7 @@ for (const [field, value, title] of [
   const { api, ready } = loadWorker(configured); await ready;
   const posts = [];
   api.makeAPIRequest = async (method, endpoint, body) => {
-    if (method === 'POST') { posts.push(body); return { id: 42 }; }
+    if (method === 'POST') { posts.push(body); return receipt(body, { id: 42 }); }
     return { results: [{ id: 550, mediaType: 'movie', releaseDate: '1999-10-15', [field]: value }] };
   };
   const input = { ...media, title };
@@ -79,7 +80,7 @@ test('valid original-title evidence survives a malformed display title', async (
   const { api, ready } = loadWorker(configured); await ready;
   const posts = [];
   api.makeAPIRequest = async (method, endpoint, body) => {
-    if (method === 'POST') { posts.push(body); return { id: 42 }; }
+    if (method === 'POST') { posts.push(body); return receipt(body, { id: 42 }); }
     return { results: [{ ...result, title: ['Wrong display'], originalTitle: media.title }] };
   };
   const candidates = await api.getMediaCandidates(media);

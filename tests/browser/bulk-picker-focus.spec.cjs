@@ -23,7 +23,7 @@ test.beforeEach(async ({ page }) => {
         return { success: true, data: {} };
       } } };
   });
-  for (const file of ['shared/RatingsConfig', 'shared/RatingsModel', 'shared/NotificationCenter', 'shared/SeasonPicker',
+  for (const file of ['shared/MediaValidation', 'shared/RatingsConfig', 'shared/RatingsModel', 'shared/NotificationCenter', 'shared/SeasonPicker',
     'content/OverlayCache', 'content/RatingsPresentation', 'content/SeerrSession', 'content/FilterPresets', 'content/RatingQueue', 'content/seerr-integration']) {
     await page.addScriptTag({ path: path.resolve(`src/${file}.js`) });
   }
@@ -134,7 +134,8 @@ for (const success of [true, false]) for (const focus of ['dialog', 'outside', '
     await page.waitForFunction(() => typeof window.finishRequest === 'function');
     if (focus === 'outside') await page.locator('#outside').focus();
     if (focus === 'removed') await page.locator('.seerr-select-checkbox').focus();
-    await page.evaluate(success => window.finishRequest({ success, error: success ? undefined : 'Request rejected' }), success);
+    await page.evaluate(success => window.finishRequest({ success, error: success ? undefined : 'Request rejected',
+      data: { id: 7, mediaType: 'tv', status: 1, tmdbId: 920, confirmedSeasons: [1] } }), success);
     await expect(dialog).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Select titles', exact: true })).toBeVisible();
     await expect(focus === 'outside' ? page.locator('#outside') : page.getByRole('button', { name: 'Select titles', exact: true })).toBeFocused();
@@ -165,7 +166,7 @@ test('partial bulk failure keeps each failed title and reason available', async 
     chrome.runtime.sendMessage = async message => {
       if (message.action !== 'requestMedia') return original(message);
       window.writes.push(message);
-      if (message.data.tmdbId === 1001) return { success: true };
+      if (message.data.tmdbId === 1001) return { success: true, data: { id: 7, mediaType: 'movie', status: 1, tmdbId: 1001 } };
       if (message.data.tmdbId === 1002) return { success: false, error: 'Permission denied <script>bad()</script>' };
       if (message.data.tmdbId === 1003) throw new Error('Connection interrupted');
       return { success: false };
@@ -199,4 +200,32 @@ test('partial bulk failure keeps each failed title and reason available', async 
   await page.locator('#outside').focus();
   await page.clock.fastForward(6000);
   await expect(result).toBeVisible();
+});
+
+for (const outcome of ['partial', 'failed', 'unconfirmed']) test(`bulk review distinguishes ${outcome} confirmations and never resends`, async ({ page }) => {
+  await page.evaluate(outcome => {
+    const original = chrome.runtime.sendMessage;
+    chrome.runtime.sendMessage = async message => {
+      if (message.action === 'getSeasonOptions') return { success: true, data: { title: 'Series', tmdbId: 920,
+        server: 'https://seerr.example', seasons: [1, 2].map(number => ({ number, name: `Season ${number}`,
+          episodeCount: 8, availability: 'Not available', requestable: true })) } };
+      if (message.action !== 'requestMedia') return original(message);
+      window.writes.push(message);
+      return { success: true, data: outcome === 'unconfirmed' ? { id: 7 } : { id: 7, tmdbId: 920, mediaType: 'tv',
+        status: outcome === 'failed' ? 4 : 1, confirmedSeasons: outcome === 'partial' ? [2] : [1, 2] } };
+    };
+  }, outcome);
+  const dialog = page.getByRole('dialog', { name: 'Review your bulk request' });
+  await dialog.getByRole('button', { name: 'Choose seasons' }).click();
+  const picker = page.getByRole('dialog', { name: 'Choose TV seasons' });
+  await picker.getByRole('button', { name: 'Select all requestable', exact: true }).click();
+  await picker.getByRole('button', { name: 'Use selected seasons', exact: true }).click();
+  await page.clock.install();
+  await dialog.getByRole('button', { name: 'Request 1 title', exact: true }).click();
+  const result = page.getByLabel(outcome === 'unconfirmed' ? 'Bulk request failures' : 'Bulk request results', { exact: true });
+  await expect(result).toContainText(outcome === 'unconfirmed' ? '0 succeeded, 1 failed' : '0 succeeded, 1 need review');
+  await expect(result).toContainText(outcome === 'partial' ? 'only these seasons: 2' : outcome === 'failed' ? 'failed in Seerr' : 'Check Seerr before requesting again');
+  await page.clock.fastForward(6000);
+  await expect(result).toBeVisible();
+  expect(await page.evaluate(() => window.writes.length)).toBe(1);
 });

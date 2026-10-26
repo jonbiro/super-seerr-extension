@@ -127,7 +127,8 @@ class SeerrClient {
     }
     if (!response) throw new Error('Request outcome unknown. Check Seerr before requesting again.');
     if (!response.success) throw new SeerrResponseError(response.error || 'Request failed');
-    return response.data;
+    const validation = typeof module !== 'undefined' && module.exports ? require('./MediaValidation') : window.MediaValidation;
+    return validation.requestResult(response.data, mediaData);
   }
 
   /**

@@ -6,6 +6,14 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.261]
+
+- Confirm the returned request ID, title identity, type, quality and TV seasons before reporting success or recording a recent action. Seerr's HTTP 202 response without a new request now explains the outcome without resending it.
+- Keep partial-season confirmations and requests that immediately fail, are declined or are already completed visible as review warnings. Bulk results distinguish these from ordinary successes and retain the affected titles until dismissed.
+- Open failed requests in Seerr's existing management workflow instead of submitting a duplicate. Keep other TV seasons and Plex actions available, and provide a keyboard-accessible Seerr title link in season review.
+- Expose shared request validation through the content-script window in Firefox as well as Chromium, keeping season links, bulk outcomes and the content client's receipt checks available in both browsers.
+- Check the current server's specials setting during review and again before a write. Disabled or unconfirmed specials cannot be silently omitted from a mixed request; ordinary seasons remain usable if that setting cannot be read.
+
 ## [3.5.260]
 
 - Keep each Simkl review tied to its own account-bound snapshot so a newer Sync in another Settings window cannot replace its remaining pages. Reject missing, expired, corrupt, or mismatched review continuations instead of mixing titles.

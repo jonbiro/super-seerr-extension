@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadWorker } = require('./helpers/worker');
+const { receipt } = require('./helpers/request-receipt');
 
 const CONFIGURED = { get: async () => ({ seerrUrl: 'https://seerr.example' }), local: { seerrApiKey: 'key' } };
 const wanted = { title: 'Dune', year: 2021, mediaType: 'movie', tmdbId: 999 };
@@ -24,7 +25,7 @@ for (const method of ['requestMedia', 'addToWatchlist']) test(`${method} replace
   const { api, ready } = loadWorker(CONFIGURED); await ready;
   const posts = [];
   api.makeAPIRequest = async (verb, endpoint, data) => {
-    if (verb === 'POST') { posts.push(data); return { id: 1 }; }
+    if (verb === 'POST') { posts.push(data); return receipt(data, { id: 1 }); }
     if (endpoint === '/api/v1/movie/999') return { id: 999, title: 'The Suicide Squad', releaseDate: '2021-08-05' };
     throw new Error(`Unexpected ${verb} ${endpoint}`);
   };
@@ -56,7 +57,7 @@ test('a saved title correction remains usable after fresh candidate and detail v
   assert.equal(saved.tmdbId, 438631);
   const posts = [];
   api.makeAPIRequest = async (verb, endpoint, data) => {
-    if (verb === 'POST') { posts.push(data); return { id: 1 }; }
+    if (verb === 'POST') { posts.push(data); return receipt(data, { id: 1 }); }
     return { id: 438631, title: 'Dune', releaseDate: '2021-09-15' };
   };
   await api.requestMedia(saved);

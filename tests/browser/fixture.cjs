@@ -4,6 +4,7 @@ const path = require('node:path');
 const http = require('node:http');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
+const { receipt } = require('../helpers/request-receipt');
 const exec = promisify(execFile);
 const root = path.resolve(__dirname, '../..');
 
@@ -29,7 +30,20 @@ async function createExtension(browser, { ref } = {}) {
 async function startServer() {
   // Real HTTP responses also reach extension background fetches, unlike page
   // route mocks. All fixtures are local; no real API key or Seerr is needed.
-  const server = http.createServer((request, response) => {
+  const server = http.createServer(async (request, response) => {
+    if (request.method === 'POST' && request.url === '/api/v1/request') {
+      try {
+        const chunks = [];
+        for await (const chunk of request) chunks.push(chunk);
+        const body = JSON.parse(Buffer.concat(chunks).toString());
+        response.writeHead(201, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify(receipt(body)));
+      } catch (_) {
+        response.writeHead(400, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ message: 'Invalid fixture request' }));
+      }
+      return;
+    }
     if (request.url.startsWith('/api/v1/search?') && new URL(request.url, 'http://fixture').searchParams.get('query') === 'The Thing') {
       response.setHeader('Content-Type', 'application/json');
       response.end(JSON.stringify({ results: [
@@ -53,7 +67,7 @@ async function startServer() {
     }
     if (request.url.startsWith('/api/')) {
       response.setHeader('Content-Type', 'application/json');
-      response.end(JSON.stringify(request.url.includes('/settings/public') ? { mediaServerType: 2, initialized: true }
+      response.end(JSON.stringify(request.url.includes('/settings/public') ? { mediaServerType: 2, initialized: true, enableSpecialEpisodes: false }
         : request.url.includes('/auth/me') ? { id: 1, displayName: 'Smoke test' }
         : request.url.includes('/ratings') ? { criticsScore: 85, audienceScore: 90, imdbRating: 8 }
         : { id: 550, title: 'Fight Club', voteAverage: 8, mediaInfo: null, results: [] }));

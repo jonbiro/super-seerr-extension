@@ -392,7 +392,7 @@ class UIComponents {
     if (elements.seasonButton) {
       // A known TV status can still have other requestable seasons, including
       // while a prior season is pending or the current ones are available.
-      const showSeasons = !statusData.action && ['available', 'available_watch', 'partial',
+      const showSeasons = (!statusData.action || statusData.action === 'manageRequest') && ['available', 'available_watch', 'partial',
         'pending', 'requested', 'downloading', 'declined', 'failed'].includes(statusData.status);
       elements.seasonButton.style.display = showSeasons ? 'flex' : 'none';
       elements.seasonButton.disabled = !showSeasons;
@@ -405,7 +405,7 @@ class UIComponents {
     // the user wants to save to Plex. Only the token gates it, never the
     // request state. Error/loading states hide it to avoid a dead click.
     const plexReady = options.plexConfigured === true;
-    const plexBlocked = ['loading', 'error'].includes(statusData.status) || !!statusData.action;
+    const plexBlocked = ['loading', 'error'].includes(statusData.status) || (!!statusData.action && statusData.action !== 'manageRequest');
     if (elements.plexButton) {
       elements.plexButton.style.display = plexReady && !plexBlocked ? 'flex' : 'none';
       // Already there renders as state, not an action. Unknown keeps Add.

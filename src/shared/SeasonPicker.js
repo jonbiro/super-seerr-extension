@@ -18,7 +18,13 @@
       const dialog = el('div', { role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Choose TV seasons' });
       dialog.style.cssText = 'box-sizing:border-box;min-width:0;overflow-wrap:anywhere;background:#171b25;color:#f9fafb;border:1px solid #64748b;border-radius:12px;padding:20px;max-width:540px;width:100%;max-height:min(85vh, calc(100dvh - 40px));overflow:auto;';
       const heading = el('h2', { textContent: options.title, tabindex: '-1' });
-      dialog.append(heading, el('p', { textContent: 'Choose seasons to request. Availability is for standard quality. Specials depend on your Seerr server settings.' }));
+      dialog.append(heading, el('p', { textContent: 'Choose seasons to request. Availability is for standard quality. Failed requests must be reviewed in Seerr.' }));
+      try {
+        const url = root.MediaValidation.seerrTitleUrl(options.server, 'tv', options.tmdbId);
+        const link = el('a', { href: url, target: '_blank', rel: 'noopener noreferrer', textContent: 'Open this title in Seerr' });
+        link.style.cssText = 'display:inline-flex;align-items:center;min-height:44px;max-width:100%;color:#93c5fd;overflow-wrap:anywhere;';
+        dialog.append(el('p', { textContent: `Seerr: ${new URL(url).host}${new URL(options.server).pathname.replace(/\/+$/, '')}` }), link);
+      } catch (_) { /* Missing or invalid metadata does not create a link. */ }
       const inputs = [];
       const confirm = el('button', { type: 'button', textContent: confirmText }); confirm.disabled = true;
       const selectAll = el('button', { type: 'button', textContent: 'Select all requestable' });
@@ -84,7 +90,7 @@
         event.stopPropagation();
         if (event.key === 'Escape') { event.preventDefault(); cancel(); }
         if (event.key === 'Tab') {
-          const controls = [...dialog.querySelectorAll('button:not(:disabled), input:not(:disabled)')];
+          const controls = [...dialog.querySelectorAll('a[href], button:not(:disabled), input:not(:disabled)')];
           const index = controls.indexOf(document.activeElement);
           if (event.shiftKey && index <= 0) { event.preventDefault(); controls.at(-1).focus(); }
           else if (!event.shiftKey && (index < 0 || index === controls.length - 1)) { event.preventDefault(); controls[0].focus(); }

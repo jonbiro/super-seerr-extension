@@ -35,6 +35,15 @@
       try { detailsId = root.MediaValidation.tmdbId(details?.id); } catch (_) { /* Invalid identity is unavailable. */ }
       if (detailsId !== tmdbId) throw new Error('Season information is unavailable for this title. Try again before requesting.');
       if (!Array.isArray(details?.seasons)) throw new Error('Season information is unavailable. Try again before requesting.');
+      let specialsEnabled = false, specialsKnown = false;
+      if (details.seasons.some(season => season?.seasonNumber === 0 && Number.isSafeInteger(season.episodeCount) && season.episodeCount > 0)) {
+        try {
+          const settings = await this.sendAPIRequest('GET', '/api/v1/settings/public');
+          specialsKnown = typeof settings?.enableSpecialEpisodes === 'boolean';
+          specialsEnabled = settings?.enableSpecialEpisodes === true;
+        } catch (_) { /* Ordinary seasons remain usable; specials need affirmative server support. */ }
+        assertCurrent();
+      }
       const unavailable = () => { throw new Error('Season availability is unavailable. Try again before requesting.'); };
       const list = value => value == null ? [] : Array.isArray(value) ? value : unavailable();
       const validSeason = season => season && Number.isSafeInteger(season.seasonNumber) && season.seasonNumber >= 0;
@@ -50,18 +59,20 @@
         availability.set(season.seasonNumber, previous !== undefined && previous !== status ? 0 : status);
       }
       const requested = new Set();
+      const failed = new Set();
       for (const request of list(info.requests)) {
         if (!request || typeof request !== 'object' || Array.isArray(request)) unavailable();
         if (request.is4k === true) continue;
         if (request.is4k != null && request.is4k !== false) unavailable();
         if (![1, 2, 3, 4, 5].includes(request.status)) unavailable();
-        // Only pending/approved requests reserve seasons. Failed requests can
-        // be retried; fresh per-season availability still protects existing media.
-        if (![1, 2].includes(request.status)) continue;
+        // Seerr reserves failed requests too; they must use its existing
+        // request retry workflow rather than creating another request.
+        if (![1, 2, 4].includes(request.status)) continue;
         if (!Array.isArray(request.seasons)) unavailable();
         for (const season of request.seasons) {
           if (!validSeason(season)) unavailable();
           requested.add(season.seasonNumber);
+          if (request.status === 4) failed.add(season.seasonNumber);
         }
       }
       const labels = { 1: 'Not available', 2: 'Pending', 3: 'Processing', 4: 'Partially available', 5: 'Available', 6: 'Blocked', 7: 'Deleted' };
@@ -81,11 +92,13 @@
           const pending = requested.has(number);
           const blocked = info.status === 6;
           const uncertain = conflicting.has(number);
+          const specialsBlocked = number === 0 && !specialsEnabled;
           return { number, name: String(season.name || (number ? `Season ${number}` : 'Specials')).slice(0, 200),
             episodeCount: uncertain ? 0 : season.episodeCount,
-            availability: blocked ? 'Blocked' : pending ? 'Already requested'
+            availability: blocked ? 'Blocked' : failed.has(number) ? 'Request failed — review in Seerr' : pending ? 'Already requested'
+              : specialsBlocked && [1, 7].includes(status) ? (specialsKnown ? 'Specials disabled in Seerr' : 'Specials setting unavailable')
               : uncertain && [1, 7].includes(status) ? 'Season information uncertain' : (labels[status] || 'Status unknown'),
-            requestable: !blocked && !pending && !uncertain && [1, 7].includes(status) && season.episodeCount > 0 };
+            requestable: !blocked && !pending && !uncertain && !specialsBlocked && [1, 7].includes(status) && season.episodeCount > 0 };
         }).sort((a, b) => a.number - b.number);
       return { tmdbId, mediaType: 'tv', title: String(details.name || media.title), server, seasons };
     },

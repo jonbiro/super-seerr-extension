@@ -2818,7 +2818,9 @@
 
       let succeeded = 0;
       let failed = 0;
+      let review = 0;
       const failures = [];
+      const reviews = [];
       const recordFailure = (title, reason) => {
         failed++;
         const detail = typeof reason === 'string' && reason.trim() ? reason.trim() : 'Request failed. Check the connection and review this title before trying again.';
@@ -2841,7 +2843,11 @@
             data: { title: t.title, year: t.year, mediaType: t.mediaType, tmdbId: tmdbIdNum, ...(t.mediaType === 'tv' ? { seasons: t.seasons, seasonServer: t.seasonServer } : {}) }
           });
           if (response && response.success) {
-            succeeded++;
+            const confirmed = window.MediaValidation.requestResult(response.data, t);
+            if (confirmed.notice) {
+              review++;
+              reviews.push(`${String(t.title).slice(0, 200)}: ${String(confirmed.notice).slice(0, 600)}`);
+            } else succeeded++;
           } else {
             recordFailure(t, response?.error);
           }
@@ -2857,8 +2863,8 @@
       const restoreFocus = closeModal();
       hideBulkActionBar();
 
-      const resultKind = failed === 0 ? 'success' : succeeded === 0 ? 'error' : 'warning';
-      const resultTitle = failed === 0 ? 'Bulk Request Complete' : succeeded === 0 ? 'Bulk Request Failed' : 'Some Requests Failed';
+      const resultKind = failed === 0 && review === 0 ? 'success' : succeeded === 0 && review === 0 ? 'error' : 'warning';
+      const resultTitle = review > 0 ? 'Some Requests Need Review' : failed === 0 ? 'Bulk Request Complete' : succeeded === 0 ? 'Bulk Request Failed' : 'Some Requests Failed';
 
       if (bulkMode) toggleBulkMode();
       // Preserve an unrelated control the user chose while requests ran.
@@ -2866,12 +2872,13 @@
       if (restoreFocus || document.activeElement === document.body) document.querySelector('.seerr-toggle-select')?.focus();
       // Notifications remember the current control for keyboard dismissal.
       // Capture the surviving control after cleanup and focus restoration.
-      const summary = `${succeeded} succeeded${failed > 0 ? `, ${failed} failed` : ''}`;
-      const note = notifyResult(resultTitle, failures.length ? `${summary}\n\nFailed titles:\n${failures.join('\n')}` : summary, resultKind, failures.length ? 0 : undefined);
-      if (failures.length) {
+      const summary = `${succeeded} succeeded${review > 0 ? `, ${review} need review` : ''}${failed > 0 ? `, ${failed} failed` : ''}`;
+      const details = [failures.length ? `Failed titles:\n${failures.join('\n')}` : '', reviews.length ? `Review in Seerr:\n${reviews.join('\n')}` : ''].filter(Boolean);
+      const note = notifyResult(resultTitle, details.length ? `${summary}\n\n${details.join('\n\n')}` : summary, resultKind, details.length ? 0 : undefined);
+      if (details.length) {
         note.classList.add('seerr-bulk-result');
         note.tabIndex = 0;
-        note.setAttribute('aria-label', 'Bulk request failures');
+        note.setAttribute('aria-label', reviews.length ? 'Bulk request results' : 'Bulk request failures');
       }
     });
   }

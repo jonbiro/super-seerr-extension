@@ -3,6 +3,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const SeerrClient = require('../src/shared/SeerrClient');
+const { result: requestResult } = require('./helpers/request-receipt');
 
 test('a zero retry delay is honoured rather than replaced by the default', () => {
   assert.equal(new SeerrClient({ retryDelay: 0 }).retryDelay, 0);
@@ -29,7 +30,7 @@ test('retry attempts never fall below one, so a request is always sent', async (
     const client = new SeerrClient({ retryAttempts, retryDelay: 0 });
     client.testExtensionConnection = async () => true;
     let calls = 0;
-    client.sendMessage = async () => { calls++; return { success: true, data: { id: 1 } }; };
+    client.sendMessage = async () => { calls++; return { success: true, data: requestResult({ tmdbId: 550 }, { id: 1 }) }; };
 
     const result = await client.requestMedia({ tmdbId: 550 });
     assert.equal(calls, 1, `retryAttempts ${retryAttempts} must still send the request`);
@@ -49,7 +50,7 @@ test('a request retains the reviewed connection token while its preflight is pen
   let finish;
   client.testExtensionConnection = () => new Promise(resolve => { finish = resolve; });
   let sent;
-  client.sendMessage = async message => { sent = message; return { success: true, data: { id: 1 } }; };
+  client.sendMessage = async message => { sent = message; return { success: true, data: requestResult(message.data, { id: 1 }) }; };
   const pending = client.requestMedia({ tmdbId: 550, mediaType: 'movie' });
   client.connectionToken = '2:family';
   finish(true); await pending;

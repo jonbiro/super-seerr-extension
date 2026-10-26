@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadWorker } = require('./helpers/worker');
 const Validation = require('../src/shared/MediaValidation');
+const { receipt } = require('./helpers/request-receipt');
 const CONFIGURED = { get: async () => ({ seerrUrl: 'https://seerr.example' }), local: { seerrApiKey: 'key' } };
 const film = (id, title, year = 1999, mediaType = 'movie') => ({ id, title, releaseDate: `${year}-01-01`, mediaType });
 const wanted = { title: 'Fight Club', year: 1999, mediaType: 'movie' };
@@ -60,7 +61,7 @@ test('a unique corroborated match posts the correct ID exactly once', async () =
   await ready;
   api.searchMedia = async () => [film(999, 'Not Fight Club'), film(550, 'Fight Club')];
   const posts = [];
-  api.makeAPIRequest = async (method, endpoint, body) => { posts.push({ method, endpoint, body }); return { id: 42 }; };
+  api.makeAPIRequest = async (method, endpoint, body) => { posts.push({ method, endpoint, body }); return receipt(body, { id: 42 }); };
   assert.equal((await api.requestMedia(wanted)).id, 42);
   assert.equal(posts.length, 1);
   assert.equal(posts[0].body.mediaId, 550);
@@ -146,7 +147,7 @@ test('a contradicted page id falls back to search instead of posting', async () 
   await ready;
   const posts = [];
   api.makeAPIRequest = async (method, endpoint, data) => {
-    if (method === 'POST') { posts.push(data); return { id: 1, type: 'movie', status: 1 }; }
+    if (method === 'POST') { posts.push(data); return receipt(data, { id: 1 }); }
     if (endpoint === '/api/v1/movie/999') return { id: 999, title: 'Dune Messiah', releaseDate: '2024-03-01' };
     throw new Error(`unrouted ${method} ${endpoint}`);
   };
@@ -162,7 +163,7 @@ test('a corroborated page id skips search entirely', async () => {
   await ready;
   const posts = [];
   api.makeAPIRequest = async (method, endpoint, data) => {
-    if (method === 'POST') { posts.push(data); return { id: 1, type: 'movie', status: 1 }; }
+    if (method === 'POST') { posts.push(data); return receipt(data, { id: 1 }); }
     if (endpoint === '/api/v1/movie/438631') return { id: 438631, title: 'Dune', releaseDate: '2021-09-03' };
     throw new Error(`unrouted ${method} ${endpoint}`);
   };
@@ -207,7 +208,7 @@ for (const mediaType of ['movie', 'tv']) for (const method of ['requestMedia', '
       seasons: [{ seasonNumber: 1, episodeCount: 8 }], mediaInfo: { status: 1 } });
     const posts = []; let searches = 0;
     api.makeAPIRequest = async (verb, endpoint, body) => {
-      if (verb === 'POST') { posts.push(body); return { id: 50, type: mediaType, status: 1 }; }
+      if (verb === 'POST') { posts.push(body); return endpoint === '/api/v1/request' ? receipt(body, { id: 50 }) : { id: 50 }; }
       if (endpoint.startsWith('/api/v1/request?')) return { results: [] };
       return endpoint.endsWith('/1') ? detail(1, 1984) : detail(2, 2021);
     };

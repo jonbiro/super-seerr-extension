@@ -195,10 +195,13 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
       }
       // Firefox executes this classic script but cannot serialize its final
       // class assignment. The next call uses the actual exported class.
-      await api.scripting.executeScript({ target: { tabId: tab.id }, files: ['/src/shared/SeasonPicker.js', '/src/shared/UIComponents.js'] }).catch(error => {
-        if (!String(error).includes('non-structured-clonable')) throw error;
-      });
+      for (const file of ['MediaValidation', 'SeerrClient', 'SeasonPicker', 'UIComponents']) {
+        await api.scripting.executeScript({ target: { tabId: tab.id }, files: ['/src/shared/' + file + '.js'] }).catch(error => {
+          if (!String(error).includes('non-structured-clonable')) throw error;
+        });
+      }
       await api.scripting.executeScript({ target: { tabId: tab.id }, func: async () => {
+        document.body.dataset.validationWindow = typeof window.MediaValidation;
         const result = await chrome.runtime.sendMessage({ action: 'getMediaCandidates', data: { title: 'The Thing', mediaType: 'movie' } });
         const cache = await chrome.runtime.sendMessage({ action: 'getOverlayCache' });
         document.body.dataset.cacheBridge = String(cache.success);
@@ -217,6 +220,13 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
           const options = await chrome.runtime.sendMessage({ action: 'getSeasonOptions', data: { title: 'Example Series', mediaType: 'tv', tmdbId: 920 } });
           const selected = await window.chooseSeerrSeasons(options.data, { confirmText: 'Use selected seasons' });
           document.body.dataset.chosenSeasons = JSON.stringify(selected);
+          if (!selected) return;
+          try {
+            const client = new window.SeerrClient();
+            const receipt = await client.requestMedia({ title: 'Example Series', mediaType: 'tv', tmdbId: 920,
+              seasons: selected, seasonServer: options.data.server });
+            document.body.dataset.confirmedRequest = JSON.stringify(receipt);
+          } catch (error) { document.body.dataset.requestError = error.message; }
         });
       } });
     `, [`${origin}/title/picker`]);
@@ -241,6 +251,9 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     await script('document.querySelectorAll(".seerr-title-choice")[1].click();');
     await eventually(() => script('return document.body.dataset.chosenTitle;'), '911', 'Firefox picker returns the explicit choice');
     await eventually(() => script('return document.querySelectorAll(".seerr-season-picker input").length;'), 3, 'Firefox renders season availability');
+    assert.equal(await script('return document.body.dataset.validationWindow;'), 'object', 'Firefox content scripts receive the shared request validator');
+    assert.equal(await script('return document.querySelector(".seerr-season-picker a").href;'), `${origin}/tv/920`, 'Firefox offers the exact Seerr title link');
+    assert.equal(await script('return document.querySelector(".seerr-season-picker a").rel;'), 'noopener noreferrer');
     assert.equal(await script('return document.querySelectorAll(".seerr-season-picker input")[0].disabled;'), true);
     await script('Array.from(document.querySelectorAll(".seerr-season-picker button")).find(button => button.textContent === "Select all requestable").click();');
     assert.equal(await script('return document.querySelector(".seerr-season-picker [role=status]").textContent;'), '1 season selected');
@@ -251,6 +264,12 @@ test('Firefox: permissions, real injection, SPA navigation, background reload an
     assert.equal(await script('return document.activeElement.textContent;'), 'Select all requestable');
     await script('document.activeElement.click(); Array.from(document.querySelectorAll(".seerr-season-picker button")).find(button => button.textContent === "Use selected seasons").click();');
     await eventually(() => script('return document.body.dataset.chosenSeasons;'), '[2]', 'Firefox confirms only the selected season');
+    await eventually(() => script('return !!(document.body.dataset.confirmedRequest || document.body.dataset.requestError);'), true, 'Firefox receives the request outcome through its real content client');
+    assert.equal(await script('return document.body.dataset.requestError;'), null);
+    const tvRequest = JSON.parse(await script('return document.body.dataset.confirmedRequest;'));
+    assert.deepEqual(tvRequest.confirmedSeasons, [2], 'Firefox retains only server-confirmed seasons');
+    assert.equal(tvRequest.id, 7);
+    assert.equal(tvRequest.notice, undefined);
     await action('/window', undefined, 'DELETE');
     await action('/window', { handle: optionsHandle });
     await navigate(`moz-extension://${uuid}/src/popup/popup.html`);
