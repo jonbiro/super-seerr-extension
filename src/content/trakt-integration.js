@@ -28,6 +28,10 @@ class TraktIntegration extends BaseIntegration {
   async extractMediaData() {
     this.log('Extracting media data from Trakt page...');
 
+    // Reuse the shared edge-page guard so common provider variants such as
+    // “403 - Forbidden” cannot fall through to slug-based title extraction.
+    if (this.isBlockedProviderPage()) return null;
+
     // Cloudflare and other edge challenges can keep a Trakt title-shaped URL
     // while replacing the document with an error page.  The generic heading
     // fallback below would otherwise turn messages such as “Sorry, you have

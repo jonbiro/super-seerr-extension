@@ -86,6 +86,14 @@ for (const [site, url] of Object.entries(blockedFixtures)) {
   });
 }
 
+for (const title of ['403 - Forbidden', 'Error 403: Forbidden']) {
+  test(`Trakt rejects a provider challenge titled ${title}`, async t => {
+    const page = loadIntegration({ site: 'trakt', url: 'https://trakt.tv/movies/fight-club-1999', title, html: `<h1>${title}</h1>` });
+    t.after(() => page.dom.window.close());
+    assert.equal(await page.integration().extractMediaData(), null);
+  });
+}
+
 for (const title of ['Attention Required! | Cloudflare', 'Just a moment...']) {
   test(`Trakt rejects an edge challenge titled ${title}`, async t => {
     const page = loadIntegration({ site: 'trakt', url: 'https://trakt.tv/movies/fight-club-1999', title,
