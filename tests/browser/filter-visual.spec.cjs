@@ -355,6 +355,21 @@ for (const change of ['class', 'style', 'hidden']) {
   });
 }
 
+test('coverage and sorting recognize a card hidden by visibility without filter interaction', async ({ page }) => {
+  await showFilter(page, 390);
+  await page.locator('[data-testid="title-card"]').evaluate(card => {
+    const item = document.createElement('li');
+    item.style.visibility = 'hidden';
+    card.replaceWith(item);
+    item.append(card);
+  });
+  await page.getByLabel('Sort titles', { exact: true }).selectOption('rt-critics-desc');
+  await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored · 0 visible');
+  await expect(page.locator('[data-testid="title-card"]')).toBeHidden();
+  await page.getByRole('button', { name: 'Reset', exact: true }).click();
+  await expect(page.locator('.seerr-score-coverage')).toHaveText('1/1 scored · 0 visible');
+});
+
 test('host layout changes cannot reveal filtered cards or start an observer loop', async ({ page }) => {
   await showFilter(page, 390);
   const card = page.locator('[data-testid="title-card"]');

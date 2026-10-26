@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.250]
+
+- Treat cards hidden with `visibility: hidden` or `collapse` as hidden in filter coverage and sorting, so host layout state cannot inflate visible counts.
+
 ## [3.5.249]
 
 - Use Trakt's plural `movies,shows` watchlist resource so authenticated watchlist syncs reach the current user API.

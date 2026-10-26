@@ -2081,7 +2081,9 @@
     if (!card) return false;
     if (visibility.has(card)) return visibility.get(card);
     const rendered = window.getComputedStyle?.(card);
-    const hidden = (rendered ? rendered.display === 'none' : card.hidden || card.style.display === 'none') ||
+    const hidden = (rendered
+      ? rendered.display === 'none' || rendered.visibility === 'hidden' || rendered.visibility === 'collapse'
+      : card.hidden || card.style.display === 'none' || card.style.visibility === 'hidden' || card.style.visibility === 'collapse') ||
       isCardHidden(card.parentElement, visibility);
     visibility.set(card, hidden);
     return hidden;
