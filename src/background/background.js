@@ -248,7 +248,12 @@ class SeerrAPI {
         signal: AbortSignal.timeout(RatingsConfig.requestTimeoutMs),
         headers: { Accept: 'application/json' }
       });
-      if (!response.ok) return;
+      if (!response.ok) {
+        // Fetch settles when headers arrive. Release a refused proxy/server
+        // body before this cosmetic lookup gives the worker slot back.
+        try { await response.body?.cancel(); } catch (_) { /* Preserve neutral wording. */ }
+        return;
+      }
       const settings = await response.json();
       if (generation !== this.settingsGeneration) return;
       this.mediaServerName = MEDIA_SERVER_NAMES[settings?.mediaServerType] ?? null;

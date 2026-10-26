@@ -50,6 +50,9 @@
               headers: { Accept: 'application/json' }
             });
             if (!response.ok) {
+              // The diagnostic only needs the status. Do not leave a proxy
+              // error page downloading after the check has been classified.
+              try { await response.body?.cancel(); } catch (_) { /* Preserve the diagnostic state. */ }
               checks.seerr = row('error', `Seerr returned HTTP ${response.status}. Check the server URL and proxy.`, 'serverUrl');
             } else {
               const settings = await response.json().catch(() => null);

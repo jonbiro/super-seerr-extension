@@ -126,6 +126,18 @@ test('authenticated connectivity can recover a blocked public-settings check', a
   assert.equal(report.checks.apiKey.state, 'ok');
 });
 
+test('a refused public-settings response releases its unread body', async () => {
+  const w = await worker({ key: null });
+  let cancelled = 0;
+  w.context.fetch = async () => new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode('proxy error')); },
+    cancel() { cancelled++; }
+  }), { status: 503 });
+  const report = await w.api.getPopupDiagnostics();
+  assert.equal(report.checks.seerr.state, 'error');
+  assert.equal(cancelled, 1, 'diagnostics must cancel a refused response body');
+});
+
 test('valid authentication does not hide a confirmed incomplete setup', async () => {
   const w = await worker();
   w.context.fetch = async url => ({ ok: true, json: async () => url.includes('/auth/me') ? { id: 1 } : { initialized: false } });

@@ -78,6 +78,18 @@ test('a server that will not answer still produces usable wording', async () => 
   assert.ok(!/undefined|null/.test(result.buttonText + result.message));
 });
 
+test('a refused metadata response releases its unread body', async () => {
+  const worker = workerWith(2).worker;
+  await worker.ready;
+  let cancelled = 0;
+  worker.context.fetch = async () => new Response(new ReadableStream({
+    start(controller) { controller.enqueue(new TextEncoder().encode('proxy error')); },
+    cancel() { cancelled++; }
+  }), { status: 503 });
+  await worker.api.loadMediaServerName();
+  assert.equal(cancelled, 1, 'a refused cosmetic lookup must cancel its unread body');
+});
+
 test('product names appear only in the lookup table, never in a message', () => {
   const worker = fs.readFileSync('src/background/background.js', 'utf8');
   const lines = worker.split('\n');
