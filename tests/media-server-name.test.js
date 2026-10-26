@@ -4,6 +4,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const Config = require('../src/shared/RatingsConfig');
 const { loadWorker } = require('./helpers/worker');
 
 const CONFIGURED = { get: async () => ({ seerrUrl: 'https://seerr.example' }), local: { seerrApiKey: 'key' } };
@@ -88,6 +89,30 @@ test('a refused metadata response releases its unread body', async () => {
   }), { status: 503 });
   await worker.api.loadMediaServerName();
   assert.equal(cancelled, 1, 'a refused cosmetic lookup must cancel its unread body');
+});
+
+test('an oversized metadata response is cancelled before naming the server', async () => {
+  const worker = workerWith(2, { ok: false }).worker;
+  await worker.ready;
+  let reads = 0;
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() {
+          reads++;
+          return { done: false, value: new Uint8Array(Config.seerrMaxResponseBytes + 1) };
+        },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  worker.context.fetch = async () => ({ ok: true, status: 200, headers: { get: () => null }, body });
+  await worker.api.loadMediaServerName();
+  assert.equal(worker.api.watchButtonText(), 'Watch');
+  assert.equal(reads, 1);
+  assert.equal(cancelled, true);
 });
 
 test('product names appear only in the lookup table, never in a message', () => {

@@ -1,7 +1,41 @@
 // Only extension pages receive diagnostics; credentials and remote error bodies stay here.
 (function (root) {
   const row = (state, message, fix = null) => ({ state, message, fix });
+  const readBoundedJsonResponse = async response => {
+    const maxBytes = root.RatingsConfig.seerrMaxResponseBytes;
+    const announced = Number(response.headers?.get?.('Content-Length'));
+    if (Number.isFinite(announced) && announced > maxBytes) {
+      try { await response.body?.cancel(); } catch (_) { /* Preserve the size error. */ }
+      throw new Error('Seerr returned a response that is too large.');
+    }
+    if (response.body?.getReader) {
+      const reader = response.body.getReader();
+      const chunks = [];
+      let size = 0;
+      try {
+        while (true) {
+          const part = await reader.read();
+          if (part.done) break;
+          const length = part.value?.byteLength || 0;
+          size += length;
+          if (size > maxBytes) {
+            await reader.cancel().catch(() => {});
+            throw new Error('Seerr returned a response that is too large.');
+          }
+          if (length) chunks.push(part.value);
+        }
+      } finally { reader.releaseLock(); }
+      if (typeof TextDecoder !== 'function') throw new Error('Seerr response could not be decoded.');
+      const bytes = new Uint8Array(size);
+      let offset = 0;
+      for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+      return JSON.parse(new TextDecoder().decode(bytes));
+    }
+    if (typeof response.json === 'function') return response.json();
+    throw new Error('Seerr response body is unreadable.');
+  };
   root.PopupDiagnostics = {
+    readBoundedJsonResponse,
     async exportDiagnostics() {
       const report = await this.getPopupDiagnostics();
       const checks = {};
@@ -55,7 +89,7 @@
               try { await response.body?.cancel(); } catch (_) { /* Preserve the diagnostic state. */ }
               checks.seerr = row('error', `Seerr returned HTTP ${response.status}. Check the server URL and proxy.`, 'serverUrl');
             } else {
-              const settings = await response.json().catch(() => null);
+              const settings = await this.readBoundedJsonResponse(response).catch(() => null);
               if (!settings || Array.isArray(settings) || typeof settings.initialized !== 'boolean') {
                 checks.seerr = row('error', 'The server did not return the expected Seerr settings. Check the URL and proxy.', 'serverUrl');
               } else {

@@ -254,7 +254,7 @@ class SeerrAPI {
         try { await response.body?.cancel(); } catch (_) { /* Preserve neutral wording. */ }
         return;
       }
-      const settings = await response.json();
+      const settings = await this.readBoundedJsonResponse(response);
       if (generation !== this.settingsGeneration) return;
       this.mediaServerName = MEDIA_SERVER_NAMES[settings?.mediaServerType] ?? null;
       await chrome.storage.local.set({ mediaServerName: { url: baseUrl, name: this.mediaServerName } });

@@ -1,5 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const Config = require('../src/shared/RatingsConfig');
 const { loadWorker } = require('./helpers/worker');
 const origin = 'https://seerr.example';
 const permissions = [`${origin}/*`, 'https://plex.tv/*', 'https://discover.provider.plex.tv/*', 'https://metadata.provider.plex.tv/*'];
@@ -136,6 +137,29 @@ test('a refused public-settings response releases its unread body', async () => 
   const report = await w.api.getPopupDiagnostics();
   assert.equal(report.checks.seerr.state, 'error');
   assert.equal(cancelled, 1, 'diagnostics must cancel a refused response body');
+});
+
+test('diagnostics cancel an oversized successful public-settings body before parsing it', async () => {
+  const w = await worker({ key: null });
+  let reads = 0;
+  let cancelled = false;
+  const body = {
+    getReader() {
+      return {
+        async read() {
+          reads++;
+          return { done: false, value: new Uint8Array(Config.seerrMaxResponseBytes + 1) };
+        },
+        async cancel() { cancelled = true; },
+        releaseLock() {}
+      };
+    }
+  };
+  w.context.fetch = async () => ({ ok: true, status: 200, headers: { get: () => null }, body });
+  const report = await w.api.getPopupDiagnostics();
+  assert.equal(report.checks.seerr.state, 'error');
+  assert.equal(reads, 1);
+  assert.equal(cancelled, true);
 });
 
 test('valid authentication does not hide a confirmed incomplete setup', async () => {
