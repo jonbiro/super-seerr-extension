@@ -6,6 +6,10 @@ Versions are produced by `make build`, which increments the patch number. Add
 notes under the version a change actually ships in rather than inventing a new
 heading per change.
 
+## [3.5.249]
+
+- Use Trakt's plural `movies,shows` watchlist resource so authenticated watchlist syncs reach the current user API.
+
 ## [3.5.248]
 
 - Deduplicate normalized multi-site ratings cache entries in Settings so migration-time duplicate server records cannot inflate the displayed cache count.

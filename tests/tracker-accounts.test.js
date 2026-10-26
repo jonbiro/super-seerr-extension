@@ -163,6 +163,17 @@ test('Trakt watchlist reads normalize movie/show identity, honor server paginati
   assert.ok(!JSON.stringify(result).includes('secret'));
 });
 
+test('Trakt watchlist uses the plural movies/shows API resource', async () => {
+  const f = load({ accounts: { trakt: account() }, fetch: async () => reply([], {
+    'X-Pagination-Page': '1', 'X-Pagination-Page-Count': '0'
+  }) });
+  await f.call('getTrackerWatchlist', { provider: 'trakt' });
+  const url = new URL(f.requests[0].url);
+  assert.equal(url.pathname, '/users/me/watchlist/movies,shows/added');
+  assert.equal(url.searchParams.get('page'), '1');
+  assert.equal(url.searchParams.get('limit'), '100');
+});
+
 test('disconnect during watchlist fetch rejects the stale list and its sync stamp', async () => {
   const pending = gate();
   const f = load({ accounts: { trakt: account() }, fetch: () => pending.promise });
